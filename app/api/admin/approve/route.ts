@@ -28,5 +28,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  if (body.action === 'delete') {
+    const cld = (await import('@/lib/cloudinary')).default
+    await cld.uploader.destroy(body.id, { resource_type: body.resourceType ?? 'image', invalidate: true })
+    return NextResponse.json({ ok: true })
+  }
+
   return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
 }
