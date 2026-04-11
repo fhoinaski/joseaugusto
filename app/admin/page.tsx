@@ -81,6 +81,18 @@ function AdminPanel() {
 
   const logout = async () => { await fetch('/api/admin/logout', { method: 'POST' }); window.location.reload() }
 
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    padding: '8px 20px',
+    borderRadius: 50,
+    border: `1px solid ${active ? 'var(--bl)' : 'var(--sand)'}`,
+    background: active ? 'var(--beige)' : 'transparent',
+    color: 'var(--b)',
+    fontFamily: "'Cormorant Garamond',serif",
+    fontSize: '.9rem',
+    cursor: 'pointer',
+    letterSpacing: '.08em'
+  })
+
   const S: Record<string, React.CSSProperties> = {
     wrap: { maxWidth: 1000, margin: '0 auto', padding: '32px 20px 80px', fontFamily: "'Cormorant Garamond',serif" },
     header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap' as const, gap: 12 },
@@ -90,7 +102,6 @@ function AdminPanel() {
     statNum: { fontFamily: "'Playfair Display',serif", fontSize: '2rem', color: 'var(--bd)', display: 'block' },
     statLbl: { fontSize: '.7rem', letterSpacing: '.12em', textTransform: 'uppercase' as const, color: 'var(--bl)' },
     tabs: { display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' as const },
-    tab: (active: boolean) => ({ padding: '8px 20px', borderRadius: 50, border: `1px solid ${active ? 'var(--bl)' : 'var(--sand)'}`, background: active ? 'var(--beige)' : 'transparent', color: 'var(--b)', fontFamily: "'Cormorant Garamond',serif", fontSize: '.9rem', cursor: 'pointer', letterSpacing: '.08em' }),
     card: { background: 'var(--warm)', border: '1px solid var(--beige)', borderRadius: 20, padding: 24, boxShadow: '0 4px 24px rgba(139,98,66,.07)' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 16 },
     photoCard: { borderRadius: 14, overflow: 'hidden' as const, border: '2px solid var(--beige)', background: 'var(--cream)' },
@@ -132,7 +143,7 @@ function AdminPanel() {
           <a href="/" style={{ fontSize: '.8rem', color: 'var(--bl)', textDecoration: 'none' }}>← voltar ao site</a>
           <p style={S.title}>🐻 Painel Admin</p>
         </div>
-        <button onClick={logout} style={{ ...S.tab(false), color: '#a33', borderColor: '#e0a0a0' }}>Sair</button>
+        <button onClick={logout} style={{ ...tabStyle(false), color: '#a33', borderColor: '#e0a0a0' }}>Sair</button>
       </div>
 
       <div style={S.statsRow}>
@@ -143,7 +154,7 @@ function AdminPanel() {
 
       <div style={S.tabs}>
         {[{ key: 'pending', label: 'Pendentes', count: pending.length }, { key: 'approved', label: 'Aprovadas', count: 0 }, { key: 'message', label: 'Mensagem', count: 0 }].map(t => (
-          <button key={t.key} style={S.tab(tab === t.key)} onClick={() => setTab(t.key as any)}>
+          <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => setTab(t.key as any)}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
           </button>
         ))}
