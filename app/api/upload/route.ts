@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { uploadBuffer, objectUrl, pingRealtimeR2 } from '@/lib/r2'
 import { dbInsertMedia } from '@/lib/db'
+import { isD1AuthError } from '@/lib/db'
 
 const MAX_IMAGE = 20 * 1024 * 1024  // 20 MB
 const MAX_VIDEO = 100 * 1024 * 1024 // 100 MB
@@ -97,8 +98,18 @@ export async function POST(req: NextRequest) {
     // 1. Upload file to R2
     await uploadBuffer(key, body, contentType, { author, status })
 
-    // 2. Record metadata in D1
-    await dbInsertMedia(key, author, mediaType, status)
+    // 2. Record metadata in D1 (degrade gracefully if token is invalid)
+    let degraded = false
+    try {
+      await dbInsertMedia(key, author, mediaType, status)
+    } catch (err) {
+      if (isD1AuthError(err)) {
+        degraded = true
+        console.warn('[upload] D1 auth error: upload kept in R2 without DB row')
+      } else {
+        throw err
+      }
+    }
 
     // 3. Ping SSE stream (skip for pending items)
     if (status === 'approved') {
@@ -109,7 +120,9 @@ export async function POST(req: NextRequest) {
       success: true,
       type:    mediaType,
       status,
+      degraded,
       ...(status === 'pending' ? { message: 'Foto em revisão — aparecerá em breve.' } : {}),
+      ...(degraded ? { warning: 'Upload salvo, mas o banco D1 está indisponível.' } : {}),
     })
   } catch (err) {
     console.error('[upload]', err)

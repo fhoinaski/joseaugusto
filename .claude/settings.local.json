@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(gh pr:*)",
+      "Bash(ls -la /f/cha-v3/cha-v3/.claude/worktrees/stoic-wiles/next.config.*)",
+      "Bash(ls -la /f/cha-v3/cha-v3/.claude/worktrees/stoic-wiles/.env*)",
+      "Bash(npx wrangler:*)",
+      "Bash(node -e ':*)",
+      "Bash(curl -s \"https://api.cloudflare.com/client/v4/accounts/418df529eab601a6b3afb5218e788254/tokens/verify\" -H \"Authorization: Bearer cfat_y1fAgli6ZEfALfZqBQOkjfUZWDK7ejQpQiiHcuyg869ab976\")"
+    ]
+  }
+}
