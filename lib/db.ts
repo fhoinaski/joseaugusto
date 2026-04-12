@@ -286,3 +286,38 @@ export async function dbGetCommentCount(mediaId: string): Promise<number> {
   const rows = await d1Query<{ n: number }>(`SELECT COUNT(*) AS n FROM comments WHERE media_id = ?`, [mediaId])
   return rows[0]?.n ?? 0
 }
+
+// ── Access Keys ───────────────────────────────────────────────────────────────
+
+export interface AccessKeyItem {
+  id: number
+  name: string
+  key: string
+  createdAt: string
+}
+
+export async function dbGetAccessKeys(): Promise<AccessKeyItem[]> {
+  const rows = await d1Query<{ id: number; name: string; key: string; created_at: string }>(
+    `SELECT id, name, key, created_at FROM access_keys ORDER BY created_at DESC`
+  )
+  return rows.map(r => ({ id: r.id, name: r.name, key: r.key, createdAt: r.created_at }))
+}
+
+export async function dbInsertAccessKey(name: string, key: string): Promise<void> {
+  await d1Exec(
+    `INSERT INTO access_keys (name, key, created_at) VALUES (?, ?, datetime('now'))`,
+    [name, key]
+  )
+}
+
+export async function dbDeleteAccessKey(id: number): Promise<void> {
+  await d1Exec(`DELETE FROM access_keys WHERE id = ?`, [id])
+}
+
+export async function dbVerifyAccessKey(key: string): Promise<boolean> {
+  const rows = await d1Query<{ id: number }>(
+    `SELECT id FROM access_keys WHERE key = ? LIMIT 1`,
+    [key]
+  )
+  return rows.length > 0
+}

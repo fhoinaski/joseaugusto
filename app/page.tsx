@@ -103,52 +103,80 @@ function useGeofence() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    try {
-      const cached = localStorage.getItem('cha_geo')
-      if (cached) {
-        const { result, ts } = JSON.parse(cached) as { result: GeoStatus; ts: number }
-        if (Date.now() - ts < 24 * 3600_000) {
-          setStatus(result); setCanPost(result !== 'observer'); return
+
+    // Step 1: check if admin enabled geo-gating
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(({ geoGateEnabled }: { geoGateEnabled: boolean }) => {
+        if (!geoGateEnabled) {
+          // Gate disabled by admin → everyone can post
+          setStatus('allowed')
+          setCanPost(true)
+          return
         }
-      }
-    } catch {}
 
-    if (!navigator.geolocation) { setStatus('key'); return }
+        // Step 2: gate is ON — check cached result first
+        try {
+          const cached = localStorage.getItem('cha_geo')
+          if (cached) {
+            const { result, ts } = JSON.parse(cached) as { result: GeoStatus; ts: number }
+            if (Date.now() - ts < 24 * 3600_000) {
+              setStatus(result); setCanPost(result !== 'observer'); return
+            }
+          }
+        } catch {}
 
-    setStatus('checking')
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const dist   = haversine(coords.latitude, coords.longitude, EVENT_LAT, EVENT_LNG)
-        const result: GeoStatus = dist <= GEO_RADIUS_M ? 'allowed' : 'observer'
-        setStatus(result); setCanPost(result !== 'observer')
-        try { localStorage.setItem('cha_geo', JSON.stringify({ result, ts: Date.now() })) } catch {}
-      },
-      () => setStatus('key'), // GPS denied / unavailable → show key input
-      { timeout: 8_000, maximumAge: 60_000 },
-    )
+        // Step 3: run GPS check
+        if (!navigator.geolocation) { setStatus('key'); return }
+
+        setStatus('checking')
+        navigator.geolocation.getCurrentPosition(
+          ({ coords }) => {
+            const dist   = haversine(coords.latitude, coords.longitude, EVENT_LAT, EVENT_LNG)
+            const result: GeoStatus = dist <= GEO_RADIUS_M ? 'allowed' : 'observer'
+            setStatus(result); setCanPost(result !== 'observer')
+            try { localStorage.setItem('cha_geo', JSON.stringify({ result, ts: Date.now() })) } catch {}
+          },
+          () => setStatus('key'),
+          { timeout: 8_000, maximumAge: 60_000 },
+        )
+      })
+      .catch(() => {
+        // If /api/settings fails, fail open
+        setStatus('allowed'); setCanPost(true)
+      })
   }, [])
 
-  const unlockWithKey = (key: string): boolean => {
-    if (key.trim() === ACCESS_KEY) {
-      setStatus('allowed'); setCanPost(true)
-      try { localStorage.setItem('cha_geo', JSON.stringify({ result: 'allowed', ts: Date.now() })) } catch {}
-      return true
+  const unlockWithKey = async (key: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/verify-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: key.trim() }),
+      })
+      const { valid } = await res.json()
+      if (valid) {
+        setStatus('allowed'); setCanPost(true)
+        try { localStorage.setItem('cha_geo', JSON.stringify({ result: 'allowed', ts: Date.now() })) } catch {}
+      }
+      return valid
+    } catch {
+      return false
     }
-    return false
   }
 
   return { geoStatus: status, canPost, unlockWithKey }
 }
 
-function GeoBanner({ geoStatus, unlockWithKey }: { geoStatus: GeoStatus; unlockWithKey: (k: string) => boolean }) {
+function GeoBanner({ geoStatus, unlockWithKey }: { geoStatus: GeoStatus; unlockWithKey: (k: string) => Promise<boolean> }) {
   const [key,       setKey]       = useState('')
   const [showKey,   setShowKey]   = useState(false)
   const [keyError,  setKeyError]  = useState(false)
 
   if (geoStatus === 'allowed' || geoStatus === 'idle' || geoStatus === 'checking') return null
 
-  const tryKey = () => {
-    if (unlockWithKey(key)) { setKeyError(false) }
+  const tryKey = async () => {
+    if (await unlockWithKey(key)) { setKeyError(false) }
     else { setKeyError(true) }
   }
 

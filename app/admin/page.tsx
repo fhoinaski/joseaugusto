@@ -34,7 +34,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings'>('pending')
   const [pending,   setPending]   = useState<MediaItem[]>([])
   const [approved,  setApproved]  = useState<MediaItem[]>([])
   const [capsules,  setCapsules]  = useState<CapsuleItem[]>([])
@@ -47,6 +47,16 @@ function AdminPanel() {
   const [toast, setToast] = useState('')
   const [loadingP, setLoadingP] = useState(true)
   const [loadingA, setLoadingA] = useState(true)
+  const [geoGateEnabled, setGeoGateEnabled] = useState(false)
+  const [savingGeo, setSavingGeo] = useState(false)
+  const [accessKeys, setAccessKeys] = useState<Array<{id:number; name:string; key:string; createdAt:string}>>([])
+  const [newKeyName, setNewKeyName] = useState('')
+  const [newKeyValue, setNewKeyValue] = useState('')
+  const [savingKey, setSavingKey] = useState(false)
+  const [newPw, setNewPw] = useState('')
+  const [showNewPw, setShowNewPw] = useState(false)
+  const [savingPw, setSavingPw] = useState(false)
+  const [pwError, setPwError] = useState('')
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
@@ -80,7 +90,48 @@ function AdminPanel() {
     fetchPending(); fetchApproved()
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_message' }) })
       .then(r => r.json()).then(d => setMsg(d.message ?? ''))
+    fetch('/api/admin/settings')
+      .then(r => r.json()).then(d => {
+        setGeoGateEnabled(d.geoGateEnabled ?? false)
+        setAccessKeys(d.keys ?? [])
+      })
   }, [fetchPending, fetchApproved])
+
+  const toggleGeoGate = async (enabled: boolean) => {
+    setSavingGeo(true)
+    await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geoGateEnabled: enabled }) })
+    setGeoGateEnabled(enabled); setSavingGeo(false)
+    showToast(enabled ? '📍 Geofencing ativado!' : '🌐 Geofencing desativado.')
+  }
+
+  const addKey = async () => {
+    if (!newKeyName.trim() || !newKeyValue.trim()) return
+    setSavingKey(true)
+    const res = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add_key', name: newKeyName.trim(), key: newKeyValue.trim() }) })
+    if (res.ok) {
+      setNewKeyName(''); setNewKeyValue('')
+      const data = await fetch('/api/admin/settings').then(r => r.json())
+      setAccessKeys(data.keys ?? [])
+      showToast('🔑 Chave adicionada!')
+    }
+    setSavingKey(false)
+  }
+
+  const deleteKey = async (id: number, name: string) => {
+    if (!confirm(`Excluir chave de "${name}"?`)) return
+    await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete_key', id }) })
+    setAccessKeys(prev => prev.filter(k => k.id !== id))
+    showToast('🗑 Chave removida.')
+  }
+
+  const changePw = async () => {
+    if (newPw.length < 6) { setPwError('Senha deve ter ao menos 6 caracteres'); return }
+    setSavingPw(true); setPwError('')
+    const res = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change_password', password: newPw }) })
+    if (res.ok) { setNewPw(''); showToast('🔒 Senha atualizada!') }
+    else { const d = await res.json(); setPwError(d.error ?? 'Erro') }
+    setSavingPw(false)
+  }
 
   const action = async (id: string, act: 'approve' | 'reject' | 'delete', type = 'image') => {
     await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: act, id, resourceType: type }) })
@@ -182,10 +233,11 @@ function AdminPanel() {
 
       <div style={S.tabs}>
         {[
-          { key: 'pending',  label: 'Pendentes', count: pending.length },
-          { key: 'approved', label: 'Aprovadas',  count: 0 },
-          { key: 'message',  label: 'Mensagem',   count: 0 },
-          { key: 'capsule',  label: '💌 Cápsula', count: 0 },
+          { key: 'pending',  label: 'Pendentes',      count: pending.length },
+          { key: 'approved', label: 'Aprovadas',       count: 0 },
+          { key: 'message',  label: 'Mensagem',        count: 0 },
+          { key: 'capsule',  label: '💌 Cápsula',      count: 0 },
+          { key: 'settings', label: '⚙ Configurações', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)}
             onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
@@ -269,6 +321,111 @@ function AdminPanel() {
               </div>
             )
           }
+        </div>
+      )}
+
+      {tab === 'settings' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Geo gate card */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📍 Restrição por Localização</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Controle quem pode enviar fotos ao álbum.</p>
+            <div style={{ border: '1px solid var(--beige)', borderRadius: 16, padding: '20px 22px', display: 'flex', alignItems: 'flex-start', gap: 20 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 600, color: 'var(--bd)', fontSize: '1rem', marginBottom: 4 }}>Restringir upload por localização</p>
+                <p style={{ fontSize: '.85rem', color: 'var(--bl)', lineHeight: 1.6 }}>
+                  Quando <strong>ativado</strong>, apenas quem estiver dentro do raio do evento pode enviar fotos. Visitantes de fora verão "Modo observador" e poderão entrar com uma chave cadastrada abaixo.
+                </p>
+              </div>
+              <button
+                onClick={() => toggleGeoGate(!geoGateEnabled)}
+                disabled={savingGeo}
+                style={{ flexShrink: 0, width: 56, height: 30, borderRadius: 15, border: 'none', background: geoGateEnabled ? '#5a9e3a' : '#c9b8a8', cursor: savingGeo ? 'wait' : 'pointer', position: 'relative', transition: 'background .25s' }}
+              >
+                <span style={{ position: 'absolute', top: 3, left: geoGateEnabled ? 29 : 3, width: 24, height: 24, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,.25)', transition: 'left .25s' }}/>
+              </button>
+            </div>
+          </div>
+
+          {/* Access keys card */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🔑 Chaves de Acesso</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>
+              Cadastre chaves para convidados que estão fora do local do evento. Pode ser uma chave compartilhada para todos ou chaves individuais.
+            </p>
+
+            {/* Add key form */}
+            <div style={{ background: 'rgba(62,36,8,.04)', border: '1px solid var(--beige)', borderRadius: 14, padding: '16px 18px', marginBottom: 20 }}>
+              <p style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--bd)', marginBottom: 12 }}>Adicionar chave</p>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                <input
+                  style={{ flex: 2, minWidth: 120, border: '1px solid var(--sand)', borderRadius: 8, padding: '8px 12px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }}
+                  placeholder="Nome do convidado ou grupo"
+                  value={newKeyName}
+                  onChange={e => setNewKeyName(e.target.value)}
+                />
+                <input
+                  style={{ flex: 1, minWidth: 100, border: '1px solid var(--sand)', borderRadius: 8, padding: '8px 12px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }}
+                  placeholder="Chave (ex: bebe2025)"
+                  value={newKeyValue}
+                  onChange={e => setNewKeyValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addKey()}
+                />
+                <button style={S.btnApprove} onClick={addKey} disabled={savingKey}>
+                  {savingKey ? '…' : '+ Adicionar'}
+                </button>
+              </div>
+            </div>
+
+            {/* Keys list */}
+            {accessKeys.length === 0
+              ? <p style={S.empty}>Nenhuma chave cadastrada.</p>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                  {accessKeys.map(k => (
+                    <div key={k.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: '1px solid var(--beige)', borderRadius: 12, background: 'var(--cream)' }}>
+                      <span style={{ fontSize: '1rem' }}>🔑</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: '.9rem', fontWeight: 600, color: 'var(--bd)', marginBottom: 2 }}>{k.name}</p>
+                        <p style={{ fontSize: '.8rem', color: 'var(--bl)', fontFamily: 'monospace', letterSpacing: '.05em' }}>{k.key}</p>
+                      </div>
+                      <p style={{ fontSize: '.72rem', color: 'var(--bl)', fontStyle: 'italic', whiteSpace: 'nowrap' as const }}>
+                        {new Date(k.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      </p>
+                      <button style={S.btnDelete} onClick={() => deleteKey(k.id, k.name)}>🗑</button>
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          </div>
+
+          {/* Change password card */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🔒 Senha do Painel Admin</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>
+              Altere a senha de acesso ao painel. A senha atual é exibida abaixo.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+              <input
+                style={{ flex: 1, minWidth: 160, border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }}
+                type={showNewPw ? 'text' : 'password'}
+                placeholder="Nova senha (mín. 6 caracteres)"
+                value={newPw}
+                onChange={e => setNewPw(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && changePw()}
+              />
+              <button style={{ ...S.btnApprove, minWidth: 40 }} onClick={() => setShowNewPw(p => !p)}>
+                {showNewPw ? '🙈' : '👁'}
+              </button>
+              <button style={S.btnApprove} onClick={changePw} disabled={savingPw || newPw.length < 6}>
+                {savingPw ? 'Salvando…' : '✓ Trocar senha'}
+              </button>
+            </div>
+            {pwError && <p style={{ fontSize: '.82rem', color: '#a33', marginTop: 8 }}>{pwError}</p>}
+          </div>
+
         </div>
       )}
 
