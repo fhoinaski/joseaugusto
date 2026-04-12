@@ -518,6 +518,125 @@ function ToastManager({ toasts, onRemove }:{ toasts:ToastMsg[]; onRemove:(id:str
   )
 }
 
+// ── Canvas helper ─────────────────────────────────────────────────────────
+async function generateCapsuleCanvas(author:string, message:string): Promise<Blob|null> {
+  try {
+    await Promise.all([
+      document.fonts.load('700 1em "Dancing Script"'),
+      document.fonts.load('400 1em "Cormorant Garamond"'),
+    ])
+    const cv=document.createElement('canvas'); cv.width=900; cv.height=640
+    const ctx=cv.getContext('2d')!
+    ctx.fillStyle='#f5ede0'; ctx.fillRect(0,0,900,640)
+    // Borders
+    ctx.strokeStyle='#c9a87c'; ctx.lineWidth=2.5; ctx.strokeRect(28,28,844,584)
+    ctx.strokeStyle='#e8d4b8'; ctx.lineWidth=1;   ctx.strokeRect(38,38,824,564)
+    // Title
+    ctx.font='40px "Dancing Script"'; ctx.fillStyle='#3e2408'; ctx.textAlign='center'
+    ctx.fillText('Para José Augusto 🐻',450,110)
+    // Divider
+    const g=ctx.createLinearGradient(200,0,700,0)
+    g.addColorStop(0,'transparent'); g.addColorStop(.3,'#c9a87c'); g.addColorStop(.7,'#c9a87c'); g.addColorStop(1,'transparent')
+    ctx.strokeStyle=g; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(200,128); ctx.lineTo(700,128); ctx.stroke()
+    // Message body
+    ctx.font='25px "Cormorant Garamond"'; ctx.fillStyle='#2a1400'; ctx.textAlign='left'
+    const words=message.split(' '); const maxW=800; const sx=58
+    let y=178, line=''
+    for(const w of words){
+      const t=line?line+' '+w:w
+      if(ctx.measureText(t).width>maxW&&line){ ctx.fillText(line,sx,y); line=w; y+=40; if(y>540){ctx.fillText('…',sx,y);break} }
+      else line=t
+    }
+    if(line&&y<=540) ctx.fillText(line,sx,y)
+    // Author + date
+    const date=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})
+    ctx.font='17px "Cormorant Garamond"'; ctx.fillStyle='#8a5e35'; ctx.textAlign='left'; ctx.fillText(date,58,595)
+    ctx.font='26px "Dancing Script"';     ctx.fillStyle='#7a4e28'; ctx.textAlign='right'; ctx.fillText(`— ${author}`,842,595)
+    return await new Promise(r=>cv.toBlob(b=>r(b),'image/png',0.92))
+  } catch { return null }
+}
+
+// ── Capsule Section ───────────────────────────────────────────────────────
+function CapsuleSection({ defaultAuthor }:{ defaultAuthor:string }) {
+  const [count,    setCount]    = useState<number|null>(null)
+  const [openDate, setOpenDate] = useState('18 anos')
+  const [author,   setAuthor]   = useState(defaultAuthor)
+  const [message,  setMessage]  = useState('')
+  const [phase,    setPhase]    = useState<'idle'|'generating'|'sending'|'done'>('idle')
+
+  useEffect(()=>{
+    setAuthor(defaultAuthor)
+  },[defaultAuthor])
+
+  useEffect(()=>{
+    fetch('/api/capsule').then(r=>r.json()).then(d=>{
+      setCount(d.count??0); setOpenDate(d.openDate??'18 anos')
+    })
+  },[])
+
+  const submit=async()=>{
+    if(!author.trim()||!message.trim()||phase!=='idle') return
+    setPhase('generating')
+    const blob=await generateCapsuleCanvas(author.trim(),message.trim())
+    setPhase('sending')
+    try {
+      const fd=new FormData()
+      if(blob) fd.append('image',blob,'capsule.png')
+      fd.append('author',author.trim())
+      fd.append('message',message.trim())
+      const res=await fetch('/api/capsule',{method:'POST',body:fd})
+      if(res.ok){ setPhase('done'); setCount(c=>(c??0)+1) }
+      else setPhase('idle')
+    }catch{ setPhase('idle') }
+  }
+
+  return (
+    <section className="capsule-section reveal">
+      <div className="capsule-inner">
+        <div className="capsule-header">
+          <span className="capsule-envelope">💌</span>
+          <p className="capsule-label">✦ Cápsula do Tempo ✦</p>
+          <h2 className="capsule-title">Uma mensagem para<br/>quando ele crescer</h2>
+          <p className="capsule-subtitle">
+            Escreva algo para o José Augusto ler quando completar <strong>{openDate}</strong>.
+            Esta mensagem ficará guardada com muito carinho.
+          </p>
+          {count!==null&&(
+            <div className="capsule-counter">
+              💌 {count===0?'Seja o primeiro a deixar uma mensagem':count===1?'1 pessoa já deixou uma mensagem':`${count} pessoas já deixaram uma mensagem`}
+            </div>
+          )}
+        </div>
+
+        {phase!=='done'?(
+          <div className="capsule-form">
+            <div className="capsule-lock-badge">🔒 Abre em {openDate}</div>
+            <input className="capsule-input" type="text" placeholder="Seu nome"
+              value={author} onChange={e=>setAuthor(e.target.value)} maxLength={80}/>
+            <div className="capsule-textarea-wrap">
+              <textarea className="capsule-textarea"
+                placeholder={"Escreva sua mensagem para o José Augusto…\n\nEle vai ler quando for grande 💛"}
+                value={message} onChange={e=>setMessage(e.target.value)} maxLength={500}/>
+              <span className="capsule-chars">{message.length}/500</span>
+            </div>
+            <button className="capsule-btn"
+              disabled={!author.trim()||!message.trim()||phase!=='idle'}
+              onClick={submit}>
+              {phase==='generating'?'✨ Preparando…':phase==='sending'?'📮 Enviando…':'🔒 Guardar mensagem'}
+            </button>
+          </div>
+        ):(
+          <div className="capsule-success">
+            <span className="capsule-success-icon">💌</span>
+            <h3 className="capsule-success-title">Mensagem guardada!</h3>
+            <p className="capsule-success-text">O José Augusto vai encontrar seu carinho quando crescer.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // ── PWA Banner ────────────────────────────────────────────────────────────
 function PWABanner() {
   const [prompt,setPrompt]=useState<any>(null)
@@ -756,6 +875,8 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <CapsuleSection defaultAuthor={savedAuthor}/>
 
       <footer className="reveal">
         <span className="footer-bear">🐻</span>

@@ -119,6 +119,68 @@ export async function pingRealtime(author: string, thumbUrl: string) {
   }
 }
 
+// ── Capsule (time capsule messages) ─────────────────────────────────────
+const CAPSULE_CONFIG_ID = 'cha-jose-augusto/config/capsule-config'
+
+function safeDecode(s: string): string {
+  try { return decodeURIComponent(s) } catch { return s }
+}
+
+export interface CapsuleItem {
+  id: string
+  author: string
+  message: string
+  createdAt: string
+  imageUrl: string
+}
+
+export async function getCapsules(): Promise<CapsuleItem[]> {
+  try {
+    const res = await (cloudinary.api as any).resources({
+      type: 'upload', resource_type: 'image',
+      prefix: 'cha-jose-augusto/capsulas/',
+      max_results: 500, context: true,
+    })
+    return (res.resources as any[])
+      .filter(r => r.context?.custom?.type === 'capsule')
+      .map(r => ({
+        id:        r.public_id,
+        author:    safeDecode(r.context.custom.author   ?? 'Anônimo'),
+        message:   safeDecode(r.context.custom.message  ?? ''),
+        createdAt: r.created_at,
+        imageUrl:  cloudinary.url(r.public_id, { width: 600, quality: 'auto', fetch_format: 'auto' }),
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  } catch { return [] }
+}
+
+export async function getCapsuleCount(): Promise<number> {
+  try {
+    const res = await (cloudinary.api as any).resources({
+      type: 'upload', resource_type: 'image',
+      prefix: 'cha-jose-augusto/capsulas/',
+      max_results: 500,
+    })
+    return (res.resources as any[]).length
+  } catch { return 0 }
+}
+
+export async function getCapsuleOpenDate(): Promise<string> {
+  try {
+    const res = await cloudinary.api.resource(CAPSULE_CONFIG_ID, { context: true })
+    return safeDecode(res.context?.custom?.open_date ?? '18 anos')
+  } catch { return '18 anos' }
+}
+
+export async function setCapsuleOpenDate(date: string) {
+  try {
+    await cloudinary.api.update(CAPSULE_CONFIG_ID, { context: `open_date=${encodeURIComponent(date)}` })
+  } catch {
+    const tiny = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    await cloudinary.uploader.upload(tiny, { public_id: CAPSULE_CONFIG_ID, context: `open_date=${encodeURIComponent(date)}` })
+  }
+}
+
 export async function getRealtimeData() {
   try {
     const res = await cloudinary.api.resource(RT_ID, { context: true })
