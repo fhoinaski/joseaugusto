@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getParentsMessage } from '@/lib/cloudinary'
+import { dbGetConfig } from '@/lib/db'
+import { DEFAULT_PARENTS_MSG } from '@/lib/db'
 
 export async function GET() {
-  const message = await getParentsMessage()
+  const message = await dbGetConfig('parents_message', DEFAULT_PARENTS_MSG)
   return NextResponse.json({ message })
 }

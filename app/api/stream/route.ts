@@ -1,4 +1,4 @@
-import { getParentsMessage } from '@/lib/cloudinary'
+import { dbGetConfig } from '@/lib/db'
 import { getRealtimeDataR2 } from '@/lib/r2'
 
 export const dynamic     = 'force-dynamic'
@@ -28,7 +28,7 @@ export async function GET() {
       try {
         const rt = await getRealtimeDataR2()
         if (rt?.ts) lastRtTs = rt.ts
-        lastMsg = await getParentsMessage()
+        lastMsg = await dbGetConfig('parents_message')
       } catch {}
 
       // Poll every 8s, emit only when something changed
@@ -41,7 +41,7 @@ export async function GET() {
             send('new-photo', rt)
           }
 
-          const msg = await getParentsMessage()
+          const msg = await dbGetConfig('parents_message')
           if (msg !== lastMsg) {
             lastMsg = msg
             send('message-update', { message: msg })

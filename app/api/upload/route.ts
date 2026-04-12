@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
-import { r2, BUCKET, objectUrl, pingRealtimeR2 } from '@/lib/r2'
+import { uploadBuffer, objectUrl, pingRealtimeR2 } from '@/lib/r2'
+import { dbInsertMedia } from '@/lib/db'
 
-const MAX_IMAGE = 20 * 1024 * 1024  // 20MB
-const MAX_VIDEO = 100 * 1024 * 1024 // 100MB
+const MAX_IMAGE = 20 * 1024 * 1024  // 20 MB
+const MAX_VIDEO = 100 * 1024 * 1024 // 100 MB
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,29 +36,21 @@ export async function POST(req: NextRequest) {
       contentType = file.type
       ext = file.name.split('.').pop() ?? 'mp4'
     } else {
-      body = await sharp(Buffer.from(arrayBuffer))
-        .webp({ quality: 80 })
-        .toBuffer()
+      body = await sharp(Buffer.from(arrayBuffer)).webp({ quality: 80 }).toBuffer()
       contentType = 'image/webp'
       ext = 'webp'
     }
 
     const key = `cha-jose-augusto/foto_${suffix}.${ext}`
 
-    await r2.send(new PutObjectCommand({
-      Bucket:      BUCKET,
-      Key:         key,
-      Body:        body,
-      ContentType: contentType,
-      CacheControl:'public, max-age=31536000, immutable',
-      Metadata: {
-        author: author,
-        status: 'approved',
-      },
-    }))
+    // 1. Upload file to R2
+    await uploadBuffer(key, body, contentType, { author, status: 'approved' })
 
-    const thumbUrl = objectUrl(key)
-    await pingRealtimeR2(author, thumbUrl).catch(() => {})
+    // 2. Record metadata in D1
+    await dbInsertMedia(key, author, isVideo ? 'video' : 'image')
+
+    // 3. Ping SSE stream
+    await pingRealtimeR2(author, objectUrl(key)).catch(() => {})
 
     return NextResponse.json({ success: true, type: isVideo ? 'video' : 'image' })
   } catch (err) {
