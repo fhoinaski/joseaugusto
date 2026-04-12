@@ -139,7 +139,7 @@ export default function TVPage() {
         </div>
       ) : (
         <div className="tv-empty">
-          <span style={{ fontSize: '5rem' }}>🐻</span>
+          <span style={{ fontSize: '5rem' }}>🧸</span>
           <p style={{ color: 'rgba(255,255,255,.5)', marginTop: 24, fontFamily: 'serif', fontSize: '1.4rem', letterSpacing: '.1em' }}>
             Aguardando fotos…
           </p>

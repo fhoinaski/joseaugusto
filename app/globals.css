@@ -397,6 +397,40 @@ body {
 .info-lbl   { font-size:.7rem; letter-spacing:.4em; text-transform:uppercase; color:var(--sd); margin-bottom:8px; font-weight:700; }
 .info-val   { font-family:'Playfair Display',serif; font-size:1rem; color:var(--text-hi); line-height:1.6; font-weight:500; }
 
+/* ── Corner Menu ── */
+.corner-menu { position:fixed; top:12px; right:12px; z-index:1100; }
+.corner-menu-btn {
+  width:36px; height:36px; border-radius:50%;
+  background:rgba(253,246,238,.82); backdrop-filter:blur(10px);
+  border:1px solid rgba(201,168,124,.35);
+  box-shadow:0 2px 12px rgba(60,20,0,.1);
+  cursor:pointer; font-size:.85rem; font-weight:700; letter-spacing:.05em;
+  color:var(--bd); display:flex; align-items:center; justify-content:center;
+  transition:background .2s, box-shadow .2s;
+}
+.corner-menu-btn:hover { background:rgba(253,246,238,.98); box-shadow:0 4px 18px rgba(60,20,0,.18); }
+.corner-menu-backdrop { position:fixed; inset:0; z-index:-1; }
+.corner-menu-dropdown {
+  position:absolute; top:44px; right:0;
+  background:rgba(253,246,238,.97); backdrop-filter:blur(14px);
+  border:1px solid rgba(201,168,124,.3); border-radius:14px;
+  padding:6px 0; box-shadow:0 8px 32px rgba(60,20,0,.15);
+  min-width:148px; animation:cornerMenuIn .18s cubic-bezier(.34,1.2,.64,1);
+}
+@keyframes cornerMenuIn { from{opacity:0;transform:translateY(-8px) scale(.95)} to{opacity:1;transform:translateY(0) scale(1)} }
+.corner-menu-item {
+  display:flex; align-items:center; gap:9px;
+  padding:9px 16px; text-decoration:none;
+  font-family:'Cormorant Garamond',serif; font-size:.9rem;
+  color:var(--bd); letter-spacing:.04em;
+  transition:background .15s;
+}
+.corner-menu-item:hover { background:rgba(201,168,124,.18); }
+.corner-menu-item span { flex:1; }
+.corner-menu-divider { height:1px; background:rgba(201,168,124,.3); margin:4px 12px; }
+.corner-menu-admin { opacity:.5; font-size:.8rem; }
+.corner-menu-admin:hover { opacity:.8; }
+
 /* ── Footer ── */
 footer { text-align:center; padding:56px 24px 72px; }
 .footer-bear { font-size:2.4rem; display:block; margin-bottom:16px; animation:rock 3s ease-in-out infinite; }

@@ -215,13 +215,40 @@ async function fetchJsonSafe<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
+// ── Corner Menu ───────────────────────────────────────────────────────────
+function CornerMenu() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="corner-menu">
+      <button
+        className="corner-menu-btn"
+        onClick={() => setOpen(p => !p)}
+        aria-label="Menu"
+      >
+        {open ? '✕' : '···'}
+      </button>
+      {open && (
+        <>
+          <div className="corner-menu-backdrop" onClick={() => setOpen(false)}/>
+          <div className="corner-menu-dropdown">
+            <a href="/feed"  className="corner-menu-item" onClick={() => setOpen(false)}>📱 <span>Feed</span></a>
+            <a href="/tv"    className="corner-menu-item" onClick={() => setOpen(false)}>📺 <span>Modo TV</span></a>
+            <div className="corner-menu-divider"/>
+            <a href="/admin" className="corner-menu-item corner-menu-admin" onClick={() => setOpen(false)}>⚙ <span>Admin</span></a>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Onboarding ────────────────────────────────────────────────────────────
 function Onboarding({ onDone }: { onDone:()=>void }) {
   const [hiding, setHiding] = useState(false)
   const finish = () => { setHiding(true); setTimeout(onDone, 600) }
   return (
     <div className={`onboard-overlay${hiding?' hiding':''}`}>
-      <span className="onboard-bear">🐻</span>
+      <span className="onboard-bear">🧸</span>
       <h1 className="onboard-name">José Augusto</h1>
       <p className="onboard-sub">25 de Abril · Chá de Bebê</p>
       <div className="onboard-steps">
@@ -1122,13 +1149,14 @@ export default function Home() {
         <div key={i} className="balloon" style={{left:l,animationDuration:d,animationDelay:delay}}>🎈</div>
       ))}
 
+      <CornerMenu/>
       {showOnboard&&<Onboarding onDone={()=>{localStorage.setItem('cha_visited','1');setShowOnboard(false)}}/>}
       <GeoBanner geoStatus={geoStatus} unlockWithKey={unlockWithKey}/>
 
       {/* Hero */}
       <section className="hero">
         <p className="hero-tag">✦ Chá de Bebê ✦</p>
-        <span className="hero-bear">🐻</span>
+        <span className="hero-bear">🧸</span>
         <h1 className="hero-name">José Augusto</h1>
         <div className="hero-divider"/>
         <p className="hero-date">25 de Abril · 2026</p>
@@ -1247,15 +1275,10 @@ export default function Home() {
       <CapsuleSection defaultAuthor={savedAuthor}/>
 
       <footer className="reveal">
-        <span className="footer-bear">🐻</span>
+        <span className="footer-bear">🧸</span>
         <p className="footer-text">Bem-vindo ao mundo, José Augusto</p>
         <div style={{width:80,height:1.5,background:'linear-gradient(to right,transparent,var(--accent),transparent)',margin:'16px auto'}}/>
         <p className="footer-sub">com muito amor · papai e mamãe</p>
-        <div style={{display:'flex',justifyContent:'center',gap:24,marginTop:24}}>
-          <a href="/feed" className="tv-footer-link">📱 Feed</a>
-          <a href="/tv" className="tv-footer-link">📺 Modo TV</a>
-          <a href="/admin" style={{fontSize:'.72rem',color:'var(--text-lo)',textDecoration:'none',letterSpacing:'.12em',opacity:.5}}>⚙ admin</a>
-        </div>
       </footer>
 
       {canPost&&(
