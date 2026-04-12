@@ -5,6 +5,41 @@ import { dbInsertMedia } from '@/lib/db'
 
 const MAX_IMAGE = 20 * 1024 * 1024  // 20 MB
 const MAX_VIDEO = 100 * 1024 * 1024 // 100 MB
+const MAX_AUDIO = 30 * 1024 * 1024  //  30 MB
+
+// ── Cloudflare AI image moderation (resnet-50 via REST API) ──────────────────
+// Returns 'pending' if the top label matches a known suspicious category.
+// Fails open (returns 'approved') on any error so uploads are never blocked
+// by a moderation service outage.
+async function moderateImage(imageBuffer: Buffer): Promise<'approved' | 'pending'> {
+  try {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
+    const token     = process.env.CLOUDFLARE_API_TOKEN
+    if (!accountId || !token) return 'approved'
+
+    const formData = new FormData()
+    formData.append('image', new Blob([new Uint8Array(imageBuffer)], { type: 'image/webp' }))
+
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/microsoft/resnet-50`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData },
+    )
+    if (!res.ok) return 'approved'
+
+    const json = await res.json() as { result: Array<{ label: string; score: number }> }
+    const top  = json.result?.[0]
+
+    // Resnet-50 is not an NSFW classifier — we check for a conservative blocklist
+    // of ImageNet categories that may indicate explicit content with high confidence
+    const flagged = ['bikini', 'brassiere', 'swimming_trunks', 'miniskirt']
+    if (top && flagged.some(s => top.label.toLowerCase().includes(s)) && top.score > 0.85) {
+      return 'pending'
+    }
+    return 'approved'
+  } catch {
+    return 'approved' // fail open
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,43 +51,66 @@ export async function POST(req: NextRequest) {
 
     const isVideo = file.type.startsWith('video/')
     const isImage = file.type.startsWith('image/')
+    const isAudio = file.type.startsWith('audio/') ||
+                    /\.(mp3|webm|ogg|m4a|wav|aac)$/i.test(file.name)
 
-    if (!isVideo && !isImage)
-      return NextResponse.json({ error: 'Envie uma foto (JPG/PNG/WEBP) ou vídeo (MP4/MOV).' }, { status: 400 })
+    if (!isVideo && !isImage && !isAudio)
+      return NextResponse.json({ error: 'Envie uma foto, vídeo (MP4/MOV) ou áudio (MP3/WebM).' }, { status: 400 })
 
-    const maxSize = isVideo ? MAX_VIDEO : MAX_IMAGE
+    const maxSize = isVideo ? MAX_VIDEO : isAudio ? MAX_AUDIO : MAX_IMAGE
     if (file.size > maxSize)
-      return NextResponse.json({ error: `Arquivo muito grande. Máximo ${isVideo ? '100' : '20'}MB.` }, { status: 400 })
+      return NextResponse.json({ error: `Arquivo muito grande. Máximo ${isVideo ? '100' : isAudio ? '30' : '20'}MB.` }, { status: 400 })
 
     const arrayBuffer = await file.arrayBuffer()
     const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
-    let body: Buffer
+    let body:        Buffer
     let contentType: string
-    let ext: string
+    let ext:         string
+    let mediaType:   'image' | 'video' | 'audio'
+    let status:      'approved' | 'pending' = 'approved'
 
-    if (isVideo) {
-      body = Buffer.from(arrayBuffer)
+    if (isAudio) {
+      body        = Buffer.from(arrayBuffer)
+      contentType = file.type || 'audio/webm'
+      ext         = file.name.split('.').pop() ?? 'webm'
+      mediaType   = 'audio'
+    } else if (isVideo) {
+      body        = Buffer.from(arrayBuffer)
       contentType = file.type
-      ext = file.name.split('.').pop() ?? 'mp4'
+      ext         = file.name.split('.').pop() ?? 'mp4'
+      mediaType   = 'video'
     } else {
-      body = await sharp(Buffer.from(arrayBuffer)).webp({ quality: 80 }).toBuffer()
+      // Convert image to WebP 80 quality + run AI moderation in parallel
+      const webpBuf = await sharp(Buffer.from(arrayBuffer)).webp({ quality: 80 }).toBuffer()
+      const [modStatus] = await Promise.all([moderateImage(webpBuf)])
+      body        = webpBuf
       contentType = 'image/webp'
-      ext = 'webp'
+      ext         = 'webp'
+      mediaType   = 'image'
+      status      = modStatus
     }
 
-    const key = `cha-jose-augusto/foto_${suffix}.${ext}`
+    const folder = isAudio ? 'audio' : isVideo ? 'videos' : 'fotos'
+    const key    = `cha-jose-augusto/${folder}/foto_${suffix}.${ext}`
 
     // 1. Upload file to R2
-    await uploadBuffer(key, body, contentType, { author, status: 'approved' })
+    await uploadBuffer(key, body, contentType, { author, status })
 
     // 2. Record metadata in D1
-    await dbInsertMedia(key, author, isVideo ? 'video' : 'image')
+    await dbInsertMedia(key, author, mediaType, status)
 
-    // 3. Ping SSE stream
-    await pingRealtimeR2(author, objectUrl(key)).catch(() => {})
+    // 3. Ping SSE stream (skip for pending items)
+    if (status === 'approved') {
+      await pingRealtimeR2(author, objectUrl(key)).catch(() => {})
+    }
 
-    return NextResponse.json({ success: true, type: isVideo ? 'video' : 'image' })
+    return NextResponse.json({
+      success: true,
+      type:    mediaType,
+      status,
+      ...(status === 'pending' ? { message: 'Foto em revisão — aparecerá em breve.' } : {}),
+    })
   } catch (err) {
     console.error('[upload]', err)
     return NextResponse.json({ error: 'Erro ao enviar. Tente novamente.' }, { status: 500 })
