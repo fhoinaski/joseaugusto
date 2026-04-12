@@ -244,3 +244,45 @@ export async function dbGetStats(): Promise<StatsResult> {
     capsuleCount: capsules[0]?.n ?? 0,
   }
 }
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+
+export interface CommentItem {
+  id: number
+  mediaId: string
+  author: string
+  text: string
+  createdAt: string
+}
+
+export async function dbGetComments(mediaId: string): Promise<CommentItem[]> {
+  const rows = await d1Query<{ id: number; media_id: string; author: string; text: string; created_at: string }>(
+    `SELECT id, media_id, author, text, created_at
+       FROM comments WHERE media_id = ? ORDER BY created_at ASC`,
+    [mediaId],
+  )
+  return rows.map(r => ({ id: r.id, mediaId: r.media_id, author: r.author, text: r.text, createdAt: r.created_at }))
+}
+
+export async function dbInsertComment(
+  mediaId: string,
+  author: string,
+  text: string,
+): Promise<CommentItem> {
+  // D1 doesn't return LAST_INSERT_ROWID via the HTTP API easily — use a workaround
+  await d1Exec(
+    `INSERT INTO comments (media_id, author, text, created_at) VALUES (?, ?, ?, datetime('now'))`,
+    [mediaId, author, text],
+  )
+  // Fetch the last inserted row for this media_id + author + text
+  const rows = await d1Query<{ id: number; created_at: string }>(
+    `SELECT id, created_at FROM comments WHERE media_id = ? AND author = ? AND text = ? ORDER BY id DESC LIMIT 1`,
+    [mediaId, author, text],
+  )
+  return { id: rows[0]?.id ?? 0, mediaId, author, text, createdAt: rows[0]?.created_at ?? new Date().toISOString() }
+}
+
+export async function dbGetCommentCount(mediaId: string): Promise<number> {
+  const rows = await d1Query<{ n: number }>(`SELECT COUNT(*) AS n FROM comments WHERE media_id = ?`, [mediaId])
+  return rows[0]?.n ?? 0
+}

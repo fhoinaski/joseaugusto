@@ -6,7 +6,7 @@ interface MediaItem {
   thumbUrl: string
   fullUrl: string
   author: string
-  type: 'image' | 'video'
+  type: 'image' | 'video' | 'audio'
 }
 
 type Phase = 'visible' | 'fading-out'
@@ -40,7 +40,7 @@ export default function TVPage() {
 
   useEffect(() => {
     fetchPhotos()
-    const t = setInterval(fetchPhotos, 15_000)
+    const t = setInterval(fetchPhotos, 10_000)
     return () => clearInterval(t)
   }, [fetchPhotos])
 
@@ -126,20 +126,15 @@ export default function TVPage() {
           className={`tv-media-wrap ${phase === 'fading-out' ? 'tv-fade-out' : 'tv-fade-in'}`}
         >
           {item.type === 'video' ? (
-            <video
-              src={item.fullUrl}
-              className="tv-media"
-              autoPlay
-              muted
-              playsInline
-              loop
-            />
+            <video src={item.fullUrl} className="tv-media" autoPlay muted playsInline loop />
+          ) : item.type === 'audio' ? (
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', width:'100%', height:'100%', background:'linear-gradient(135deg,#1a0a00,#3e2408)', gap:32 }}>
+              <div style={{ fontSize:'8rem' }}>🎙️</div>
+              <p style={{ color:'rgba(255,255,255,.8)', fontFamily:'serif', fontSize:'2rem', letterSpacing:'.1em' }}>{item.author}</p>
+              <audio src={item.fullUrl} autoPlay style={{ width:'320px' }} />
+            </div>
           ) : (
-            <img
-              src={item.fullUrl}
-              alt={item.author}
-              className="tv-media tv-ken-burns"
-            />
+            <img src={item.fullUrl} alt={item.author} className="tv-media tv-ken-burns" />
           )}
         </div>
       ) : (
@@ -154,7 +149,7 @@ export default function TVPage() {
       {/* Author name */}
       {item && (
         <div className={`tv-author ${showAuthor ? 'tv-author-visible' : ''}`}>
-          {item.type === 'video' ? '🎥' : '📷'} {item.author}
+          {item.type === 'video' ? '🎥' : item.type === 'audio' ? '🎙️' : '📷'} {item.author}
         </div>
       )}
 

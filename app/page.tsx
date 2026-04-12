@@ -23,26 +23,153 @@ const FILTERS: FilterDef[] = [
   { id:'golden',   label:'Dourado',   css:'sepia(0.6) brightness(1.1) saturate(1.3)' },
 ]
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-// Resizes to maxPx and encodes as WebP before upload — reduces bandwidth on slow 4G
-async function compressImage(file: File, maxPx = 1200, q = 0.88): Promise<Blob> {
-  return new Promise(resolve => {
+// ── Image processing helpers ──────────────────────────────────────────────
+function isHeicFile(f: File): boolean {
+  return /\.(heic|heif)$/i.test(f.name) || f.type === 'image/heic' || f.type === 'image/heif'
+}
+
+/** Convert + resize. Returns { blob, previewUrl } ready to display and upload. */
+async function prepareImageBlob(
+  file: File,
+  maxPx = 2000,
+  quality = 0.88,
+): Promise<{ blob: Blob; previewUrl: string }> {
+  let src: Blob = file
+
+  // 1. HEIC/HEIF → JPEG (iPhone photos)
+  if (isHeicFile(file)) {
+    try {
+      // Dynamic import keeps this out of the server bundle
+      const mod = await import('heic2any')
+      const heic2any = mod.default as (o: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>
+      const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+      src = Array.isArray(out) ? out[0] : out
+    } catch { /* fall through — try native decode */ }
+  }
+
+  // 2. Canvas resize (avoids black-screen on 50MP photos by capping dimensions)
+  const blob = await new Promise<Blob>((resolve) => {
     const img = new Image()
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(src)
+    // 10s safety timeout prevents infinite waiting on corrupt files
+    const tid = setTimeout(() => { URL.revokeObjectURL(url); resolve(src) }, 10_000)
+
     img.onload = () => {
+      clearTimeout(tid)
       URL.revokeObjectURL(url)
       let { width: w, height: h } = img
-      const ratio = Math.min(maxPx / w, maxPx / h)
-      if (ratio < 1) { w = Math.round(w * ratio); h = Math.round(h * ratio) }
-      const cv = document.createElement('canvas')
-      cv.width = w; cv.height = h
-      cv.getContext('2d')!.drawImage(img, 0, 0, w, h)
-      // Prefer WebP; fall back to JPEG if browser doesn't support it
-      cv.toBlob(b => resolve(b || file), 'image/webp', q)
+      // Don't upscale small images
+      if (w <= maxPx && h <= maxPx) { resolve(src); return }
+      const r = Math.min(maxPx / w, maxPx / h)
+      w = Math.round(w * r); h = Math.round(h * r)
+      try {
+        const cv = document.createElement('canvas')
+        cv.width = w; cv.height = h
+        cv.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        cv.toBlob(b => resolve(b ?? src), 'image/webp', quality)
+      } catch { resolve(src) }
     }
-    img.onerror = () => resolve(file)
+    img.onerror = () => { clearTimeout(tid); URL.revokeObjectURL(url); resolve(src) }
     img.src = url
   })
+
+  return { blob, previewUrl: URL.createObjectURL(blob) }
+}
+
+// ── Geofencing ────────────────────────────────────────────────────────────
+// Set your event coordinates via NEXT_PUBLIC_EVENT_LAT / NEXT_PUBLIC_EVENT_LNG
+const EVENT_LAT    = parseFloat(process.env.NEXT_PUBLIC_EVENT_LAT    ?? '-27.6133')
+const EVENT_LNG    = parseFloat(process.env.NEXT_PUBLIC_EVENT_LNG    ?? '-48.5299')
+const GEO_RADIUS_M = parseInt(process.env.NEXT_PUBLIC_GEO_RADIUS     ?? '200', 10)
+const ACCESS_KEY   = process.env.NEXT_PUBLIC_ACCESS_KEY               ?? 'bebe2025'
+
+function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6_371_000
+  const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180
+  const dφ = (lat2 - lat1) * Math.PI / 180, dλ = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(dλ / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+type GeoStatus = 'idle' | 'checking' | 'allowed' | 'observer' | 'key'
+
+function useGeofence() {
+  const [status,  setStatus]  = useState<GeoStatus>('idle')
+  const [canPost, setCanPost] = useState(true) // optimistic — UI usable immediately
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const cached = localStorage.getItem('cha_geo')
+      if (cached) {
+        const { result, ts } = JSON.parse(cached) as { result: GeoStatus; ts: number }
+        if (Date.now() - ts < 24 * 3600_000) {
+          setStatus(result); setCanPost(result !== 'observer'); return
+        }
+      }
+    } catch {}
+
+    if (!navigator.geolocation) { setStatus('key'); return }
+
+    setStatus('checking')
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const dist   = haversine(coords.latitude, coords.longitude, EVENT_LAT, EVENT_LNG)
+        const result: GeoStatus = dist <= GEO_RADIUS_M ? 'allowed' : 'observer'
+        setStatus(result); setCanPost(result !== 'observer')
+        try { localStorage.setItem('cha_geo', JSON.stringify({ result, ts: Date.now() })) } catch {}
+      },
+      () => setStatus('key'), // GPS denied / unavailable → show key input
+      { timeout: 8_000, maximumAge: 60_000 },
+    )
+  }, [])
+
+  const unlockWithKey = (key: string): boolean => {
+    if (key.trim() === ACCESS_KEY) {
+      setStatus('allowed'); setCanPost(true)
+      try { localStorage.setItem('cha_geo', JSON.stringify({ result: 'allowed', ts: Date.now() })) } catch {}
+      return true
+    }
+    return false
+  }
+
+  return { geoStatus: status, canPost, unlockWithKey }
+}
+
+function GeoBanner({ geoStatus, unlockWithKey }: { geoStatus: GeoStatus; unlockWithKey: (k: string) => boolean }) {
+  const [key,       setKey]       = useState('')
+  const [showKey,   setShowKey]   = useState(false)
+  const [keyError,  setKeyError]  = useState(false)
+
+  if (geoStatus === 'allowed' || geoStatus === 'idle' || geoStatus === 'checking') return null
+
+  const tryKey = () => {
+    if (unlockWithKey(key)) { setKeyError(false) }
+    else { setKeyError(true) }
+  }
+
+  if (geoStatus === 'observer' && !showKey) {
+    return (
+      <div className="geo-banner observer">
+        <span className="geo-banner-icon">📍</span>
+        <p className="geo-banner-text">Modo observador — você está fora do local do evento.</p>
+        <button className="geo-banner-key-btn" onClick={() => setShowKey(true)}>Tenho a chave</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="geo-banner key-input">
+      <span className="geo-banner-icon">🔑</span>
+      <p className="geo-banner-text">Digite a chave de acesso para enviar fotos:</p>
+      <div className="geo-banner-row">
+        <input className="geo-banner-input" type="text" value={key} onChange={e => setKey(e.target.value)}
+          placeholder="Chave de acesso…" onKeyDown={e => e.key === 'Enter' && tryKey()}/>
+        <button className="geo-banner-submit" onClick={tryKey}>Entrar</button>
+      </div>
+      {keyError && <p className="geo-banner-error">Chave incorreta. Tente novamente.</p>}
+    </div>
+  )
 }
 
 async function fetchJsonSafe<T>(url: string, fallback: T): Promise<T> {
@@ -247,22 +374,38 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
 
   const handleImgFiles=async(files:FileList|null)=>{
     if(!files||!files[0])return
-    if(files.length===1&&files[0].type.startsWith('image/')){
-      setStep('loading'); setCompPct(0)
-      const interval=setInterval(()=>setCompPct(p=>Math.min(p+20,90)),80)
-      setEditFile(files[0])
-      clearInterval(interval); setCompPct(100)
-      setTimeout(()=>setStep('edit'),150)
+    const f0=files[0]
+    const isSingle=files.length===1&&(f0.type.startsWith('image/')||isHeicFile(f0))
+
+    if(isSingle){
+      setStep('loading'); setCompPct(10)
+      const pct=setInterval(()=>setCompPct(p=>Math.min(p+12,85)),200)
+      try{
+        const {blob}=await prepareImageBlob(f0,2000)
+        clearInterval(pct); setCompPct(100)
+        const ext=blob.type==='image/webp'?'webp':'jpg'
+        const prepared=new File([blob],f0.name.replace(/\.(heic|heif|jpg|jpeg|png)$/i,`.${ext}`),{type:blob.type})
+        setEditFile(prepared)
+        setTimeout(()=>setStep('edit'),150)
+      }catch{
+        clearInterval(pct)
+        setEditFile(f0)
+        setTimeout(()=>setStep('edit'),150)
+      }
     } else {
       setStep('loading')
       const items:QItem[]=[]
       for(let i=0;i<files.length;i++){
         const f=files[i]; setCompPct(Math.round(((i+1)/files.length)*100))
-        const isImg=f.type.startsWith('image/')
+        const isImg=f.type.startsWith('image/')||isHeicFile(f)
         const isAud=f.type.startsWith('audio/')||/\.(mp3|webm|ogg|m4a|wav|aac)$/i.test(f.name)
         const type:QItem['type']=isImg?'image':isAud?'audio':'video'
-        const blob=isImg?await compressImage(f,1200):f
-        items.push({file:blob,name:f.name,preview:isImg?URL.createObjectURL(blob):'',status:'waiting',progress:0,type,retries:0,isOfflineError:false})
+        if(isImg){
+          const {blob,previewUrl}=await prepareImageBlob(f,2000)
+          items.push({file:blob,name:f.name,preview:previewUrl,status:'waiting',progress:0,type,retries:0,isOfflineError:false})
+        }else{
+          items.push({file:f,name:f.name,preview:isAud?'':URL.createObjectURL(f),status:'waiting',progress:0,type,retries:0,isOfflineError:false})
+        }
       }
       setQueue(items); setStep('queue')
     }
@@ -346,8 +489,8 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 </button>
               ))}
             </div>
-            <input ref={camRef}  type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
-            <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={camRef}  type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={vidRef}  type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
               if(!e.target.files)return
               const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}))
@@ -807,6 +950,7 @@ export default function Home() {
   const [parentsMsg,  setParentsMsg]   = useState('')
   const [savedAuthor, setSavedAuthor]  = useState('')
   const [simpleMode,  setSimpleMode]   = useState(false)
+  const { geoStatus, canPost, unlockWithKey } = useGeofence()
   const lastRtTs  = useRef<number>(0)
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
@@ -947,6 +1091,7 @@ export default function Home() {
       ))}
 
       {showOnboard&&<Onboarding onDone={()=>{localStorage.setItem('cha_visited','1');setShowOnboard(false)}}/>}
+      <GeoBanner geoStatus={geoStatus} unlockWithKey={unlockWithKey}/>
 
       {/* Hero */}
       <section className="hero">
@@ -958,7 +1103,7 @@ export default function Home() {
         <p className="hero-sub">Sábado, às 17 horas</p>
         <div className="hero-cta">
           <a href="#galeria" className="btn-primary">📷 Ver o álbum</a>
-          <button className="btn-secondary" onClick={()=>setShowUpload(true)}>🌿 Compartilhar</button>
+          {canPost&&<button className="btn-secondary" onClick={()=>setShowUpload(true)}>🌿 Compartilhar</button>}
         </div>
         <button className={`simple-toggle${simpleMode?' active':''}`} onClick={toggleSimple}>
           ♿ {simpleMode?'Modo simples ativo':'Modo simples'}
@@ -1075,14 +1220,17 @@ export default function Home() {
         <div style={{width:80,height:1.5,background:'linear-gradient(to right,transparent,var(--accent),transparent)',margin:'16px auto'}}/>
         <p className="footer-sub">com muito amor · papai e mamãe</p>
         <div style={{display:'flex',justifyContent:'center',gap:24,marginTop:24}}>
+          <a href="/feed" className="tv-footer-link">📱 Feed</a>
           <a href="/tv" className="tv-footer-link">📺 Modo TV</a>
           <a href="/admin" style={{fontSize:'.72rem',color:'var(--text-lo)',textDecoration:'none',letterSpacing:'.12em',opacity:.5}}>⚙ admin</a>
         </div>
       </footer>
 
-      <button className="fab" onClick={()=>setShowUpload(true)} aria-label="Enviar foto">
-        📤<span className="fab-tooltip">Enviar foto ou vídeo</span>
-      </button>
+      {canPost&&(
+        <button className="fab" onClick={()=>setShowUpload(true)} aria-label="Enviar foto">
+          📤<span className="fab-tooltip">Enviar foto ou vídeo</span>
+        </button>
+      )}
 
       {lbIdx!==null&&(
         <Lightbox items={media} index={lbIdx} onClose={()=>setLbIdx(null)}
