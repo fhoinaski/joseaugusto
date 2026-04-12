@@ -1,38 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import cloudinary, { getCapsuleCount, getCapsuleOpenDate } from '@/lib/cloudinary'
+import { uploadBuffer, objectUrl } from '@/lib/r2'
+import { dbGetCapsuleCount, dbGetConfig, dbInsertCapsule } from '@/lib/db'
 
 export async function GET() {
-  const [count, openDate] = await Promise.all([getCapsuleCount(), getCapsuleOpenDate()])
+  const [count, openDate] = await Promise.all([
+    dbGetCapsuleCount(),
+    dbGetConfig('capsule_open_date', '18 anos'),
+  ])
   return NextResponse.json({ count, openDate })
 }
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
-    const image    = formData.get('image')   as File | null
-    const author   = ((formData.get('author')  as string) ?? '').trim().slice(0, 100)
-    const message  = ((formData.get('message') as string) ?? '').trim().slice(0, 500)
+    const image   = formData.get('image')   as File | null
+    const author  = ((formData.get('author')  as string) ?? '').trim().slice(0, 100)
+    const message = ((formData.get('message') as string) ?? '').trim().slice(0, 500)
 
     if (!author || !message) {
       return NextResponse.json({ error: 'Nome e mensagem são obrigatórios' }, { status: 400 })
     }
 
-    const context = [
-      'type=capsule',
-      `author=${encodeURIComponent(author)}`,
-      `message=${encodeURIComponent(message)}`,
-      `created_at=${new Date().toISOString()}`,
-    ].join('|')
+    let imageUrl = ''
 
     if (image && image.size > 0) {
-      const buffer  = Buffer.from(await image.arrayBuffer())
-      const dataUrl = `data:image/png;base64,${buffer.toString('base64')}`
-      await cloudinary.uploader.upload(dataUrl, { folder: 'cha-jose-augusto/capsulas', context })
-    } else {
-      // Fallback: tiny placeholder
-      const tiny = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-      await cloudinary.uploader.upload(tiny, { folder: 'cha-jose-augusto/capsulas', context })
+      const buffer = Buffer.from(await image.arrayBuffer())
+      const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+      const key    = `cha-jose-augusto/capsulas/capsule_${suffix}.png`
+      await uploadBuffer(key, buffer, 'image/png', { author, type: 'capsule' })
+      imageUrl = objectUrl(key)
     }
+
+    await dbInsertCapsule(author, message, imageUrl)
 
     return NextResponse.json({ ok: true })
   } catch (err) {
