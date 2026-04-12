@@ -358,12 +358,18 @@ function Carousel3D({ items, onOpenLightbox }:{ items:MediaItem[]; onOpenLightbo
               className={`c-card${i===current?' active-card':''}`}
               style={{ transform:getTransform(i), zIndex:getZIndex(i), opacity:getOpacity(i) }}
               onClick={()=>{ if(i===current)onOpenLightbox(i); else { go(((i-current)+total)%total<=total/2?1:-1) } }}>
-              {item.type==='video'
-                ?<video src={item.thumbUrl} muted playsInline/>
-                :<img src={item.thumbUrl} alt={item.author} loading="lazy"/>
-              }
+              {/* Sempre mostra thumbUrl como imagem — vídeos têm poster gerado pelo Cloudinary */}
+              <img src={item.thumbUrl} alt={item.author} loading="lazy"
+                style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+              {item.type==='video'&&(
+                <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(255,255,255,.85)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',boxShadow:'0 4px 16px rgba(0,0,0,.3)'}}>
+                    ▶
+                  </div>
+                </div>
+              )}
               <div className="c-card-overlay">
-                <p className="c-card-author">📷 {item.author}</p>
+                <p className="c-card-author">{item.type==='video'?'🎥':'📷'} {item.author}</p>
               </div>
             </div>
           ))}
@@ -386,8 +392,24 @@ function Carousel3D({ items, onOpenLightbox }:{ items:MediaItem[]; onOpenLightbo
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
 function Lightbox({ items, index, onClose, onNav }:{ items:MediaItem[]; index:number; onClose:()=>void; onNav:(n:number)=>void }) {
-  const item=items[index]
-  const touchStart=useRef<number|null>(null)
+  const [displayIdx, setDisplayIdx] = useState(index)
+  const [slideDir, setSlideDir]     = useState<'left'|'right'|null>(null)
+  const [animating, setAnimating]   = useState(false)
+  const touchStart = useRef<number|null>(null)
+
+  // When index changes externally, trigger slide transition
+  useEffect(()=>{
+    if(index === displayIdx) return
+    const dir = index > displayIdx ? 'left' : 'right'
+    setSlideDir(dir)
+    setAnimating(true)
+    const t = setTimeout(()=>{
+      setDisplayIdx(index)
+      setSlideDir(null)
+      setTimeout(()=>setAnimating(false), 320)
+    }, 60)
+    return()=>clearTimeout(t)
+  },[index, displayIdx])
 
   useEffect(()=>{
     const fn=(e:KeyboardEvent)=>{ if(e.key==='Escape')onClose(); if(e.key==='ArrowRight')onNav(1); if(e.key==='ArrowLeft')onNav(-1) }
@@ -402,24 +424,41 @@ function Lightbox({ items, index, onClose, onNav }:{ items:MediaItem[]; index:nu
     touchStart.current=null
   }
 
-  const maxDots=Math.min(items.length,7)
-  const ds=Math.max(0,Math.min(index-3,items.length-maxDots))
+  const item = items[displayIdx] ?? items[index]
+  const maxDots = Math.min(items.length, 7)
+  const ds = Math.max(0, Math.min(index-3, items.length-maxDots))
+
+  // Slide animation style
+  const getSlideStyle = (): React.CSSProperties => {
+    if(!animating || !slideDir) return { transition:'transform .35s cubic-bezier(.25,.46,.45,.94), opacity .35s ease', transform:'translateX(0) scale(1)', opacity:1 }
+    // Before update: exit current
+    if(slideDir==='left')  return { transition:'transform .35s cubic-bezier(.25,.46,.45,.94), opacity .35s ease', transform:'translateX(-8%) scale(.96)', opacity:0 }
+    return { transition:'transform .35s cubic-bezier(.25,.46,.45,.94), opacity .35s ease', transform:'translateX(8%) scale(.96)', opacity:0 }
+  }
 
   return (
     <div className="lightbox" onClick={onClose} onTouchStart={onTS} onTouchEnd={onTE}>
       <button className="lightbox-close" onClick={e=>{e.stopPropagation();onClose()}}>✕</button>
       <button className="lightbox-nav lightbox-prev" disabled={index===0} onClick={e=>{e.stopPropagation();onNav(-1)}}>‹</button>
       <button className="lightbox-nav lightbox-next" disabled={index===items.length-1} onClick={e=>{e.stopPropagation();onNav(1)}}>›</button>
+
       <div className="lightbox-content" onClick={e=>e.stopPropagation()}>
-        {item.type==='video'
-          ?<video src={item.fullUrl} className="lightbox-media" controls autoPlay/>
-          :<img src={item.fullUrl} alt={item.author} className="lightbox-media"/>
-        }
-        <p className="lightbox-caption">📷 {item.author} · {new Date(item.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long'})}</p>
+        <div style={{...getSlideStyle(), display:'flex', flexDirection:'column', alignItems:'center', gap:12}}>
+          {item.type==='video'
+            ?<video src={item.fullUrl} className="lightbox-media" controls autoPlay/>
+            :<img src={item.fullUrl} alt={item.author} className="lightbox-media"/>
+          }
+          <p className="lightbox-caption">
+            {item.type==='video'?'🎥':'📷'} {item.author} · {new Date(item.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long'})}
+          </p>
+        </div>
       </div>
+
       {items.length>1&&(
         <div className="lightbox-counter">
-          {Array.from({length:maxDots},(_,i)=>ds+i).map(i=><div key={i} className={`lightbox-dot${i===index?' active':''}`}/>)}
+          {Array.from({length:maxDots},(_,i)=>ds+i).map(i=>(
+            <div key={i} className={`lightbox-dot${i===index?' active':''}`}/>
+          ))}
         </div>
       )}
     </div>
@@ -630,9 +669,19 @@ export default function Home() {
             <div className="gallery-grid">
               {media.map((item,i)=>(
                 <div key={item.id} className="gallery-card" style={{animationDelay:`${(i%8)*0.055}s`}} onClick={()=>setLbIdx(i)}>
-                  {item.type==='video'?<video src={item.thumbUrl} muted playsInline/>:<img src={item.thumbUrl} alt={item.author} loading="lazy"/>}
-                  {item.type==='video'&&<div className="gallery-card-type">▶ Vídeo</div>}
-                  <div className="gallery-card-footer"><span className="gallery-card-author">📷 {item.author}</span></div>
+                  <div style={{position:'relative',aspectRatio:'1',overflow:'hidden'}}>
+                    <img src={item.thumbUrl} alt={item.author} loading="lazy"
+                      style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                    {item.type==='video'&&(
+                      <>
+                        <div className="gallery-card-type">▶ Vídeo</div>
+                        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <div style={{width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,.8)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1rem'}}>▶</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="gallery-card-footer"><span className="gallery-card-author">{item.type==='video'?'🎥':'📷'} {item.author}</span></div>
                 </div>
               ))}
             </div>

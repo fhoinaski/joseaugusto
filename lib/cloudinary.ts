@@ -22,9 +22,17 @@ function mapResource(r: any): MediaItem {
   const isVideo = r.resource_type === 'video'
   return {
     id:       r.public_id,
+    // For videos: generate a JPG poster from the first frame (so_0)
     thumbUrl: isVideo
-      ? cloudinary.url(r.public_id, { resource_type: 'video', format: 'jpg', width: 400, height: 400, crop: 'fill', quality: 'auto' })
-      : cloudinary.url(r.public_id, { width: 400, height: 400, crop: 'fill', quality: 'auto', fetch_format: 'auto' }),
+      ? cloudinary.url(r.public_id, {
+          resource_type: 'video', format: 'jpg',
+          width: 400, height: 400, crop: 'fill',
+          quality: 'auto', start_offset: '0'
+        })
+      : cloudinary.url(r.public_id, {
+          width: 400, height: 400, crop: 'fill',
+          quality: 'auto', fetch_format: 'auto'
+        }),
     fullUrl: isVideo
       ? cloudinary.url(r.public_id, { resource_type: 'video', quality: 'auto' })
       : cloudinary.url(r.public_id, { width: 1400, quality: 'auto', fetch_format: 'auto' }),
