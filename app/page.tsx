@@ -103,29 +103,48 @@ function useGeofence() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    try {
-      const cached = localStorage.getItem('cha_geo')
-      if (cached) {
-        const { result, ts } = JSON.parse(cached) as { result: GeoStatus; ts: number }
-        if (Date.now() - ts < 24 * 3600_000) {
-          setStatus(result); setCanPost(result !== 'observer'); return
+
+    // Step 1: check if admin enabled geo-gating
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(({ geoGateEnabled }: { geoGateEnabled: boolean }) => {
+        if (!geoGateEnabled) {
+          // Gate disabled by admin → everyone can post
+          setStatus('allowed')
+          setCanPost(true)
+          return
         }
-      }
-    } catch {}
 
-    if (!navigator.geolocation) { setStatus('key'); return }
+        // Step 2: gate is ON — check cached result first
+        try {
+          const cached = localStorage.getItem('cha_geo')
+          if (cached) {
+            const { result, ts } = JSON.parse(cached) as { result: GeoStatus; ts: number }
+            if (Date.now() - ts < 24 * 3600_000) {
+              setStatus(result); setCanPost(result !== 'observer'); return
+            }
+          }
+        } catch {}
 
-    setStatus('checking')
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const dist   = haversine(coords.latitude, coords.longitude, EVENT_LAT, EVENT_LNG)
-        const result: GeoStatus = dist <= GEO_RADIUS_M ? 'allowed' : 'observer'
-        setStatus(result); setCanPost(result !== 'observer')
-        try { localStorage.setItem('cha_geo', JSON.stringify({ result, ts: Date.now() })) } catch {}
-      },
-      () => setStatus('key'), // GPS denied / unavailable → show key input
-      { timeout: 8_000, maximumAge: 60_000 },
-    )
+        // Step 3: run GPS check
+        if (!navigator.geolocation) { setStatus('key'); return }
+
+        setStatus('checking')
+        navigator.geolocation.getCurrentPosition(
+          ({ coords }) => {
+            const dist   = haversine(coords.latitude, coords.longitude, EVENT_LAT, EVENT_LNG)
+            const result: GeoStatus = dist <= GEO_RADIUS_M ? 'allowed' : 'observer'
+            setStatus(result); setCanPost(result !== 'observer')
+            try { localStorage.setItem('cha_geo', JSON.stringify({ result, ts: Date.now() })) } catch {}
+          },
+          () => setStatus('key'),
+          { timeout: 8_000, maximumAge: 60_000 },
+        )
+      })
+      .catch(() => {
+        // If /api/settings fails, fail open
+        setStatus('allowed'); setCanPost(true)
+      })
   }, [])
 
   const unlockWithKey = (key: string): boolean => {

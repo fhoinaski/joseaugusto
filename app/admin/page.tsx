@@ -34,7 +34,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings'>('pending')
   const [pending,   setPending]   = useState<MediaItem[]>([])
   const [approved,  setApproved]  = useState<MediaItem[]>([])
   const [capsules,  setCapsules]  = useState<CapsuleItem[]>([])
@@ -47,6 +47,8 @@ function AdminPanel() {
   const [toast, setToast] = useState('')
   const [loadingP, setLoadingP] = useState(true)
   const [loadingA, setLoadingA] = useState(true)
+  const [geoGateEnabled, setGeoGateEnabled] = useState(false)
+  const [savingGeo, setSavingGeo] = useState(false)
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
@@ -80,7 +82,16 @@ function AdminPanel() {
     fetchPending(); fetchApproved()
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_message' }) })
       .then(r => r.json()).then(d => setMsg(d.message ?? ''))
+    fetch('/api/admin/settings')
+      .then(r => r.json()).then(d => setGeoGateEnabled(d.geoGateEnabled ?? false))
   }, [fetchPending, fetchApproved])
+
+  const toggleGeoGate = async (enabled: boolean) => {
+    setSavingGeo(true)
+    await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ geoGateEnabled: enabled }) })
+    setGeoGateEnabled(enabled); setSavingGeo(false)
+    showToast(enabled ? '📍 Geofencing ativado!' : '🌐 Geofencing desativado.')
+  }
 
   const action = async (id: string, act: 'approve' | 'reject' | 'delete', type = 'image') => {
     await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: act, id, resourceType: type }) })
@@ -182,10 +193,11 @@ function AdminPanel() {
 
       <div style={S.tabs}>
         {[
-          { key: 'pending',  label: 'Pendentes', count: pending.length },
-          { key: 'approved', label: 'Aprovadas',  count: 0 },
-          { key: 'message',  label: 'Mensagem',   count: 0 },
-          { key: 'capsule',  label: '💌 Cápsula', count: 0 },
+          { key: 'pending',  label: 'Pendentes',      count: pending.length },
+          { key: 'approved', label: 'Aprovadas',       count: 0 },
+          { key: 'message',  label: 'Mensagem',        count: 0 },
+          { key: 'capsule',  label: '💌 Cápsula',      count: 0 },
+          { key: 'settings', label: '⚙ Configurações', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)}
             onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
@@ -269,6 +281,59 @@ function AdminPanel() {
               </div>
             )
           }
+        </div>
+      )}
+
+      {tab === 'settings' && (
+        <div style={S.card}>
+          <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>⚙ Configurações de Acesso</h2>
+          <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 24 }}>Controle quem pode enviar fotos ao álbum.</p>
+
+          {/* Geo gate toggle */}
+          <div style={{ border: '1px solid var(--beige)', borderRadius: 16, padding: '20px 22px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 600, color: 'var(--bd)', fontSize: '1rem', marginBottom: 4 }}>📍 Restringir upload por localização</p>
+              <p style={{ fontSize: '.85rem', color: 'var(--bl)', lineHeight: 1.6 }}>
+                Quando <strong>ativado</strong>, apenas quem estiver dentro do raio de {process.env.NEXT_PUBLIC_GEO_RADIUS ?? '200'} m do evento pode enviar fotos.
+                Quem estiver fora verá o aviso "Modo observador" e poderá entrar com uma chave de acesso.
+              </p>
+              <p style={{ fontSize: '.78rem', color: 'var(--bl)', fontStyle: 'italic', marginTop: 6, opacity: 0.7 }}>
+                Quando <strong>desativado</strong>, qualquer pessoa com o link pode enviar fotos livremente.
+              </p>
+            </div>
+            <button
+              onClick={() => toggleGeoGate(!geoGateEnabled)}
+              disabled={savingGeo}
+              style={{
+                flexShrink: 0,
+                width: 56,
+                height: 30,
+                borderRadius: 15,
+                border: 'none',
+                background: geoGateEnabled ? '#5a9e3a' : '#c9b8a8',
+                cursor: savingGeo ? 'wait' : 'pointer',
+                position: 'relative',
+                transition: 'background .25s',
+              }}
+              aria-label={geoGateEnabled ? 'Desativar geofencing' : 'Ativar geofencing'}
+            >
+              <span style={{
+                position: 'absolute',
+                top: 3,
+                left: geoGateEnabled ? 29 : 3,
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: '#fff',
+                boxShadow: '0 1px 4px rgba(0,0,0,.25)',
+                transition: 'left .25s',
+              }}/>
+            </button>
+          </div>
+
+          <p style={{ fontSize: '.78rem', color: 'var(--bl)', fontStyle: 'italic', opacity: 0.6 }}>
+            A chave de acesso para visitantes externos é definida pela variável de ambiente <code>NEXT_PUBLIC_ACCESS_KEY</code>.
+          </p>
         </div>
       )}
 
