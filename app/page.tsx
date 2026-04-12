@@ -806,21 +806,55 @@ export default function Home() {
   },[])
 
   useEffect(()=>{
+    // Seed the last-known timestamp so we don't fire stale toasts on reconnect
     fetch('/api/realtime').then(r=>r.json()).then(({data})=>{if(data?.ts)lastRtTs.current=data.ts})
-    const poll=async()=>{
-      try{
-        const {data}=await(await fetch('/api/realtime')).json()
-        if(data?.ts&&data.ts>lastRtTs.current&&data.ts>Date.now()-30000){
-          lastRtTs.current=data.ts
-          const id=Math.random().toString(36).slice(2)
-          const text=data.author!=='Convidado'?`${data.author} adicionou uma foto! 📷`:'Nova foto adicionada! 📷'
-          setToasts(prev=>[...prev.slice(-2),{id,text,thumb:data.thumbUrl}])
-          setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4500)
-          setTimeout(()=>fetchMedia(),2000)
-        }
-      }catch{}
+
+    const handleNewPhoto=(data:any)=>{
+      if(!data?.ts||data.ts<=lastRtTs.current||data.ts<=Date.now()-30000)return
+      lastRtTs.current=data.ts
+      const id=Math.random().toString(36).slice(2)
+      const text=data.author!=='Convidado'?`${data.author} adicionou uma foto! 📷`:'Nova foto adicionada! 📷'
+      setToasts(prev=>[...prev.slice(-2),{id,text,thumb:data.thumbUrl}])
+      setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4500)
+      setTimeout(()=>fetchMedia(),2000)
     }
-    const t=setInterval(poll,10000); return()=>clearInterval(t)
+
+    // Fallback polling — used when EventSource is unavailable or times out
+    let fallback:ReturnType<typeof setInterval>|null=null
+    const startFallback=()=>{
+      if(fallback)return
+      fallback=setInterval(async()=>{
+        try{const{data}=await(await fetch('/api/realtime')).json();handleNewPhoto(data)}catch{}
+      },10000)
+    }
+
+    if(typeof EventSource==='undefined'){
+      startFallback()
+      return()=>{if(fallback)clearInterval(fallback)}
+    }
+
+    let es=new EventSource('/api/stream')
+
+    // If SSE hasn't confirmed connection within 5s, fall back to polling
+    let fbTimer:ReturnType<typeof setTimeout>|null=setTimeout(()=>{
+      if(es.readyState!==EventSource.OPEN){es.close();startFallback()}
+    },5000)
+
+    es.addEventListener('ping',()=>{
+      if(fbTimer){clearTimeout(fbTimer);fbTimer=null}
+    })
+    es.addEventListener('new-photo',(e:MessageEvent)=>{
+      try{handleNewPhoto(JSON.parse(e.data))}catch{}
+    })
+    es.addEventListener('message-update',(e:MessageEvent)=>{
+      try{const{message}=JSON.parse(e.data);if(message)setParentsMsg(message)}catch{}
+    })
+
+    return()=>{
+      es.close()
+      if(fallback)clearInterval(fallback)
+      if(fbTimer)clearTimeout(fbTimer)
+    }
   },[fetchMedia])
 
   useEffect(()=>{
