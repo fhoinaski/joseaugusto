@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dbGetComments, dbInsertComment } from '@/lib/db'
+import { pingCommentR2 } from '@/lib/r2'
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
     const safeText   = text.toString().trim().slice(0, 300)
 
     const comment = await dbInsertComment(media_id, safeAuthor, safeText)
+    await pingCommentR2(media_id, safeAuthor).catch(() => {})
     return NextResponse.json({ comment }, { status: 201 })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

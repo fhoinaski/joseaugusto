@@ -39,7 +39,10 @@ self.addEventListener('fetch', e => {
       caches.open(CACHE).then(cache =>
         cache.match(e.request).then(cached =>
           cached || fetch(e.request).then(r => {
-            if (r.ok) cache.put(e.request, r.clone())
+            if (r.ok) {
+              const clone = r.clone()
+              cache.put(e.request, clone)
+            }
             return r
           }).catch(() => new Response('', { status: 503 }))
         )
@@ -53,7 +56,8 @@ self.addEventListener('fetch', e => {
     fetch(e.request)
       .then(res => {
         if (res.ok && res.type === 'basic') {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone()))
+          const clone = res.clone()
+          caches.open(CACHE).then(c => c.put(e.request, clone))
         }
         return res
       })

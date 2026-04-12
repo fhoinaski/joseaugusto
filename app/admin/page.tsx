@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 
-interface MediaItem   { id: string; thumbUrl: string; fullUrl: string; author: string; type: 'image' | 'video'; createdAt: string }
+interface MediaItem   { id: string; thumbUrl: string; fullUrl: string; author: string; type: 'image' | 'video' | 'audio'; createdAt: string }
 interface CapsuleItem { id: string; author: string; message: string; createdAt: string; imageUrl: string }
 
 function LoginForm({ onLogin }: { onLogin: () => void }) {
@@ -41,7 +41,9 @@ function AdminPanel() {
   const [capsuleOpenDate, setCapsuleOpenDate] = useState('18 anos')
   const [editingOpenDate, setEditingOpenDate] = useState('')
   const [msg, setMsg] = useState('')
+  const [pinnedText, setPinnedText] = useState('')
   const [savingMsg,       setSavingMsg]       = useState(false)
+  const [savingPinnedText, setSavingPinnedText] = useState(false)
   const [savingOpenDate,  setSavingOpenDate]  = useState(false)
   const [loadingC, setLoadingC] = useState(false)
   const [toast, setToast] = useState('')
@@ -57,6 +59,7 @@ function AdminPanel() {
   const [showNewPw, setShowNewPw] = useState(false)
   const [savingPw, setSavingPw] = useState(false)
   const [pwError, setPwError] = useState('')
+  const [pinnedMediaId, setPinnedMediaId] = useState('')
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
@@ -90,12 +93,27 @@ function AdminPanel() {
     fetchPending(); fetchApproved()
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_message' }) })
       .then(r => r.json()).then(d => setMsg(d.message ?? ''))
+    fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_pinned_text' }) })
+      .then(r => r.json()).then(d => setPinnedText(d.pinnedText ?? ''))
+    fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_pinned_media' }) })
+      .then(r => r.json()).then(d => setPinnedMediaId(d.pinnedMediaId ?? ''))
     fetch('/api/admin/settings')
       .then(r => r.json()).then(d => {
         setGeoGateEnabled(d.geoGateEnabled ?? false)
         setAccessKeys(d.keys ?? [])
       })
   }, [fetchPending, fetchApproved])
+
+  const togglePin = async (id: string) => {
+    const res = await fetch('/api/admin/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'pin_media', id }),
+    })
+    const data = await res.json()
+    setPinnedMediaId(data.pinnedMediaId ?? '')
+    showToast(data.pinnedMediaId ? '📌 Post fixado no feed!' : '📌 Post desafixado.')
+  }
 
   const toggleGeoGate = async (enabled: boolean) => {
     setSavingGeo(true)
@@ -158,7 +176,15 @@ function AdminPanel() {
     setSavingMsg(false); showToast('🌸 Mensagem salva!')
   }
 
+  const savePinnedText = async () => {
+    setSavingPinnedText(true)
+    await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_pinned_text', text: pinnedText }) })
+    setSavingPinnedText(false); showToast('📌 Texto fixado atualizado!')
+  }
+
   const logout = async () => { await fetch('/api/admin/logout', { method: 'POST' }); window.location.reload() }
+  const exportMediaZip = () => { window.location.href = '/api/admin/export/media' }
+  const exportTexts = () => { window.location.href = '/api/admin/export/texts' }
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 20px',
@@ -199,7 +225,9 @@ function AdminPanel() {
     <div style={S.photoCard}>
       {item.type === 'video'
         ? <div style={{ aspectRatio: '1', background: 'var(--beige)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>🎥</div>
-        : <img src={item.thumbUrl} alt={item.author} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+        : item.type === 'audio'
+          ? <div style={{ aspectRatio: '1', background: 'var(--beige)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>🎙️</div>
+          : <img src={item.thumbUrl} alt={item.author} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
       }
       <div style={S.photoInfo}>
         <p style={S.photoAuthor}>{item.author}</p>
@@ -207,6 +235,7 @@ function AdminPanel() {
         <div style={S.actionRow}>
           {showApprove && <button style={S.btnApprove} onClick={() => action(item.id, 'approve', item.type)}>✓ Aprovar</button>}
           {showApprove && <button style={S.btnDelete} onClick={() => action(item.id, 'reject', item.type)}>✗ Rejeitar</button>}
+          {!showApprove && <button style={{ ...S.btnApprove, background: pinnedMediaId === item.id ? '#fff7d6' : '#eef1ff', color: pinnedMediaId === item.id ? '#8a6d1f' : '#3d4f9b' }} onClick={() => togglePin(item.id)}>{pinnedMediaId === item.id ? '📌 Fixado' : '📍 Fixar'}</button>}
           {!showApprove && <button style={S.btnDelete} onClick={() => {
             if (confirm(`Excluir permanentemente esta foto de ${item.author}?`)) action(item.id, 'delete', item.type)
           }}>🗑 Excluir</button>}
@@ -222,7 +251,11 @@ function AdminPanel() {
           <a href="/" style={{ fontSize: '.8rem', color: 'var(--bl)', textDecoration: 'none' }}>← voltar ao site</a>
           <p style={S.title}>🐻 Painel Admin</p>
         </div>
-        <button onClick={logout} style={{ ...tabStyle(false), color: '#a33', borderColor: '#e0a0a0' }}>Sair</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={exportMediaZip} style={tabStyle(false)}>📦 Exportar mídia</button>
+          <button onClick={exportTexts} style={tabStyle(false)}>📝 Exportar textos</button>
+          <button onClick={logout} style={{ ...tabStyle(false), color: '#a33', borderColor: '#e0a0a0' }}>Sair</button>
+        </div>
       </div>
 
       <div style={S.statsRow}>
@@ -277,6 +310,19 @@ function AdminPanel() {
           <button className="btn-primary" onClick={saveMsg} disabled={savingMsg} style={{ fontSize: '.95rem', padding: '11px 28px' }}>
             {savingMsg ? 'Salvando…' : '🌸 Salvar mensagem'}
           </button>
+
+          <div style={{ height: 18 }} />
+          <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.08rem', color: 'var(--bd)', marginBottom: 6 }}>Texto fixado do feed</h3>
+          <p style={{ fontSize: '.88rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 14 }}>Este texto aparece no bloco “Destaque do Feed”, independente da mensagem dos pais.</p>
+          <textarea style={{ width: '100%', border: '1px solid var(--sand)', borderRadius: 12, padding: '14px 16px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', resize: 'vertical', minHeight: 110, lineHeight: 1.7, marginBottom: 12 }}
+            value={pinnedText} onChange={e => setPinnedText(e.target.value)} maxLength={240} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '.78rem', color: 'var(--text-lo)' }}>{pinnedText.length}/240</span>
+            <button className="btn-secondary" onClick={() => setPinnedText('')} style={{ fontSize: '.9rem', padding: '8px 20px' }}>Limpar</button>
+            <button className="btn-primary" onClick={savePinnedText} disabled={savingPinnedText} style={{ fontSize: '.95rem', padding: '11px 28px' }}>
+              {savingPinnedText ? 'Salvando…' : '📌 Salvar texto fixado'}
+            </button>
+          </div>
         </div>
       )}
 

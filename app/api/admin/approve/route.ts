@@ -31,6 +31,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message })
   }
 
+  if (body.action === 'update_pinned_text') {
+    await dbSetConfig('pinned_text', body.text ?? '')
+    return NextResponse.json({ ok: true })
+  }
+
+  if (body.action === 'get_pinned_text') {
+    const pinnedText = await dbGetConfig('pinned_text', '')
+    return NextResponse.json({ pinnedText })
+  }
+
+  if (body.action === 'pin_media') {
+    const id = (body.id ?? '').toString().trim()
+    const current = await dbGetConfig('pinned_media_id', '')
+    const next = current === id ? '' : id
+    await dbSetConfig('pinned_media_id', next)
+    return NextResponse.json({ ok: true, pinnedMediaId: next })
+  }
+
+  if (body.action === 'get_pinned_media') {
+    const pinnedMediaId = await dbGetConfig('pinned_media_id', '')
+    return NextResponse.json({ pinnedMediaId })
+  }
+
   if (body.action === 'approve' || body.action === 'reject') {
     await dbUpdateStatus(body.id, body.action === 'approve' ? 'approved' : 'rejected')
     return NextResponse.json({ ok: true })

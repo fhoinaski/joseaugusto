@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dbIncrementReaction } from '@/lib/db'
+import { pingReactionR2 } from '@/lib/r2'
 
-const ALLOWED_EMOJIS = ['♥', '😍', '🎉', '👶']
+const ALLOWED_EMOJIS = ['👍', '♥', '😍', '🎉', '👶', '😂']
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +13,7 @@ export async function POST(req: NextRequest) {
     }
 
     const reactions = await dbIncrementReaction(id, emoji)
+    await pingReactionR2(id, emoji).catch(() => {})
     return NextResponse.json({ reactions })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

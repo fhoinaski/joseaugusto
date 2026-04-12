@@ -1,5 +1,7 @@
 import { dbGetConfig } from '@/lib/db'
 import { getRealtimeDataR2 } from '@/lib/r2'
+import { getReactionDataR2 } from '@/lib/r2'
+import { getCommentDataR2 } from '@/lib/r2'
 
 export const dynamic     = 'force-dynamic'
 export const maxDuration = 30 // Vercel Pro / self-hosted; hobby closes at ~10s (EventSource reconnects)
@@ -25,9 +27,15 @@ export async function GET() {
       // Snapshot initial state so we only emit on real changes
       let lastRtTs = 0
       let lastMsg  = ''
+      let lastReactionTs = 0
+      let lastCommentTs = 0
       try {
         const rt = await getRealtimeDataR2()
         if (rt?.ts) lastRtTs = rt.ts
+        const reaction = await getReactionDataR2()
+        if (reaction?.ts) lastReactionTs = reaction.ts
+        const comment = await getCommentDataR2()
+        if (comment?.ts) lastCommentTs = comment.ts
         lastMsg = await dbGetConfig('parents_message')
       } catch {}
 
@@ -39,6 +47,18 @@ export async function GET() {
           if (rt?.ts && rt.ts > lastRtTs) {
             lastRtTs = rt.ts
             send('new-photo', rt)
+          }
+
+          const reaction = await getReactionDataR2()
+          if (reaction?.ts && reaction.ts > lastReactionTs) {
+            lastReactionTs = reaction.ts
+            send('reaction-update', reaction)
+          }
+
+          const comment = await getCommentDataR2()
+          if (comment?.ts && comment.ts > lastCommentTs) {
+            lastCommentTs = comment.ts
+            send('comment-update', comment)
           }
 
           const msg = await dbGetConfig('parents_message')

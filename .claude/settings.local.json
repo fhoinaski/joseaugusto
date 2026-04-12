@@ -8,7 +8,10 @@
       "Bash(ls -la /f/cha-v3/cha-v3/.claude/worktrees/stoic-wiles/.env*)",
       "Bash(npx wrangler:*)",
       "Bash(node -e ':*)",
-      "Bash(curl -s \"https://api.cloudflare.com/client/v4/accounts/418df529eab601a6b3afb5218e788254/tokens/verify\" -H \"Authorization: Bearer cfat_y1fAgli6ZEfALfZqBQOkjfUZWDK7ejQpQiiHcuyg869ab976\")"
+      "Bash(curl -s \"https://api.cloudflare.com/client/v4/accounts/418df529eab601a6b3afb5218e788254/tokens/verify\" -H \"Authorization: Bearer cfat_y1fAgli6ZEfALfZqBQOkjfUZWDK7ejQpQiiHcuyg869ab976\")",
+      "Bash(git -C \"F:/cha-v3/cha-v3\" log --oneline origin/main -8)",
+      "Bash(git -C \"F:/cha-v3/cha-v3\" show origin/main:app/page.tsx)",
+      "Bash(git -C \"F:/cha-v3/cha-v3\" show origin/main:app/feed/page.tsx)"
     ]
   }
 }

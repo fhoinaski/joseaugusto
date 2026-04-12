@@ -15,6 +15,7 @@ export interface MediaItem {
   thumbUrl: string
   fullUrl: string
   author: string
+  caption?: string
   status: 'approved' | 'pending' | 'rejected'
   type: 'image' | 'video' | 'audio'
   createdAt: string
@@ -40,6 +41,11 @@ interface D1Response<T> {
 export function isD1AuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return msg.includes('D1 HTTP 401') || msg.includes('"code":10000') || /authentication error/i.test(msg)
+}
+
+function isMissingCaptionColumnError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /no such column:\s*m\.caption/i.test(msg)
 }
 
 function endpoint() {
@@ -81,26 +87,42 @@ interface MediaRow {
   id: string; author: string
   status: 'approved' | 'pending' | 'rejected'
   type: 'image' | 'video' | 'audio'; created_at: string
+  caption: string | null
   emoji: string | null; count: number | null
 }
 
 /** Returns media rows with reactions collapsed into a map. */
 export async function dbGetMedia(status: string): Promise<Array<Omit<MediaItem, 'thumbUrl' | 'fullUrl'>>> {
-  const rows = await d1Query<MediaRow>(
-    `SELECT m.id, m.author, m.status, m.type, m.created_at, r.emoji, r.count
-       FROM media m
-       LEFT JOIN reactions r ON r.media_id = m.id
-      WHERE m.status = ?
-      ORDER BY m.created_at DESC`,
-    [status],
-  )
+  let rows: MediaRow[] = []
+  try {
+    rows = await d1Query<MediaRow>(
+      `SELECT m.id, m.author, m.status, m.type, m.caption, m.created_at, r.emoji, r.count
+         FROM media m
+         LEFT JOIN reactions r ON r.media_id = m.id
+        WHERE m.status = ?
+        ORDER BY m.created_at DESC`,
+      [status],
+    )
+  } catch (err) {
+    if (!isMissingCaptionColumnError(err)) throw err
+    type LegacyMediaRow = Omit<MediaRow, 'caption'>
+    const legacyRows = await d1Query<LegacyMediaRow>(
+      `SELECT m.id, m.author, m.status, m.type, m.created_at, r.emoji, r.count
+         FROM media m
+         LEFT JOIN reactions r ON r.media_id = m.id
+        WHERE m.status = ?
+        ORDER BY m.created_at DESC`,
+      [status],
+    )
+    rows = legacyRows.map(row => ({ ...row, caption: '' }))
+  }
 
   const map = new Map<string, Omit<MediaItem, 'thumbUrl' | 'fullUrl'>>()
   for (const row of rows) {
     if (!map.has(row.id)) {
       map.set(row.id, {
         id: row.id, author: row.author, status: row.status,
-        type: row.type, createdAt: row.created_at, reactions: {},
+        type: row.type, caption: row.caption ?? '', createdAt: row.created_at, reactions: {},
       })
     }
     if (row.emoji && row.count != null) {
@@ -114,14 +136,44 @@ export async function dbInsertMedia(
   id: string,
   author: string,
   type: 'image' | 'video' | 'audio',
-  status: 'approved' | 'pending' = 'approved',
+  status: 'approved' | 'pending' | 'rejected' = 'approved',
+  caption = '',
 ): Promise<void> {
-  await d1Exec(
-    `INSERT INTO media (id, author, status, type, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'))
-         ON CONFLICT(id) DO NOTHING`,
-    [id, author, status, type],
+  try {
+    await d1Exec(
+      `INSERT INTO media (id, author, status, type, caption, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(id) DO NOTHING`,
+      [id, author, status, type, caption],
+    )
+  } catch (err) {
+    if (!isMissingCaptionColumnError(err)) throw err
+    await d1Exec(
+      `INSERT INTO media (id, author, status, type, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(id) DO NOTHING`,
+      [id, author, status, type],
+    )
+  }
+}
+
+export async function dbGetMediaAuthor(id: string): Promise<string | null> {
+  const rows = await d1Query<{ author: string }>(`SELECT author FROM media WHERE id = ? LIMIT 1`, [id])
+  return rows[0]?.author ?? null
+}
+
+export async function dbGetTopAuthors(limit = 3): Promise<Array<{ author: string; score: number }>> {
+  const rows = await d1Query<{ author: string; score: number }>(
+    `SELECT m.author AS author, COALESCE(SUM(r.count), 0) AS score
+       FROM media m
+  LEFT JOIN reactions r ON r.media_id = m.id
+      WHERE m.status = 'approved'
+   GROUP BY m.author
+   ORDER BY score DESC, m.author ASC
+      LIMIT ?`,
+    [limit],
   )
+  return rows.map(r => ({ author: r.author, score: r.score }))
 }
 
 export async function dbUpdateStatus(id: string, status: string): Promise<void> {
@@ -245,6 +297,20 @@ export async function dbGetStats(): Promise<StatsResult> {
   }
 }
 
+export async function dbExportComments(): Promise<Array<{ mediaId: string; author: string; text: string; createdAt: string }>> {
+  const rows = await d1Query<{ media_id: string; author: string; text: string; created_at: string }>(
+    `SELECT media_id, author, text, created_at FROM comments ORDER BY created_at ASC`,
+  )
+  return rows.map(r => ({ mediaId: r.media_id, author: r.author, text: r.text, createdAt: r.created_at }))
+}
+
+export async function dbExportCapsules(): Promise<Array<{ author: string; message: string; imageUrl: string; createdAt: string }>> {
+  const rows = await d1Query<{ author: string; message: string; image_url: string; created_at: string }>(
+    `SELECT author, message, image_url, created_at FROM capsule_messages ORDER BY created_at ASC`,
+  )
+  return rows.map(r => ({ author: r.author, message: r.message, imageUrl: r.image_url, createdAt: r.created_at }))
+}
+
 // ── Comments ──────────────────────────────────────────────────────────────────
 
 export interface CommentItem {
@@ -285,6 +351,25 @@ export async function dbInsertComment(
 export async function dbGetCommentCount(mediaId: string): Promise<number> {
   const rows = await d1Query<{ n: number }>(`SELECT COUNT(*) AS n FROM comments WHERE media_id = ?`, [mediaId])
   return rows[0]?.n ?? 0
+}
+
+// ── Stories Seen ──────────────────────────────────────────────────────────────
+
+export async function dbGetSeenStoryIds(userId: string): Promise<string[]> {
+  const rows = await d1Query<{ media_id: string }>(
+    `SELECT media_id FROM stories_seen WHERE user_id = ? ORDER BY seen_at DESC`,
+    [userId],
+  )
+  return rows.map(r => r.media_id)
+}
+
+export async function dbMarkStorySeen(userId: string, mediaId: string): Promise<void> {
+  await d1Exec(
+    `INSERT INTO stories_seen (user_id, media_id, seen_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(user_id, media_id) DO UPDATE SET seen_at = excluded.seen_at`,
+    [userId, mediaId],
+  )
 }
 
 // ── Access Keys ───────────────────────────────────────────────────────────────

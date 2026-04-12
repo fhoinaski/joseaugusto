@@ -1,8 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { isHeicFile, prepareImageBlob, renameWithExt, validateShortVideo } from '@/lib/media-processor'
+import { GeoStatus, useGeoAccess } from '@/components/GeoAccessProvider'
 
 interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
+interface TopAuthor { author:string; score:number }
+interface EventComment { mediaId:string; author:string; text:string; createdAt:string }
+interface PinnedPayload { pinnedPost?: MediaItem | null; pinnedMediaId?: string; pinnedText?: string }
 
 const REACTION_EMOJIS = ['♥','😍','🎉','👶']
 
@@ -22,151 +27,6 @@ const FILTERS: FilterDef[] = [
   { id:'fade',     label:'Desbotado', css:'brightness(1.15) contrast(0.85) saturate(0.7)' },
   { id:'golden',   label:'Dourado',   css:'sepia(0.6) brightness(1.1) saturate(1.3)' },
 ]
-
-// ── Image processing helpers ──────────────────────────────────────────────
-function isHeicFile(f: File): boolean {
-  return /\.(heic|heif)$/i.test(f.name) || f.type === 'image/heic' || f.type === 'image/heif'
-}
-
-function withExt(name: string, ext: string): string {
-  const base = name.replace(/\.[^/.]+$/, '')
-  return `${base}.${ext}`
-}
-
-/** Convert + resize. Returns { blob, previewUrl } ready to display and upload. */
-async function prepareImageBlob(
-  file: File,
-  maxPx = 2000,
-  quality = 0.88,
-): Promise<{ blob: Blob; previewUrl: string }> {
-  let src: Blob = file
-
-  // 1. HEIC/HEIF → JPEG (iPhone photos)
-  if (isHeicFile(file)) {
-    try {
-      const mod = await import('heic2any')
-      const heic2any = mod.default as (o: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>
-      const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
-      src = Array.isArray(out) ? out[0] : out
-    } catch { /* fall through — try native decode */ }
-  }
-
-  // 2. Canvas resize (avoids black-screen on 50MP photos by capping dimensions)
-  const blob = await new Promise<Blob>((resolve) => {
-    const img = new Image()
-    const url = URL.createObjectURL(src)
-    // 10s safety timeout prevents infinite waiting on corrupt files
-    const tid = setTimeout(() => { URL.revokeObjectURL(url); resolve(src) }, 10_000)
-
-    img.onload = () => {
-      clearTimeout(tid)
-      URL.revokeObjectURL(url)
-      let { width: w, height: h } = img
-      // Don't upscale small images
-      if (w <= maxPx && h <= maxPx) { resolve(src); return }
-      const r = Math.min(maxPx / w, maxPx / h)
-      w = Math.round(w * r); h = Math.round(h * r)
-      try {
-        const cv = document.createElement('canvas')
-        cv.width = w; cv.height = h
-        cv.getContext('2d')!.drawImage(img, 0, 0, w, h)
-        cv.toBlob(b => resolve(b ?? src), 'image/webp', quality)
-      } catch { resolve(src) }
-    }
-    img.onerror = () => { clearTimeout(tid); URL.revokeObjectURL(url); resolve(src) }
-    img.src = url
-  })
-
-  return { blob, previewUrl: URL.createObjectURL(blob) }
-}
-
-// ── Geofencing ────────────────────────────────────────────────────────────
-// Set your event coordinates via NEXT_PUBLIC_EVENT_LAT / NEXT_PUBLIC_EVENT_LNG
-const EVENT_LAT    = parseFloat(process.env.NEXT_PUBLIC_EVENT_LAT    ?? '-27.6133')
-const EVENT_LNG    = parseFloat(process.env.NEXT_PUBLIC_EVENT_LNG    ?? '-48.5299')
-const GEO_RADIUS_M = parseInt(process.env.NEXT_PUBLIC_GEO_RADIUS     ?? '200', 10)
-const ACCESS_KEY   = process.env.NEXT_PUBLIC_ACCESS_KEY               ?? 'bebe2025'
-
-function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6_371_000
-  const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180
-  const dφ = (lat2 - lat1) * Math.PI / 180, dλ = (lon2 - lon1) * Math.PI / 180
-  const a = Math.sin(dφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(dλ / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-type GeoStatus = 'idle' | 'checking' | 'allowed' | 'observer' | 'key'
-
-function useGeofence() {
-  const [status,  setStatus]  = useState<GeoStatus>('idle')
-  const [canPost, setCanPost] = useState(true) // optimistic — UI usable immediately
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    // Step 1: check if admin enabled geo-gating
-    fetch('/api/settings')
-      .then(r => r.json())
-      .then(({ geoGateEnabled }: { geoGateEnabled: boolean }) => {
-        if (!geoGateEnabled) {
-          // Gate disabled by admin → everyone can post
-          setStatus('allowed')
-          setCanPost(true)
-          return
-        }
-
-        // Step 2: gate is ON — check cached result first
-        try {
-          const cached = localStorage.getItem('cha_geo')
-          if (cached) {
-            const { result, ts } = JSON.parse(cached) as { result: GeoStatus; ts: number }
-            if (Date.now() - ts < 24 * 3600_000) {
-              setStatus(result); setCanPost(result !== 'observer'); return
-            }
-          }
-        } catch {}
-
-        // Step 3: run GPS check
-        if (!navigator.geolocation) { setStatus('key'); return }
-
-        setStatus('checking')
-        navigator.geolocation.getCurrentPosition(
-          ({ coords }) => {
-            const dist   = haversine(coords.latitude, coords.longitude, EVENT_LAT, EVENT_LNG)
-            const result: GeoStatus = dist <= GEO_RADIUS_M ? 'allowed' : 'observer'
-            setStatus(result); setCanPost(result !== 'observer')
-            try { localStorage.setItem('cha_geo', JSON.stringify({ result, ts: Date.now() })) } catch {}
-          },
-          () => setStatus('key'),
-          { timeout: 8_000, maximumAge: 60_000 },
-        )
-      })
-      .catch(() => {
-        // If /api/settings fails, fail open
-        setStatus('allowed'); setCanPost(true)
-      })
-  }, [])
-
-  const unlockWithKey = async (key: string): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/verify-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: key.trim() }),
-      })
-      const { valid } = await res.json()
-      if (valid) {
-        setStatus('allowed'); setCanPost(true)
-        try { localStorage.setItem('cha_geo', JSON.stringify({ result: 'allowed', ts: Date.now() })) } catch {}
-      }
-      return valid
-    } catch {
-      return false
-    }
-  }
-
-  return { geoStatus: status, canPost, unlockWithKey }
-}
 
 function GeoBanner({ geoStatus, unlockWithKey }: { geoStatus: GeoStatus; unlockWithKey: (k: string) => Promise<boolean> }) {
   const [key,       setKey]       = useState('')
@@ -216,32 +76,6 @@ async function fetchJsonSafe<T>(url: string, fallback: T): Promise<T> {
 }
 
 // ── Corner Menu ───────────────────────────────────────────────────────────
-function CornerMenu() {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="corner-menu">
-      <button
-        className="corner-menu-btn"
-        onClick={() => setOpen(p => !p)}
-        aria-label="Menu"
-      >
-        {open ? '✕' : '···'}
-      </button>
-      {open && (
-        <>
-          <div className="corner-menu-backdrop" onClick={() => setOpen(false)}/>
-          <div className="corner-menu-dropdown">
-            <a href="/feed"  className="corner-menu-item" onClick={() => setOpen(false)}>📱 <span>Feed</span></a>
-            <a href="/tv"    className="corner-menu-item" onClick={() => setOpen(false)}>📺 <span>Modo TV</span></a>
-            <div className="corner-menu-divider"/>
-            <a href="/admin" className="corner-menu-item corner-menu-admin" onClick={() => setOpen(false)}>⚙ <span>Admin</span></a>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
 // ── Onboarding ────────────────────────────────────────────────────────────
 function Onboarding({ onDone }: { onDone:()=>void }) {
   const [hiding, setHiding] = useState(false)
@@ -392,6 +226,9 @@ function removeFromLS(name:string){
 
 function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; onSuccess:(a:string,t:string)=>void; authorDefault:string }) {
   const [author,setAuthor]   = useState(authorDefault)
+  const [authorError,setAuthorError] = useState('')
+  const [caption,setCaption] = useState('')
+  const [suggestingCaption,setSuggestingCaption] = useState(false)
   const [step,setStep]       = useState<'source'|'loading'|'edit'|'queue'>('source')
   const [editFile,setEditFile]= useState<File|null>(null)
   const [queue,setQueue]     = useState<QItem[]>([])
@@ -432,6 +269,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   },[])
 
   const handleImgFiles=async(files:FileList|null)=>{
+    if(!author.trim()){ setAuthorError('Informe seu nome para enviar imagens.'); return }
     if(!files||!files[0])return
     const f0=files[0]
     const isSingle=files.length===1&&(f0.type.startsWith('image/')||isHeicFile(f0))
@@ -443,7 +281,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
         const {blob}=await prepareImageBlob(f0,2000)
         clearInterval(pct); setCompPct(100)
         const ext=blob.type==='image/webp'?'webp':'jpg'
-        const prepared=new File([blob],withExt(f0.name,ext),{type:blob.type})
+        const prepared=new File([blob],renameWithExt(f0.name,ext),{type:blob.type})
         setEditFile(prepared)
         setTimeout(()=>setStep('edit'),150)
       }catch{
@@ -463,6 +301,13 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
           const {blob,previewUrl}=await prepareImageBlob(f,2000)
           items.push({file:blob,name:f.name,preview:previewUrl,status:'waiting',progress:0,type,retries:0,isOfflineError:false})
         }else{
+          if(type==='video'){
+            const check=await validateShortVideo(f)
+            if(!check.ok){
+              items.push({file:f,name:f.name,preview:URL.createObjectURL(f),status:'error',progress:0,type,error:check.error,retries:0,isOfflineError:false})
+              continue
+            }
+          }
           items.push({file:f,name:f.name,preview:isAud?'':URL.createObjectURL(f),status:'waiting',progress:0,type,retries:0,isOfflineError:false})
         }
       }
@@ -471,6 +316,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   }
 
   const handleAudioFiles=(files:FileList|null)=>{
+    if(!author.trim()){ setAuthorError('Informe seu nome para enviar arquivos.'); return }
     if(!files)return
     const items:QItem[]=Array.from(files).map(f=>({
       file:f,name:f.name,preview:'',status:'waiting' as const,
@@ -488,6 +334,10 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   }
 
   const uploadAll=async()=>{
+    if(!author.trim()){
+      setAuthorError('Informe seu nome antes de enviar.')
+      return
+    }
     if(uploadingRef.current)return
     uploadingRef.current=true; setUploading(true)
     let lastThumb=''
@@ -499,7 +349,8 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
       try{
         const fd=new FormData()
         fd.append('media',qi.file,qi.name)
-        fd.append('author',author||'Convidado')
+        fd.append('author',author.trim())
+        if (caption.trim()) fd.append('caption', caption.trim())
         const timer=setInterval(()=>setQueue(p=>p.map((q,idx)=>idx===i&&q.progress<85?{...q,progress:q.progress+15}:q)),250)
         const res=await fetch('/api/upload',{method:'POST',body:fd})
         clearInterval(timer)
@@ -519,9 +370,25 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
       }
     }
     uploadingRef.current=false; setUploading(false)
-    if(lastThumb)onSuccess(author||'Convidado',lastThumb)
+    if(lastThumb)onSuccess(author.trim(),lastThumb)
   }
   uploadAllRef.current=uploadAll
+
+  const suggestCaption = async () => {
+    const target = queue.find(q => q.type === 'image')
+    if (!target || suggestingCaption) return
+    setSuggestingCaption(true)
+    try {
+      const fd = new FormData()
+      fd.append('media', target.file, target.name)
+      const res = await fetch('/api/upload/caption', { method: 'POST', body: fd })
+      const text = await res.text()
+      const data = text ? JSON.parse(text) as { caption?: string } : {}
+      if (data.caption) setCaption(data.caption)
+    } finally {
+      setSuggestingCaption(false)
+    }
+  }
 
   return (
     <div className="modal-overlay" onClick={step==='source'?onClose:undefined}>
@@ -532,7 +399,9 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             <p className="modal-label">✦ Compartilhe suas fotos ✦</p>
             <h2 className="modal-title">Adicionar ao álbum</h2>
             <p className="modal-hint">Sua foto aparece no mural imediatamente 🌸</p>
-            <input className="name-input" placeholder="Seu nome (opcional — aparece na foto)" value={author} onChange={e=>setAuthor(e.target.value)} maxLength={60}/>
+            <input className="name-input" placeholder="Seu nome (obrigatório)" value={author} onChange={e=>{setAuthor(e.target.value); if(e.target.value.trim()) setAuthorError('')}} maxLength={60}/>
+            {!!authorError&&<p style={{margin:'4px 2px 10px',fontSize:'.82rem',color:'#c0392b',fontStyle:'italic'}}>{authorError}</p>}
+            <input className="name-input" placeholder="Legenda opcional" value={caption} onChange={e=>setCaption(e.target.value)} maxLength={180}/>
             <div className="source-grid">
               {[
                 {icon:'📷',label:'Câmera',sub:'Tirar foto agora',action:()=>camRef.current?.click()},
@@ -541,7 +410,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 {icon:'📚',label:'Várias',sub:'Enviar de uma vez',action:()=>{if(fileRef.current){fileRef.current.multiple=true;fileRef.current.click()}}},
                 {icon:'🎙️',label:'Áudio',sub:'Mensagem de voz',action:()=>audioRef.current?.click()},
               ].map(({icon,label,sub,action})=>(
-                <button key={label} className="source-btn" onClick={action}>
+                <button key={label} className="source-btn" onClick={action} disabled={!author.trim()} style={!author.trim()?{opacity:.55,cursor:'not-allowed'}:undefined}>
                   <span className="source-btn-icon">{icon}</span>
                   <span className="source-btn-label">{label}</span>
                   <span className="source-btn-sub">{sub}</span>
@@ -551,9 +420,15 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={vidRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
+              if(!author.trim()){ setAuthorError('Informe seu nome para enviar arquivos.'); return }
               if(!e.target.files)return
-              const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}))
-              setQueue(items);setStep('queue')
+              Promise.all(Array.from(e.target.files).map(async f=>{
+                const check=await validateShortVideo(f)
+                if(!check.ok){
+                  return {file:f,name:f.name,preview:URL.createObjectURL(f),status:'error' as const,progress:0,type:'video' as const,error:check.error,retries:0,isOfflineError:false}
+                }
+                return {file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}
+              })).then(items=>{ setQueue(items); setStep('queue') })
             }}/>
             <input ref={audioRef} type="file" accept="audio/*,.mp3,.webm,.ogg,.m4a,.wav,.aac" style={{display:'none'}} onChange={e=>handleAudioFiles(e.target.files)}/>
           </>
@@ -578,6 +453,11 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
           <>
             <p className="modal-label">✦ {allDone?'Concluído':'Enviando'} ✦</p>
             <h2 className="modal-title" style={{marginBottom:16}}>{allDone?'🌸 Tudo enviado!':`${queue.length} arquivo${queue.length>1?'s':''}`}</h2>
+            {queue.some(q=>q.type==='image')&&!allDone&&(
+              <button className="btn-secondary" style={{width:'100%',justifyContent:'center',marginBottom:10}} onClick={suggestCaption} disabled={suggestingCaption||uploading}>
+                {suggestingCaption?'⏳ Gerando legenda IA…':'✨ Sugerir legenda com IA'}
+              </button>
+            )}
 
             {/* Offline banner */}
             {!isOnline&&(
@@ -1006,11 +886,17 @@ export default function Home() {
   const [showUpload,  setShowUpload]   = useState(false)
   const [showAll,     setShowAll]      = useState(false)
   const [toasts,      setToasts]       = useState<ToastMsg[]>([])
+  const [topAuthors,  setTopAuthors]   = useState<TopAuthor[]>([])
+  const [recentComments, setRecentComments] = useState<EventComment[]>([])
   const [parentsMsg,  setParentsMsg]   = useState('')
+  const [pinnedPost,  setPinnedPost]   = useState<MediaItem | null>(null)
+  const [pinnedText,  setPinnedText]   = useState('')
   const [savedAuthor, setSavedAuthor]  = useState('')
-  const [simpleMode,  setSimpleMode]   = useState(false)
-  const { geoStatus, canPost, unlockWithKey } = useGeofence()
+  const { geoStatus, canWrite, unlockWithKey } = useGeoAccess()
   const lastRtTs  = useRef<number>(0)
+  const mediaRef = useRef<MediaItem[]>([])
+  const authorRef = useRef('')
+  const recentFetchAtRef = useRef(0)
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
 
@@ -1018,31 +904,58 @@ export default function Home() {
     if(typeof window==='undefined')return
     if(!localStorage.getItem('cha_visited'))setShowOnboard(true)
     setSavedAuthor(localStorage.getItem('cha_author')?? '')
-    // Init simple mode from localStorage or prefers-reduced-motion
-    const stored=localStorage.getItem('cha_simple')
-    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if(stored==='1'||(stored===null&&reduced))setSimpleMode(true)
   },[])
 
-  // Sync simple mode to body class so CSS can react globally
-  useEffect(()=>{
-    document.body.classList.toggle('simple-mode',simpleMode)
-    return()=>document.body.classList.remove('simple-mode')
-  },[simpleMode])
+  useEffect(() => {
+    if (typeof window === 'undefined' || !canWrite) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('upload') === '1') {
+      setShowUpload(true)
+    }
+  }, [canWrite])
 
-  const toggleSimple=()=>setSimpleMode(p=>{localStorage.setItem('cha_simple',p?'0':'1');return!p})
+  useEffect(()=>{ mediaRef.current = media },[media])
+  useEffect(()=>{ authorRef.current = savedAuthor },[savedAuthor])
 
   const fetchMedia=useCallback(async(cursor?:string)=>{
-    const data=await fetchJsonSafe<{ media?: MediaItem[]; nextCursor?: string | null }>(
+    const data=await fetchJsonSafe<{ media?: MediaItem[]; nextCursor?: string | null; topAuthors?: TopAuthor[] } & PinnedPayload>(
       cursor?`/api/photos?cursor=${cursor}`:'/api/photos',
       {},
     )
     setMedia(prev=>cursor?[...prev,...(data.media??[])]:(data.media??[]))
+    if (!cursor) {
+      setTopAuthors(data.topAuthors??[])
+      setPinnedPost(data.pinnedPost ?? null)
+      setPinnedText(data.pinnedText ?? '')
+    }
     setNextCursor(data.nextCursor??null)
     setLoading(false)
   },[])
 
   useEffect(()=>{fetchMedia()},[fetchMedia])
+
+  const fetchRecentComments = useCallback(async () => {
+    const ids = media.slice(0, 6).map(m => m.id)
+    if (ids.length === 0) { setRecentComments([]); return }
+    try {
+      const groups = await Promise.all(ids.map(async mediaId => {
+        const res = await fetch(`/api/comments?media_id=${encodeURIComponent(mediaId)}`)
+        const data = await res.json() as { comments?: Array<{ id: number; author: string; text: string; createdAt: string }> }
+        const comments = Array.isArray(data.comments) ? data.comments : []
+        const latest = comments[comments.length - 1]
+        if (!latest) return null
+        return { mediaId, author: latest.author, text: latest.text, createdAt: latest.createdAt }
+      }))
+      const sorted = groups.filter(Boolean).sort((a, b) => +new Date((b as EventComment).createdAt) - +new Date((a as EventComment).createdAt))
+      setRecentComments(sorted.slice(0, 6) as EventComment[])
+    } catch {
+      setRecentComments([])
+    }
+  }, [media])
+
+  useEffect(() => {
+    fetchRecentComments()
+  }, [fetchRecentComments])
 
   useEffect(()=>{
     if(!sentinelRef.current||!nextCursor)return
@@ -1054,10 +967,6 @@ export default function Home() {
 
   useEffect(()=>{
     fetchJsonSafe<{ message?: string }>('/api/admin/message', {}).then(d=>setParentsMsg(d.message??''))
-    const t=setInterval(()=>{
-      fetchJsonSafe<{ message?: string }>('/api/admin/message', {}).then(d=>setParentsMsg(d.message??''))
-    },30000)
-    return()=>clearInterval(t)
   },[])
 
   useEffect(()=>{
@@ -1074,6 +983,13 @@ export default function Home() {
       setTimeout(()=>fetchMedia(),2000)
     }
 
+    const refreshRecentComments = () => {
+      const now = Date.now()
+      if (now - recentFetchAtRef.current < 5000) return
+      recentFetchAtRef.current = now
+      fetchRecentComments()
+    }
+
     // Fallback polling — used when EventSource is unavailable or times out
     let fallback:ReturnType<typeof setInterval>|null=null
     const startFallback=()=>{
@@ -1081,7 +997,7 @@ export default function Home() {
       fallback=setInterval(async()=>{
         const { data } = await fetchJsonSafe<{ data?: any }>('/api/realtime', {})
         handleNewPhoto(data)
-      },10000)
+      },25000)
     }
 
     if(typeof EventSource==='undefined'){
@@ -1101,6 +1017,24 @@ export default function Home() {
     })
     es.addEventListener('new-photo',(e:MessageEvent)=>{
       try{handleNewPhoto(JSON.parse(e.data))}catch{}
+    })
+    es.addEventListener('reaction-update',(e:MessageEvent)=>{
+      try {
+        const event = JSON.parse(e.data) as { mediaId?: string; emoji?: string }
+        if (!event.mediaId || !event.emoji) return
+        setMedia(prev => prev.map(m => m.id === event.mediaId
+          ? { ...m, reactions: { ...m.reactions, [event.emoji!]: (m.reactions[event.emoji!] ?? 0) + 1 } }
+          : m,
+        ))
+        if (!authorRef.current) return
+        const target = mediaRef.current.find(m => m.id === event.mediaId)
+        if (target && target.author === authorRef.current) {
+          addToast(`Sua foto recebeu ${event.emoji ?? 'uma reação'} 💛`, target.thumbUrl)
+        }
+      } catch {}
+    })
+    es.addEventListener('comment-update',()=>{
+      refreshRecentComments()
     })
     es.addEventListener('message-update',(e:MessageEvent)=>{
       try{const{message}=JSON.parse(e.data);if(message)setParentsMsg(message)}catch{}
@@ -1145,11 +1079,11 @@ export default function Home() {
 
   return (
     <>
+      <div id="topo"/>
       {[['5%','18s','0s'],['88%','22s','7s'],['48%','20s','13s']].map(([l,d,delay],i)=>(
         <div key={i} className="balloon" style={{left:l,animationDuration:d,animationDelay:delay}}>🎈</div>
       ))}
 
-      <CornerMenu/>
       {showOnboard&&<Onboarding onDone={()=>{localStorage.setItem('cha_visited','1');setShowOnboard(false)}}/>}
       <GeoBanner geoStatus={geoStatus} unlockWithKey={unlockWithKey}/>
 
@@ -1163,11 +1097,13 @@ export default function Home() {
         <p className="hero-sub">Sábado, às 17 horas</p>
         <div className="hero-cta">
           <a href="#galeria" className="btn-primary">📷 Ver o álbum</a>
-          {canPost&&<button className="btn-secondary" onClick={()=>setShowUpload(true)}>🌿 Compartilhar</button>}
         </div>
-        <button className={`simple-toggle${simpleMode?' active':''}`} onClick={toggleSimple}>
-          ♿ {simpleMode?'Modo simples ativo':'Modo simples'}
-        </button>
+        {media[0]?.thumbUrl && (
+          <div className="hero-preview-card">
+            <img src={media[0].thumbUrl} alt={media[0].author} className="hero-preview-image" loading="lazy" />
+            <p className="hero-preview-caption">Último momento enviado por {media[0].author}</p>
+          </div>
+        )}
         {media.length>0&&(
           <div className="online-badge" style={{marginTop:20}}>
             <span className="online-dot"/>
@@ -1188,7 +1124,84 @@ export default function Home() {
         </div>
       )}
 
+      {(pinnedPost || pinnedText.trim()) && (
+        <section className="social-pinned reveal" id="feed">
+          <div className="social-pinned-head">
+            <p className="section-label">✦ Destaque do Feed ✦</p>
+            <span className="social-pinned-badge">📌 fixado pelo admin</span>
+          </div>
+          {!!pinnedText.trim() && (
+            <div className="social-text-card">
+              <p>{pinnedText}</p>
+            </div>
+          )}
+          {pinnedPost && (
+            <article className="social-media-card" onClick={() => {
+              const idx = media.findIndex(m => m.id === pinnedPost.id)
+              setLbIdx(idx >= 0 ? idx : 0)
+            }}>
+              <div className="social-media-top">
+                <strong>{pinnedPost.author}</strong>
+                <span>{new Date(pinnedPost.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+              </div>
+              <img src={pinnedPost.thumbUrl} alt={pinnedPost.author} loading="lazy" className="social-media-image"/>
+              <div className="social-media-actions">
+                {REACTION_EMOJIS.map(emoji => (
+                  <button
+                    key={`pinned-${pinnedPost.id}-${emoji}`}
+                    className="social-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleReact(pinnedPost.id, emoji)
+                    }}
+                  >
+                    <span>{emoji}</span>
+                    <small>{pinnedPost.reactions?.[emoji] ?? 0}</small>
+                  </button>
+                ))}
+              </div>
+            </article>
+          )}
+        </section>
+      )}
+
+      {topAuthors.length>0&&(
+        <div className="parents-section reveal" style={{marginTop:20}}>
+          <p className="section-label">✦ Ranking de Popularidade ✦</p>
+          <div className="parents-card" style={{padding:'18px 22px'}}>
+            {topAuthors.map((a,idx)=>(
+              <p key={`${a.author}-${idx}`} style={{margin:'8px 0',display:'flex',justifyContent:'space-between',fontWeight:600,color:'var(--bd)'}}>
+                <span>{idx===0?'🥇':idx===1?'🥈':'🥉'} {a.author}</span>
+                <span>{a.score} curtidas</span>
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="leaves" style={{opacity:.3,marginTop:8}}>· · · ✦ · · ·</div>
+
+      <section id="comentarios-evento" className="parents-section reveal" style={{marginTop:14}}>
+        <p className="section-label">✦ Novidades do Evento ✦</p>
+        <div className="parents-card" style={{padding:'14px 18px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <strong style={{color:'var(--bd)'}}>Comentários e interações em tempo real</strong>
+            <a href="/feed" style={{fontSize:'.88rem',color:'var(--bl)'}}>abrir feed ↗</a>
+          </div>
+          {recentComments.length===0 ? (
+            <p style={{margin:0,color:'var(--text-md)',fontStyle:'italic'}}>Ainda sem comentários recentes. Compartilhe e chame a galera para interagir.</p>
+          ) : (
+            <div style={{display:'grid',gap:8}}>
+              {recentComments.map((c, idx) => (
+                <div key={`${c.mediaId}-${idx}`} style={{padding:'8px 10px',borderRadius:10,background:'rgba(245,237,224,.7)',border:'1px solid rgba(201,168,124,.25)'}}>
+                  <p style={{margin:'0 0 2px',fontSize:'.84rem',color:'#7a4e28'}}><strong>{c.author}</strong> comentou</p>
+                  <p style={{margin:0,color:'var(--bd)',fontSize:'.93rem'}}>{c.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Gallery */}
       <section className="carousel-section reveal" id="galeria">
@@ -1207,11 +1220,10 @@ export default function Home() {
           <div style={{textAlign:'center',padding:'60px 24px',color:'var(--text-md)',fontStyle:'italic'}}>
             <div style={{fontSize:'3rem',marginBottom:16}}>📷</div>
             <p style={{fontWeight:600}}>As fotos aparecerão aqui assim que forem enviadas.</p>
-            <button className="btn-secondary" style={{marginTop:24}} onClick={()=>setShowUpload(true)}>🌸 Seja o primeiro a compartilhar</button>
           </div>
         )}
 
-        {!loading&&media.length>0&&!simpleMode&&!showAll&&(
+        {!loading&&media.length>0&&!showAll&&(
           <>
             <Carousel3D items={media} onOpenLightbox={setLbIdx}/>
             <div style={{textAlign:'center',marginTop:8}}>
@@ -1222,19 +1234,17 @@ export default function Home() {
           </>
         )}
 
-        {!loading&&media.length>0&&(simpleMode||showAll)&&(
+        {!loading&&media.length>0&&showAll&&(
           <div className="grid-section">
-            {!simpleMode&&(
-              <div style={{textAlign:'center',marginBottom:20}}>
-                <button className="view-all-btn" onClick={()=>setShowAll(false)}>
-                  ↩ Voltar ao carrossel
-                </button>
-              </div>
-            )}
-            <div className={simpleMode?'simple-grid':'gallery-grid'}>
+            <div style={{textAlign:'center',marginBottom:20}}>
+              <button className="view-all-btn" onClick={()=>setShowAll(false)}>
+                ↩ Voltar ao carrossel
+              </button>
+            </div>
+            <div className="gallery-grid">
               {media.map((item,i)=>(
-                <div key={item.id} className="gallery-card" style={simpleMode?{}:{animationDelay:`${(i%8)*0.055}s`}} onClick={()=>setLbIdx(i)}>
-                  <div style={{position:'relative',aspectRatio: simpleMode?'4/3':'1',overflow:'hidden'}}>
+                <div key={item.id} className="gallery-card" style={{animationDelay:`${(i%8)*0.055}s`}} onClick={()=>setLbIdx(i)}>
+                  <div style={{position:'relative',aspectRatio:'1',overflow:'hidden'}}>
                     <img src={item.thumbUrl} alt={item.author} loading="lazy"
                       style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
                     {item.type==='video'&&(
@@ -1245,8 +1255,13 @@ export default function Home() {
                         </div>
                       </>
                     )}
+                    {item.type==='audio'&&<div className="gallery-card-type">🎙 Áudio</div>}
                   </div>
-                  <div className="gallery-card-footer"><span className="gallery-card-author">{item.type==='video'?'🎥':'📷'} {item.author}</span></div>
+                  <div className="gallery-card-footer"><span className="gallery-card-author">{item.type==='video'?'🎥':item.type==='audio'?'🎙️':'📷'} {item.author}</span></div>
+                  <div className="gallery-inline-actions" onClick={e=>e.stopPropagation()}>
+                    <button className="gallery-inline-btn" onClick={()=>handleReact(item.id,'♥')}>👍 Curtir</button>
+                    <a className="gallery-inline-btn" href="/feed">💬 Comentar</a>
+                  </div>
                   <ReactionBar item={item} onReact={handleReact}/>
                 </div>
               ))}
@@ -1280,12 +1295,6 @@ export default function Home() {
         <div style={{width:80,height:1.5,background:'linear-gradient(to right,transparent,var(--accent),transparent)',margin:'16px auto'}}/>
         <p className="footer-sub">com muito amor · papai e mamãe</p>
       </footer>
-
-      {canPost&&(
-        <button className="fab" onClick={()=>setShowUpload(true)} aria-label="Enviar foto">
-          📤<span className="fab-tooltip">Enviar foto ou vídeo</span>
-        </button>
-      )}
 
       {lbIdx!==null&&(
         <Lightbox items={media} index={lbIdx} onClose={()=>setLbIdx(null)}

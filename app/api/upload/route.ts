@@ -9,10 +9,10 @@ const MAX_VIDEO = 100 * 1024 * 1024 // 100 MB
 const MAX_AUDIO = 30 * 1024 * 1024  //  30 MB
 
 // ── Cloudflare AI image moderation (resnet-50 via REST API) ──────────────────
-// Returns 'pending' if the top label matches a known suspicious category.
+// Returns 'rejected' if the top label matches a known suspicious category.
 // Fails open (returns 'approved') on any error so uploads are never blocked
 // by a moderation service outage.
-async function moderateImage(imageBuffer: Buffer): Promise<'approved' | 'pending'> {
+async function moderateImage(imageBuffer: Buffer): Promise<'approved' | 'rejected'> {
   try {
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
     const token     = process.env.CLOUDFLARE_API_TOKEN
@@ -32,9 +32,9 @@ async function moderateImage(imageBuffer: Buffer): Promise<'approved' | 'pending
 
     // Resnet-50 is not an NSFW classifier — we check for a conservative blocklist
     // of ImageNet categories that may indicate explicit content with high confidence
-    const flagged = ['bikini', 'brassiere', 'swimming_trunks', 'miniskirt']
+    const flagged = ['bikini', 'brassiere', 'swimming_trunks', 'miniskirt', 'maillot']
     if (top && flagged.some(s => top.label.toLowerCase().includes(s)) && top.score > 0.85) {
-      return 'pending'
+      return 'rejected'
     }
     return 'approved'
   } catch {
@@ -46,7 +46,9 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const file   = formData.get('media') as File | null
-    const author = ((formData.get('author') as string) || 'Convidado').trim().slice(0, 60)
+    const authorRaw = ((formData.get('author') as string) || '').trim()
+    const author = authorRaw.slice(0, 60)
+    const caption = ((formData.get('caption') as string) || '').trim().slice(0, 180)
 
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
@@ -54,6 +56,10 @@ export async function POST(req: NextRequest) {
     const isImage = file.type.startsWith('image/')
     const isAudio = file.type.startsWith('audio/') ||
                     /\.(mp3|webm|ogg|m4a|wav|aac)$/i.test(file.name)
+
+    if (isImage && !author) {
+      return NextResponse.json({ error: 'Informe seu nome para enviar imagem.' }, { status: 400 })
+    }
 
     if (!isVideo && !isImage && !isAudio)
       return NextResponse.json({ error: 'Envie uma foto, vídeo (MP4/MOV) ou áudio (MP3/WebM).' }, { status: 400 })
@@ -69,7 +75,7 @@ export async function POST(req: NextRequest) {
     let contentType: string
     let ext:         string
     let mediaType:   'image' | 'video' | 'audio'
-    let status:      'approved' | 'pending' = 'approved'
+    let status:      'approved' | 'rejected' = 'approved'
 
     if (isAudio) {
       body        = Buffer.from(arrayBuffer)
@@ -96,12 +102,12 @@ export async function POST(req: NextRequest) {
     const key    = `cha-jose-augusto/${folder}/foto_${suffix}.${ext}`
 
     // 1. Upload file to R2
-    await uploadBuffer(key, body, contentType, { author, status })
+    await uploadBuffer(key, body, contentType, { author: author || 'Convidado', status })
 
     // 2. Record metadata in D1 (degrade gracefully if token is invalid)
     let degraded = false
     try {
-      await dbInsertMedia(key, author, mediaType, status)
+      await dbInsertMedia(key, author || 'Convidado', mediaType, status, caption)
     } catch (err) {
       if (isD1AuthError(err)) {
         degraded = true
@@ -111,9 +117,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Ping SSE stream (skip for pending items)
+    // 3. Ping SSE stream (skip for rejected items)
     if (status === 'approved') {
-      await pingRealtimeR2(author, objectUrl(key)).catch(() => {})
+      await pingRealtimeR2(author || 'Convidado', objectUrl(key)).catch(() => {})
     }
 
     return NextResponse.json({
@@ -121,7 +127,7 @@ export async function POST(req: NextRequest) {
       type:    mediaType,
       status,
       degraded,
-      ...(status === 'pending' ? { message: 'Foto em revisão — aparecerá em breve.' } : {}),
+      ...(status === 'rejected' ? { message: 'Imagem bloqueada automaticamente pela moderação.' } : {}),
       ...(degraded ? { warning: 'Upload salvo, mas o banco D1 está indisponível.' } : {}),
     })
   } catch (err) {
