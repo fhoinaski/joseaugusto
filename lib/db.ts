@@ -16,7 +16,7 @@ export interface MediaItem {
   fullUrl: string
   author: string
   status: 'approved' | 'pending' | 'rejected'
-  type: 'image' | 'video'
+  type: 'image' | 'video' | 'audio'
   createdAt: string
   reactions: Record<string, number>
 }
@@ -75,7 +75,7 @@ async function d1Exec(sql: string, params: unknown[] = []): Promise<void> {
 interface MediaRow {
   id: string; author: string
   status: 'approved' | 'pending' | 'rejected'
-  type: 'image' | 'video'; created_at: string
+  type: 'image' | 'video' | 'audio'; created_at: string
   emoji: string | null; count: number | null
 }
 
@@ -105,12 +105,17 @@ export async function dbGetMedia(status: string): Promise<Array<Omit<MediaItem, 
   return Array.from(map.values())
 }
 
-export async function dbInsertMedia(id: string, author: string, type: 'image' | 'video'): Promise<void> {
+export async function dbInsertMedia(
+  id: string,
+  author: string,
+  type: 'image' | 'video' | 'audio',
+  status: 'approved' | 'pending' = 'approved',
+): Promise<void> {
   await d1Exec(
     `INSERT INTO media (id, author, status, type, created_at)
-       VALUES (?, ?, 'approved', ?, datetime('now'))
+       VALUES (?, ?, ?, ?, datetime('now'))
          ON CONFLICT(id) DO NOTHING`,
-    [id, author, type],
+    [id, author, status, type],
   )
 }
 
@@ -193,4 +198,44 @@ export async function dbInsertCapsule(author: string, message: string, imageUrl:
 
 export async function dbDeleteCapsule(id: number): Promise<void> {
   await d1Exec(`DELETE FROM capsule_messages WHERE id = ?`, [id])
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+
+export interface StatsResult {
+  total: number
+  byType: Record<string, number>
+  byStatus: Record<string, number>
+  peakHours: Array<{ hour: number; count: number }>
+  capsuleCount: number
+}
+
+export async function dbGetStats(): Promise<StatsResult> {
+  const [totals, hours, capsules] = await Promise.all([
+    d1Query<{ type: string; status: string; n: number }>(
+      `SELECT type, status, COUNT(*) AS n FROM media GROUP BY type, status`,
+    ),
+    d1Query<{ hour: number; count: number }>(
+      `SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour, COUNT(*) AS count
+         FROM media GROUP BY hour ORDER BY count DESC LIMIT 24`,
+    ),
+    d1Query<{ n: number }>(`SELECT COUNT(*) AS n FROM capsule_messages`),
+  ])
+
+  const byType: Record<string, number> = {}
+  const byStatus: Record<string, number> = {}
+  let total = 0
+  for (const row of totals) {
+    byType[row.type]     = (byType[row.type]     ?? 0) + row.n
+    byStatus[row.status] = (byStatus[row.status] ?? 0) + row.n
+    total += row.n
+  }
+
+  return {
+    total,
+    byType,
+    byStatus,
+    peakHours:    hours,
+    capsuleCount: capsules[0]?.n ?? 0,
+  }
 }

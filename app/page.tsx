@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'; createdAt:string; reactions:Record<string,number> }
+interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
 
 const REACTION_EMOJIS = ['♥','😍','🎉','👶']
@@ -24,7 +24,8 @@ const FILTERS: FilterDef[] = [
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-async function compressImage(file: File, maxPx = 1800, q = 0.88): Promise<Blob> {
+// Resizes to maxPx and encodes as WebP before upload — reduces bandwidth on slow 4G
+async function compressImage(file: File, maxPx = 1200, q = 0.88): Promise<Blob> {
   return new Promise(resolve => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -36,7 +37,8 @@ async function compressImage(file: File, maxPx = 1800, q = 0.88): Promise<Blob> 
       const cv = document.createElement('canvas')
       cv.width = w; cv.height = h
       cv.getContext('2d')!.drawImage(img, 0, 0, w, h)
-      cv.toBlob(b => resolve(b || file), 'image/jpeg', q)
+      // Prefer WebP; fall back to JPEG if browser doesn't support it
+      cv.toBlob(b => resolve(b || file), 'image/webp', q)
     }
     img.onerror = () => resolve(file)
     img.src = url
@@ -154,7 +156,7 @@ function PhotoEditor({ file, onConfirm, onCancel }: { file:File; onConfirm:(b:Bl
 }
 
 // ── Upload Modal ──────────────────────────────────────────────────────────
-interface QItem { file:Blob; name:string; preview:string; status:'waiting'|'uploading'|'done'|'error'; progress:number; error?:string; type:'image'|'video'; retries:number; isOfflineError:boolean }
+interface QItem { file:Blob; name:string; preview:string; status:'waiting'|'uploading'|'done'|'error'; progress:number; error?:string; type:'image'|'video'|'audio'; retries:number; isOfflineError:boolean }
 
 const MAX_LS_SIZE = 5*1024*1024
 const LS_KEY = 'cha_upload_queue'
@@ -202,6 +204,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   const fileRef=useRef<HTMLInputElement>(null)
   const camRef =useRef<HTMLInputElement>(null)
   const vidRef =useRef<HTMLInputElement>(null)
+  const audioRef=useRef<HTMLInputElement>(null)
   const uploadingRef=useRef(false)
   const uploadAllRef=useRef<()=>Promise<void>>(async()=>{})
   const allDone = queue.length>0 && queue.every(q=>q.status==='done'||q.status==='error')
@@ -245,11 +248,22 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
       for(let i=0;i<files.length;i++){
         const f=files[i]; setCompPct(Math.round(((i+1)/files.length)*100))
         const isImg=f.type.startsWith('image/')
-        const blob=isImg?await compressImage(f,1800):f
-        items.push({file:blob,name:f.name,preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:isImg?'image':'video',retries:0,isOfflineError:false})
+        const isAud=f.type.startsWith('audio/')||/\.(mp3|webm|ogg|m4a|wav|aac)$/i.test(f.name)
+        const type:QItem['type']=isImg?'image':isAud?'audio':'video'
+        const blob=isImg?await compressImage(f,1200):f
+        items.push({file:blob,name:f.name,preview:isImg?URL.createObjectURL(blob):'',status:'waiting',progress:0,type,retries:0,isOfflineError:false})
       }
       setQueue(items); setStep('queue')
     }
+  }
+
+  const handleAudioFiles=(files:FileList|null)=>{
+    if(!files)return
+    const items:QItem[]=Array.from(files).map(f=>({
+      file:f,name:f.name,preview:'',status:'waiting' as const,
+      progress:0,type:'audio' as const,retries:0,isOfflineError:false
+    }))
+    setQueue(items); setStep('queue')
   }
 
   const handleEditorConfirm=async(blob:Blob)=>{
@@ -312,6 +326,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 {icon:'🖼️',label:'Galeria',sub:'Editar e enviar',action:()=>{if(fileRef.current){fileRef.current.multiple=false;fileRef.current.click()}}},
                 {icon:'🎥',label:'Vídeo',sub:'Compartilhar vídeo',action:()=>vidRef.current?.click()},
                 {icon:'📚',label:'Várias',sub:'Enviar de uma vez',action:()=>{if(fileRef.current){fileRef.current.multiple=true;fileRef.current.click()}}},
+                {icon:'🎙️',label:'Áudio',sub:'Mensagem de voz',action:()=>audioRef.current?.click()},
               ].map(({icon,label,sub,action})=>(
                 <button key={label} className="source-btn" onClick={action}>
                   <span className="source-btn-icon">{icon}</span>
@@ -320,13 +335,14 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 </button>
               ))}
             </div>
-            <input ref={camRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={camRef}  type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
-            <input ref={vidRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
+            <input ref={vidRef}  type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
               if(!e.target.files)return
               const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}))
               setQueue(items);setStep('queue')
             }}/>
+            <input ref={audioRef} type="file" accept="audio/*,.mp3,.webm,.ogg,.m4a,.wav,.aac" style={{display:'none'}} onChange={e=>handleAudioFiles(e.target.files)}/>
           </>
         )}
         {step==='loading'&&(
@@ -364,7 +380,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             <div className="queue-list">
               {queue.map((q,i)=>(
                 <div key={i} className="queue-item">
-                  {q.type==='image'?<img src={q.preview} alt="" className="queue-thumb"/>:<div className="queue-thumb" style={{background:'var(--beige)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem'}}>🎥</div>}
+                  {q.type==='image'?<img src={q.preview} alt="" className="queue-thumb"/>:q.type==='audio'?<div className="queue-thumb" style={{background:'var(--beige)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem'}}>🎙️</div>:<div className="queue-thumb" style={{background:'var(--beige)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem'}}>🎥</div>}
                   <div className="queue-info">
                     <p className="queue-name">{q.name}</p>
                     <div className="queue-bar-wrap"><div className="queue-bar" style={{width:`${q.progress}%`}}/></div>
@@ -477,18 +493,20 @@ function Carousel3D({ items, onOpenLightbox }:{ items:MediaItem[]; onOpenLightbo
               className={`c-card${i===current?' active-card':''}`}
               style={{ transform:getTransform(i), zIndex:getZIndex(i), opacity:getOpacity(i) }}
               onClick={()=>{ if(i===current)onOpenLightbox(i); else { go(((i-current)+total)%total<=total/2?1:-1) } }}>
-              {/* Sempre mostra thumbUrl como imagem — vídeos têm poster gerado pelo Cloudinary */}
-              <img src={item.thumbUrl} alt={item.author} loading="lazy"
-                style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+              {item.type==='audio'
+                ?<div style={{width:'100%',height:'100%',background:'linear-gradient(135deg,#f5ede0,#e8d4b8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,padding:16}}>
+                   <span style={{fontSize:'2.5rem'}}>🎙️</span>
+                   <audio src={item.fullUrl} controls style={{width:'90%',maxWidth:200}}/>
+                 </div>
+                :<img src={item.thumbUrl} alt={item.author} loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+              }
               {item.type==='video'&&(
                 <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(255,255,255,.85)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',boxShadow:'0 4px 16px rgba(0,0,0,.3)'}}>
-                    ▶
-                  </div>
+                  <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(255,255,255,.85)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',boxShadow:'0 4px 16px rgba(0,0,0,.3)'}}>▶</div>
                 </div>
               )}
               <div className="c-card-overlay">
-                <p className="c-card-author">{item.type==='video'?'🎥':'📷'} {item.author}</p>
+                <p className="c-card-author">{item.type==='video'?'🎥':item.type==='audio'?'🎙️':'📷'} {item.author}</p>
               </div>
             </div>
           ))}
@@ -510,7 +528,7 @@ function Carousel3D({ items, onOpenLightbox }:{ items:MediaItem[]; onOpenLightbo
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
-function Lightbox({ items, index, onClose, onNav, onReact }:{ items:MediaItem[]; index:number; onClose:()=>void; onNav:(n:number)=>void; onReact:(id:string,emoji:string)=>void }) {
+function Lightbox({ items, index, onClose, onNav, onReact, simpleMode }:{ items:MediaItem[]; index:number; onClose:()=>void; onNav:(n:number)=>void; onReact:(id:string,emoji:string)=>void; simpleMode?:boolean }) {
   const [displayIdx, setDisplayIdx] = useState(index)
   const [slideDir, setSlideDir]     = useState<'left'|'right'|null>(null)
   const [animating, setAnimating]   = useState(false)
@@ -559,17 +577,23 @@ function Lightbox({ items, index, onClose, onNav, onReact }:{ items:MediaItem[];
   return (
     <div className="lightbox" onClick={onClose} onTouchStart={onTS} onTouchEnd={onTE}>
       <button className="lightbox-close" onClick={e=>{e.stopPropagation();onClose()}}>✕</button>
-      <button className="lightbox-nav lightbox-prev" disabled={index===0} onClick={e=>{e.stopPropagation();onNav(-1)}}>‹</button>
-      <button className="lightbox-nav lightbox-next" disabled={index===items.length-1} onClick={e=>{e.stopPropagation();onNav(1)}}>›</button>
+      <button className={`lightbox-nav lightbox-prev${simpleMode?' lb-simple-nav':''}`} disabled={index===0} onClick={e=>{e.stopPropagation();onNav(-1)}}>{simpleMode?'← Anterior':'‹'}</button>
+      <button className={`lightbox-nav lightbox-next${simpleMode?' lb-simple-nav':''}`} disabled={index===items.length-1} onClick={e=>{e.stopPropagation();onNav(1)}}>{simpleMode?'Próximo →':'›'}</button>
 
       <div className="lightbox-content" onClick={e=>e.stopPropagation()}>
         <div style={{...getSlideStyle(), display:'flex', flexDirection:'column', alignItems:'center', gap:12}}>
           {item.type==='video'
             ?<video src={item.fullUrl} className="lightbox-media" controls autoPlay/>
-            :<img src={item.fullUrl} alt={item.author} className="lightbox-media"/>
+            :item.type==='audio'
+              ?<div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,padding:'32px 16px',background:'linear-gradient(135deg,#f5ede0,#e8d4b8)',borderRadius:16,width:'100%',maxWidth:400}}>
+                 <span style={{fontSize:'4rem'}}>🎙️</span>
+                 <p style={{fontFamily:'var(--serif)',fontSize:'1.1rem',color:'var(--text-md)',textAlign:'center'}}>Mensagem de voz de<br/><strong>{item.author}</strong></p>
+                 <audio src={item.fullUrl} controls autoPlay style={{width:'100%'}}/>
+               </div>
+              :<img src={item.fullUrl} alt={item.author} className="lightbox-media"/>
           }
           <p className="lightbox-caption">
-            {item.type==='video'?'🎥':'📷'} {item.author} · {new Date(item.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long'})}
+            {item.type==='video'?'🎥':item.type==='audio'?'🎙️':'📷'} {item.author} · {new Date(item.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long'})}
           </p>
           <div className="lb-reactions">
             {REACTION_EMOJIS.map(emoji=>{
@@ -771,6 +795,7 @@ export default function Home() {
   const [toasts,      setToasts]       = useState<ToastMsg[]>([])
   const [parentsMsg,  setParentsMsg]   = useState('')
   const [savedAuthor, setSavedAuthor]  = useState('')
+  const [simpleMode,  setSimpleMode]   = useState(false)
   const lastRtTs  = useRef<number>(0)
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
@@ -779,7 +804,19 @@ export default function Home() {
     if(typeof window==='undefined')return
     if(!localStorage.getItem('cha_visited'))setShowOnboard(true)
     setSavedAuthor(localStorage.getItem('cha_author')?? '')
+    // Init simple mode from localStorage or prefers-reduced-motion
+    const stored=localStorage.getItem('cha_simple')
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if(stored==='1'||(stored===null&&reduced))setSimpleMode(true)
   },[])
+
+  // Sync simple mode to body class so CSS can react globally
+  useEffect(()=>{
+    document.body.classList.toggle('simple-mode',simpleMode)
+    return()=>document.body.classList.remove('simple-mode')
+  },[simpleMode])
+
+  const toggleSimple=()=>setSimpleMode(p=>{localStorage.setItem('cha_simple',p?'0':'1');return!p})
 
   const fetchMedia=useCallback(async(cursor?:string)=>{
     const res=await fetch(cursor?`/api/photos?cursor=${cursor}`:'/api/photos')
@@ -907,6 +944,9 @@ export default function Home() {
           <a href="#galeria" className="btn-primary">📷 Ver o álbum</a>
           <button className="btn-secondary" onClick={()=>setShowUpload(true)}>🌿 Compartilhar</button>
         </div>
+        <button className={`simple-toggle${simpleMode?' active':''}`} onClick={toggleSimple}>
+          ♿ {simpleMode?'Modo simples ativo':'Modo simples'}
+        </button>
         {media.length>0&&(
           <div className="online-badge" style={{marginTop:20}}>
             <span className="online-dot"/>
@@ -950,7 +990,7 @@ export default function Home() {
           </div>
         )}
 
-        {!loading&&media.length>0&&!showAll&&(
+        {!loading&&media.length>0&&!simpleMode&&!showAll&&(
           <>
             <Carousel3D items={media} onOpenLightbox={setLbIdx}/>
             <div style={{textAlign:'center',marginTop:8}}>
@@ -961,17 +1001,19 @@ export default function Home() {
           </>
         )}
 
-        {!loading&&media.length>0&&showAll&&(
+        {!loading&&media.length>0&&(simpleMode||showAll)&&(
           <div className="grid-section">
-            <div style={{textAlign:'center',marginBottom:20}}>
-              <button className="view-all-btn" onClick={()=>setShowAll(false)}>
-                ↩ Voltar ao carrossel
-              </button>
-            </div>
-            <div className="gallery-grid">
+            {!simpleMode&&(
+              <div style={{textAlign:'center',marginBottom:20}}>
+                <button className="view-all-btn" onClick={()=>setShowAll(false)}>
+                  ↩ Voltar ao carrossel
+                </button>
+              </div>
+            )}
+            <div className={simpleMode?'simple-grid':'gallery-grid'}>
               {media.map((item,i)=>(
-                <div key={item.id} className="gallery-card" style={{animationDelay:`${(i%8)*0.055}s`}} onClick={()=>setLbIdx(i)}>
-                  <div style={{position:'relative',aspectRatio:'1',overflow:'hidden'}}>
+                <div key={item.id} className="gallery-card" style={simpleMode?{}:{animationDelay:`${(i%8)*0.055}s`}} onClick={()=>setLbIdx(i)}>
+                  <div style={{position:'relative',aspectRatio: simpleMode?'4/3':'1',overflow:'hidden'}}>
                     <img src={item.thumbUrl} alt={item.author} loading="lazy"
                       style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
                     {item.type==='video'&&(
