@@ -154,7 +154,42 @@ function PhotoEditor({ file, onConfirm, onCancel }: { file:File; onConfirm:(b:Bl
 }
 
 // ── Upload Modal ──────────────────────────────────────────────────────────
-interface QItem { file:Blob; name:string; preview:string; status:'waiting'|'uploading'|'done'|'error'; progress:number; error?:string; type:'image'|'video' }
+interface QItem { file:Blob; name:string; preview:string; status:'waiting'|'uploading'|'done'|'error'; progress:number; error?:string; type:'image'|'video'; retries:number; isOfflineError:boolean }
+
+const MAX_LS_SIZE = 5*1024*1024
+const LS_KEY = 'cha_upload_queue'
+
+async function saveToLS(item:QItem){
+  if(item.file.size>MAX_LS_SIZE)return
+  try{
+    const dataUrl=await new Promise<string>((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result as string);r.onerror=rej;r.readAsDataURL(item.file)})
+    const stored:any[]=JSON.parse(localStorage.getItem(LS_KEY)??'[]')
+    const updated=[...stored.filter((e:any)=>e.name!==item.name),{name:item.name,type:item.type,dataUrl,retries:item.retries,ts:Date.now()}]
+    localStorage.setItem(LS_KEY,JSON.stringify(updated))
+  }catch{}
+}
+
+function loadFromLS():QItem[]{
+  try{
+    const cutoff=Date.now()-24*60*60*1000 // discard items older than 24h
+    const stored:any[]=JSON.parse(localStorage.getItem(LS_KEY)??'[]').filter((e:any)=>!e.ts||e.ts>cutoff)
+    if(!stored.length)return[]
+    return stored.map((s:any)=>{
+      const arr=s.dataUrl.split(',')
+      const mime=arr[0].match(/:(.*?);/)![1]
+      const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n)
+      const blob=new Blob([u8],{type:mime})
+      return{file:blob,name:s.name,preview:s.dataUrl,status:'waiting' as const,progress:0,type:s.type,retries:s.retries??0,isOfflineError:false}
+    })
+  }catch{return[]}
+}
+
+function removeFromLS(name:string){
+  try{
+    const stored:any[]=JSON.parse(localStorage.getItem(LS_KEY)??'[]')
+    localStorage.setItem(LS_KEY,JSON.stringify(stored.filter((e:any)=>e.name!==name)))
+  }catch{}
+}
 
 function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; onSuccess:(a:string,t:string)=>void; authorDefault:string }) {
   const [author,setAuthor]   = useState(authorDefault)
@@ -163,10 +198,38 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   const [queue,setQueue]     = useState<QItem[]>([])
   const [uploading,setUploading]= useState(false)
   const [compPct,setCompPct] = useState(0)
+  const [isOnline,setIsOnline]= useState(()=>typeof navigator!=='undefined'?navigator.onLine:true)
   const fileRef=useRef<HTMLInputElement>(null)
   const camRef =useRef<HTMLInputElement>(null)
   const vidRef =useRef<HTMLInputElement>(null)
+  const uploadingRef=useRef(false)
+  const uploadAllRef=useRef<()=>Promise<void>>(async()=>{})
   const allDone = queue.length>0 && queue.every(q=>q.status==='done'||q.status==='error')
+
+  // Load persisted queue on mount
+  useEffect(()=>{
+    const pending=loadFromLS()
+    if(pending.length>0){setQueue(pending);setStep('queue')}
+  },[])
+
+  // Online / offline listeners
+  useEffect(()=>{
+    const goOffline=()=>setIsOnline(false)
+    const goOnline=()=>{
+      setIsOnline(true)
+      // Wait 2s then reset offline-failed items and auto-retry (max 3 attempts)
+      setTimeout(()=>{
+        setQueue(prev=>prev.map(q=>
+          q.isOfflineError&&q.retries<3
+            ?{...q,status:'waiting' as const,progress:0,error:undefined,isOfflineError:false}:q
+        ))
+        setTimeout(()=>uploadAllRef.current(),200)
+      },2000)
+    }
+    window.addEventListener('offline',goOffline)
+    window.addEventListener('online',goOnline)
+    return()=>{window.removeEventListener('offline',goOffline);window.removeEventListener('online',goOnline)}
+  },[])
 
   const handleImgFiles=async(files:FileList|null)=>{
     if(!files||!files[0])return
@@ -183,7 +246,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
         const f=files[i]; setCompPct(Math.round(((i+1)/files.length)*100))
         const isImg=f.type.startsWith('image/')
         const blob=isImg?await compressImage(f,1800):f
-        items.push({file:blob,name:f.name,preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:isImg?'image':'video'})
+        items.push({file:blob,name:f.name,preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:isImg?'image':'video',retries:0,isOfflineError:false})
       }
       setQueue(items); setStep('queue')
     }
@@ -193,31 +256,45 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
     setStep('loading'); setCompPct(0)
     const iv=setInterval(()=>setCompPct(p=>Math.min(p+25,90)),80)
     await new Promise(r=>setTimeout(r,50)); clearInterval(iv); setCompPct(100)
-    setQueue([{file:blob,name:editFile?.name??'foto.jpg',preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:'image'}])
+    setQueue([{file:blob,name:editFile?.name??'foto.jpg',preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:'image',retries:0,isOfflineError:false}])
     setTimeout(()=>setStep('queue'),100)
   }
 
   const uploadAll=async()=>{
-    if(uploading)return; setUploading(true)
+    if(uploadingRef.current)return
+    uploadingRef.current=true; setUploading(true)
     let lastThumb=''
     for(let i=0;i<queue.length;i++){
-      if(queue[i].status==='done')continue
+      const qi=queue[i]
+      if(qi.status==='done')continue
+      if(qi.status==='error'&&!qi.isOfflineError)continue // skip server errors
       setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'uploading',progress:10}:q))
       try{
         const fd=new FormData()
-        fd.append('media',queue[i].file,queue[i].name)
+        fd.append('media',qi.file,qi.name)
         fd.append('author',author||'Convidado')
         const timer=setInterval(()=>setQueue(p=>p.map((q,idx)=>idx===i&&q.progress<85?{...q,progress:q.progress+15}:q)),250)
         const res=await fetch('/api/upload',{method:'POST',body:fd})
         clearInterval(timer)
         const data=await res.json()
-        if(res.ok){lastThumb=queue[i].preview;setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'done',progress:100}:q))}
-        else setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:data.error}:q))
-      }catch{setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:'Erro de conexão'}:q))}
+        if(res.ok){
+          lastThumb=qi.preview
+          setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'done',progress:100}:q))
+          removeFromLS(qi.name)
+        }else{
+          setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:data.error??'Erro no servidor',isOfflineError:false}:q))
+        }
+      }catch{
+        const nr=qi.retries+1
+        setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:`Sem conexão (${nr}/3)`,isOfflineError:true,retries:nr}:q))
+        if(qi.file.size<=MAX_LS_SIZE) saveToLS({...qi,retries:nr,isOfflineError:true,status:'error'})
+        break // no point continuing without connection
+      }
     }
-    setUploading(false)
+    uploadingRef.current=false; setUploading(false)
     if(lastThumb)onSuccess(author||'Convidado',lastThumb)
   }
+  uploadAllRef.current=uploadAll
 
   return (
     <div className="modal-overlay" onClick={step==='source'?onClose:undefined}>
@@ -247,7 +324,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={vidRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
               if(!e.target.files)return
-              const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const}))
+              const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}))
               setQueue(items);setStep('queue')
             }}/>
           </>
@@ -272,6 +349,18 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
           <>
             <p className="modal-label">✦ {allDone?'Concluído':'Enviando'} ✦</p>
             <h2 className="modal-title" style={{marginBottom:16}}>{allDone?'🌸 Tudo enviado!':`${queue.length} arquivo${queue.length>1?'s':''}`}</h2>
+
+            {/* Offline banner */}
+            {!isOnline&&(
+              <div className="offline-banner">
+                <span className="offline-banner-icon">📶</span>
+                <div className="offline-banner-text">
+                  <p className="offline-banner-title">Sem conexão</p>
+                  <p className="offline-banner-sub">Retomando automaticamente quando voltar</p>
+                </div>
+              </div>
+            )}
+
             <div className="queue-list">
               {queue.map((q,i)=>(
                 <div key={i} className="queue-item">
@@ -279,9 +368,16 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                   <div className="queue-info">
                     <p className="queue-name">{q.name}</p>
                     <div className="queue-bar-wrap"><div className="queue-bar" style={{width:`${q.progress}%`}}/></div>
-                    <p className={`queue-status ${q.status}`}>
-                      {q.status==='waiting'&&'Aguardando…'}{q.status==='uploading'&&'Enviando…'}{q.status==='done'&&'✓ No mural!'}{q.status==='error'&&`✗ ${q.error}`}
+                    <p className={`queue-status ${q.status==='error'&&q.isOfflineError?'offline':q.status}`}>
+                      {q.status==='waiting'&&'Aguardando…'}
+                      {q.status==='uploading'&&'Enviando…'}
+                      {q.status==='done'&&'✓ No mural!'}
+                      {q.status==='error'&&!q.isOfflineError&&`✗ ${q.error}`}
+                      {q.status==='error'&&q.isOfflineError&&(q.retries>=3?`📶 ${q.error} — clique em tentar novamente`:`📶 ${q.error} — aguardando conexão`)}
                     </p>
+                    {q.status==='error'&&!q.isOfflineError&&q.file.size>MAX_LS_SIZE&&(
+                      <p style={{fontSize:'.7rem',color:'var(--text-lo)',fontStyle:'italic'}}>arquivo grande — não salvo localmente</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -290,7 +386,10 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             {uploading&&<p style={{textAlign:'center',color:'var(--text-md)',fontStyle:'italic',fontSize:'.92rem'}}>Não feche enquanto envia…</p>}
             {allDone&&(
               <div style={{display:'flex',gap:10}}>
-                {queue.some(q=>q.status==='error')&&<button className="btn-secondary" style={{flex:1}} onClick={()=>{setQueue(p=>p.map(q=>q.status==='error'?{...q,status:'waiting' as const,progress:0}:q));setUploading(false)}}>🔄 Tentar novamente</button>}
+                {queue.some(q=>q.status==='error')&&<button className="btn-secondary" style={{flex:1}} onClick={()=>{
+                  setQueue(p=>p.map(q=>q.status==='error'?{...q,status:'waiting' as const,progress:0,error:undefined,isOfflineError:false,retries:0}:q))
+                  uploadingRef.current=false; setUploading(false)
+                }}>🔄 Tentar novamente</button>}
                 <button className="btn-primary" style={{flex:2,justifyContent:'center'}} onClick={onClose}>✓ Fechar</button>
               </div>
             )}

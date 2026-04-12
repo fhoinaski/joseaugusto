@@ -352,6 +352,19 @@ body {
 .queue-status.done     { color:var(--sd); }
 .queue-status.error    { color:#b03020; }
 .queue-status.uploading{ color:var(--bl); }
+.queue-status.offline  { color:#c07020; }
+
+/* Offline banner */
+.offline-banner {
+  display:flex; align-items:center; gap:10px;
+  background:linear-gradient(135deg,rgba(180,80,0,.12),rgba(140,60,0,.1));
+  border:1px solid rgba(200,100,20,.35);
+  border-radius:12px; padding:12px 14px; margin-bottom:14px;
+  animation:fadeUp .3s ease both;
+}
+.offline-banner-icon { font-size:1.3rem; flex-shrink:0; }
+.offline-banner-title { font-size:.88rem; font-weight:700; color:var(--bl); }
+.offline-banner-sub   { font-size:.75rem; font-style:italic; color:var(--text-lo); margin-top:1px; }
 
 /* Loading */
 .preview-loading  { aspect-ratio:1; border-radius:16px; overflow:hidden; background:var(--beige); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; min-height:200px; }
