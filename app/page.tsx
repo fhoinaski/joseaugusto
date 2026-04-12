@@ -147,27 +147,36 @@ function useGeofence() {
       })
   }, [])
 
-  const unlockWithKey = (key: string): boolean => {
-    if (key.trim() === ACCESS_KEY) {
-      setStatus('allowed'); setCanPost(true)
-      try { localStorage.setItem('cha_geo', JSON.stringify({ result: 'allowed', ts: Date.now() })) } catch {}
-      return true
+  const unlockWithKey = async (key: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/verify-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: key.trim() }),
+      })
+      const { valid } = await res.json()
+      if (valid) {
+        setStatus('allowed'); setCanPost(true)
+        try { localStorage.setItem('cha_geo', JSON.stringify({ result: 'allowed', ts: Date.now() })) } catch {}
+      }
+      return valid
+    } catch {
+      return false
     }
-    return false
   }
 
   return { geoStatus: status, canPost, unlockWithKey }
 }
 
-function GeoBanner({ geoStatus, unlockWithKey }: { geoStatus: GeoStatus; unlockWithKey: (k: string) => boolean }) {
+function GeoBanner({ geoStatus, unlockWithKey }: { geoStatus: GeoStatus; unlockWithKey: (k: string) => Promise<boolean> }) {
   const [key,       setKey]       = useState('')
   const [showKey,   setShowKey]   = useState(false)
   const [keyError,  setKeyError]  = useState(false)
 
   if (geoStatus === 'allowed' || geoStatus === 'idle' || geoStatus === 'checking') return null
 
-  const tryKey = () => {
-    if (unlockWithKey(key)) { setKeyError(false) }
+  const tryKey = async () => {
+    if (await unlockWithKey(key)) { setKeyError(false) }
     else { setKeyError(true) }
   }
 
