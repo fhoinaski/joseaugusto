@@ -1,8 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'; createdAt:string }
+interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
+
+const REACTION_EMOJIS = ['♥','😍','🎉','👶']
+
+function getReacted(id:string):string[] { try{ return JSON.parse(localStorage.getItem(`cha_reacted_${id}`)??'[]') }catch{return[]} }
+function markReacted(id:string,emoji:string){ const r=getReacted(id); if(!r.includes(emoji))localStorage.setItem(`cha_reacted_${id}`,JSON.stringify([...r,emoji])) }
 interface FilterDef { id:string; label:string; css:string }
 
 const FILTERS: FilterDef[] = [
@@ -54,6 +59,21 @@ function Onboarding({ onDone }: { onDone:()=>void }) {
       </div>
       <button className="onboard-btn" onClick={finish}>Entrar no álbum</button>
       <p className="onboard-pwa">📲 Adicione à tela inicial para acesso rápido</p>
+    </div>
+  )
+}
+
+// ── Reaction Bar (gallery cards) ──────────────────────────────────────────
+function ReactionBar({ item, onReact }:{ item:MediaItem; onReact:(id:string,emoji:string)=>void }) {
+  const hasAny = REACTION_EMOJIS.some(e=>(item.reactions[e]??0)>0)
+  if(!hasAny) return null
+  return (
+    <div className="reaction-bar" onClick={e=>e.stopPropagation()}>
+      {REACTION_EMOJIS.filter(e=>(item.reactions[e]??0)>0).map(emoji=>(
+        <button key={emoji} className="reaction-pill" onClick={()=>onReact(item.id,emoji)}>
+          {emoji} <span>{item.reactions[emoji]}</span>
+        </button>
+      ))}
     </div>
   )
 }
@@ -134,7 +154,42 @@ function PhotoEditor({ file, onConfirm, onCancel }: { file:File; onConfirm:(b:Bl
 }
 
 // ── Upload Modal ──────────────────────────────────────────────────────────
-interface QItem { file:Blob; name:string; preview:string; status:'waiting'|'uploading'|'done'|'error'; progress:number; error?:string; type:'image'|'video' }
+interface QItem { file:Blob; name:string; preview:string; status:'waiting'|'uploading'|'done'|'error'; progress:number; error?:string; type:'image'|'video'; retries:number; isOfflineError:boolean }
+
+const MAX_LS_SIZE = 5*1024*1024
+const LS_KEY = 'cha_upload_queue'
+
+async function saveToLS(item:QItem){
+  if(item.file.size>MAX_LS_SIZE)return
+  try{
+    const dataUrl=await new Promise<string>((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result as string);r.onerror=rej;r.readAsDataURL(item.file)})
+    const stored:any[]=JSON.parse(localStorage.getItem(LS_KEY)??'[]')
+    const updated=[...stored.filter((e:any)=>e.name!==item.name),{name:item.name,type:item.type,dataUrl,retries:item.retries,ts:Date.now()}]
+    localStorage.setItem(LS_KEY,JSON.stringify(updated))
+  }catch{}
+}
+
+function loadFromLS():QItem[]{
+  try{
+    const cutoff=Date.now()-24*60*60*1000 // discard items older than 24h
+    const stored:any[]=JSON.parse(localStorage.getItem(LS_KEY)??'[]').filter((e:any)=>!e.ts||e.ts>cutoff)
+    if(!stored.length)return[]
+    return stored.map((s:any)=>{
+      const arr=s.dataUrl.split(',')
+      const mime=arr[0].match(/:(.*?);/)![1]
+      const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n)
+      const blob=new Blob([u8],{type:mime})
+      return{file:blob,name:s.name,preview:s.dataUrl,status:'waiting' as const,progress:0,type:s.type,retries:s.retries??0,isOfflineError:false}
+    })
+  }catch{return[]}
+}
+
+function removeFromLS(name:string){
+  try{
+    const stored:any[]=JSON.parse(localStorage.getItem(LS_KEY)??'[]')
+    localStorage.setItem(LS_KEY,JSON.stringify(stored.filter((e:any)=>e.name!==name)))
+  }catch{}
+}
 
 function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; onSuccess:(a:string,t:string)=>void; authorDefault:string }) {
   const [author,setAuthor]   = useState(authorDefault)
@@ -143,10 +198,38 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   const [queue,setQueue]     = useState<QItem[]>([])
   const [uploading,setUploading]= useState(false)
   const [compPct,setCompPct] = useState(0)
+  const [isOnline,setIsOnline]= useState(()=>typeof navigator!=='undefined'?navigator.onLine:true)
   const fileRef=useRef<HTMLInputElement>(null)
   const camRef =useRef<HTMLInputElement>(null)
   const vidRef =useRef<HTMLInputElement>(null)
+  const uploadingRef=useRef(false)
+  const uploadAllRef=useRef<()=>Promise<void>>(async()=>{})
   const allDone = queue.length>0 && queue.every(q=>q.status==='done'||q.status==='error')
+
+  // Load persisted queue on mount
+  useEffect(()=>{
+    const pending=loadFromLS()
+    if(pending.length>0){setQueue(pending);setStep('queue')}
+  },[])
+
+  // Online / offline listeners
+  useEffect(()=>{
+    const goOffline=()=>setIsOnline(false)
+    const goOnline=()=>{
+      setIsOnline(true)
+      // Wait 2s then reset offline-failed items and auto-retry (max 3 attempts)
+      setTimeout(()=>{
+        setQueue(prev=>prev.map(q=>
+          q.isOfflineError&&q.retries<3
+            ?{...q,status:'waiting' as const,progress:0,error:undefined,isOfflineError:false}:q
+        ))
+        setTimeout(()=>uploadAllRef.current(),200)
+      },2000)
+    }
+    window.addEventListener('offline',goOffline)
+    window.addEventListener('online',goOnline)
+    return()=>{window.removeEventListener('offline',goOffline);window.removeEventListener('online',goOnline)}
+  },[])
 
   const handleImgFiles=async(files:FileList|null)=>{
     if(!files||!files[0])return
@@ -163,7 +246,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
         const f=files[i]; setCompPct(Math.round(((i+1)/files.length)*100))
         const isImg=f.type.startsWith('image/')
         const blob=isImg?await compressImage(f,1800):f
-        items.push({file:blob,name:f.name,preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:isImg?'image':'video'})
+        items.push({file:blob,name:f.name,preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:isImg?'image':'video',retries:0,isOfflineError:false})
       }
       setQueue(items); setStep('queue')
     }
@@ -173,31 +256,45 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
     setStep('loading'); setCompPct(0)
     const iv=setInterval(()=>setCompPct(p=>Math.min(p+25,90)),80)
     await new Promise(r=>setTimeout(r,50)); clearInterval(iv); setCompPct(100)
-    setQueue([{file:blob,name:editFile?.name??'foto.jpg',preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:'image'}])
+    setQueue([{file:blob,name:editFile?.name??'foto.jpg',preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:'image',retries:0,isOfflineError:false}])
     setTimeout(()=>setStep('queue'),100)
   }
 
   const uploadAll=async()=>{
-    if(uploading)return; setUploading(true)
+    if(uploadingRef.current)return
+    uploadingRef.current=true; setUploading(true)
     let lastThumb=''
     for(let i=0;i<queue.length;i++){
-      if(queue[i].status==='done')continue
+      const qi=queue[i]
+      if(qi.status==='done')continue
+      if(qi.status==='error'&&!qi.isOfflineError)continue // skip server errors
       setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'uploading',progress:10}:q))
       try{
         const fd=new FormData()
-        fd.append('media',queue[i].file,queue[i].name)
+        fd.append('media',qi.file,qi.name)
         fd.append('author',author||'Convidado')
         const timer=setInterval(()=>setQueue(p=>p.map((q,idx)=>idx===i&&q.progress<85?{...q,progress:q.progress+15}:q)),250)
         const res=await fetch('/api/upload',{method:'POST',body:fd})
         clearInterval(timer)
         const data=await res.json()
-        if(res.ok){lastThumb=queue[i].preview;setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'done',progress:100}:q))}
-        else setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:data.error}:q))
-      }catch{setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:'Erro de conexão'}:q))}
+        if(res.ok){
+          lastThumb=qi.preview
+          setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'done',progress:100}:q))
+          removeFromLS(qi.name)
+        }else{
+          setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:data.error??'Erro no servidor',isOfflineError:false}:q))
+        }
+      }catch{
+        const nr=qi.retries+1
+        setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:`Sem conexão (${nr}/3)`,isOfflineError:true,retries:nr}:q))
+        if(qi.file.size<=MAX_LS_SIZE) saveToLS({...qi,retries:nr,isOfflineError:true,status:'error'})
+        break // no point continuing without connection
+      }
     }
-    setUploading(false)
+    uploadingRef.current=false; setUploading(false)
     if(lastThumb)onSuccess(author||'Convidado',lastThumb)
   }
+  uploadAllRef.current=uploadAll
 
   return (
     <div className="modal-overlay" onClick={step==='source'?onClose:undefined}>
@@ -227,7 +324,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={vidRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
               if(!e.target.files)return
-              const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const}))
+              const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}))
               setQueue(items);setStep('queue')
             }}/>
           </>
@@ -252,6 +349,18 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
           <>
             <p className="modal-label">✦ {allDone?'Concluído':'Enviando'} ✦</p>
             <h2 className="modal-title" style={{marginBottom:16}}>{allDone?'🌸 Tudo enviado!':`${queue.length} arquivo${queue.length>1?'s':''}`}</h2>
+
+            {/* Offline banner */}
+            {!isOnline&&(
+              <div className="offline-banner">
+                <span className="offline-banner-icon">📶</span>
+                <div className="offline-banner-text">
+                  <p className="offline-banner-title">Sem conexão</p>
+                  <p className="offline-banner-sub">Retomando automaticamente quando voltar</p>
+                </div>
+              </div>
+            )}
+
             <div className="queue-list">
               {queue.map((q,i)=>(
                 <div key={i} className="queue-item">
@@ -259,9 +368,16 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                   <div className="queue-info">
                     <p className="queue-name">{q.name}</p>
                     <div className="queue-bar-wrap"><div className="queue-bar" style={{width:`${q.progress}%`}}/></div>
-                    <p className={`queue-status ${q.status}`}>
-                      {q.status==='waiting'&&'Aguardando…'}{q.status==='uploading'&&'Enviando…'}{q.status==='done'&&'✓ No mural!'}{q.status==='error'&&`✗ ${q.error}`}
+                    <p className={`queue-status ${q.status==='error'&&q.isOfflineError?'offline':q.status}`}>
+                      {q.status==='waiting'&&'Aguardando…'}
+                      {q.status==='uploading'&&'Enviando…'}
+                      {q.status==='done'&&'✓ No mural!'}
+                      {q.status==='error'&&!q.isOfflineError&&`✗ ${q.error}`}
+                      {q.status==='error'&&q.isOfflineError&&(q.retries>=3?`📶 ${q.error} — clique em tentar novamente`:`📶 ${q.error} — aguardando conexão`)}
                     </p>
+                    {q.status==='error'&&!q.isOfflineError&&q.file.size>MAX_LS_SIZE&&(
+                      <p style={{fontSize:'.7rem',color:'var(--text-lo)',fontStyle:'italic'}}>arquivo grande — não salvo localmente</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -270,7 +386,10 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             {uploading&&<p style={{textAlign:'center',color:'var(--text-md)',fontStyle:'italic',fontSize:'.92rem'}}>Não feche enquanto envia…</p>}
             {allDone&&(
               <div style={{display:'flex',gap:10}}>
-                {queue.some(q=>q.status==='error')&&<button className="btn-secondary" style={{flex:1}} onClick={()=>{setQueue(p=>p.map(q=>q.status==='error'?{...q,status:'waiting' as const,progress:0}:q));setUploading(false)}}>🔄 Tentar novamente</button>}
+                {queue.some(q=>q.status==='error')&&<button className="btn-secondary" style={{flex:1}} onClick={()=>{
+                  setQueue(p=>p.map(q=>q.status==='error'?{...q,status:'waiting' as const,progress:0,error:undefined,isOfflineError:false,retries:0}:q))
+                  uploadingRef.current=false; setUploading(false)
+                }}>🔄 Tentar novamente</button>}
                 <button className="btn-primary" style={{flex:2,justifyContent:'center'}} onClick={onClose}>✓ Fechar</button>
               </div>
             )}
@@ -391,10 +510,11 @@ function Carousel3D({ items, onOpenLightbox }:{ items:MediaItem[]; onOpenLightbo
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
-function Lightbox({ items, index, onClose, onNav }:{ items:MediaItem[]; index:number; onClose:()=>void; onNav:(n:number)=>void }) {
+function Lightbox({ items, index, onClose, onNav, onReact }:{ items:MediaItem[]; index:number; onClose:()=>void; onNav:(n:number)=>void; onReact:(id:string,emoji:string)=>void }) {
   const [displayIdx, setDisplayIdx] = useState(index)
   const [slideDir, setSlideDir]     = useState<'left'|'right'|null>(null)
   const [animating, setAnimating]   = useState(false)
+  const [popping,   setPopping]     = useState<string|null>(null)
   const touchStart = useRef<number|null>(null)
 
   // When index changes externally, trigger slide transition
@@ -451,6 +571,24 @@ function Lightbox({ items, index, onClose, onNav }:{ items:MediaItem[]; index:nu
           <p className="lightbox-caption">
             {item.type==='video'?'🎥':'📷'} {item.author} · {new Date(item.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long'})}
           </p>
+          <div className="lb-reactions">
+            {REACTION_EMOJIS.map(emoji=>{
+              const reacted=typeof window!=='undefined'&&getReacted(item.id).includes(emoji)
+              const count=item.reactions[emoji]??0
+              return (
+                <button key={emoji}
+                  className={`lb-reaction-btn${reacted?' reacted':''}${popping===emoji?' popping':''}`}
+                  onClick={()=>{
+                    if(reacted)return
+                    setPopping(emoji); setTimeout(()=>setPopping(null),400)
+                    onReact(item.id,emoji)
+                  }}>
+                  <span className="lb-reaction-emoji">{emoji}</span>
+                  {count>0&&<span className="lb-reaction-count">{count}</span>}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
@@ -476,6 +614,125 @@ function ToastManager({ toasts, onRemove }:{ toasts:ToastMsg[]; onRemove:(id:str
         </div>
       ))}
     </div>
+  )
+}
+
+// ── Canvas helper ─────────────────────────────────────────────────────────
+async function generateCapsuleCanvas(author:string, message:string): Promise<Blob|null> {
+  try {
+    await Promise.all([
+      document.fonts.load('700 1em "Dancing Script"'),
+      document.fonts.load('400 1em "Cormorant Garamond"'),
+    ])
+    const cv=document.createElement('canvas'); cv.width=900; cv.height=640
+    const ctx=cv.getContext('2d')!
+    ctx.fillStyle='#f5ede0'; ctx.fillRect(0,0,900,640)
+    // Borders
+    ctx.strokeStyle='#c9a87c'; ctx.lineWidth=2.5; ctx.strokeRect(28,28,844,584)
+    ctx.strokeStyle='#e8d4b8'; ctx.lineWidth=1;   ctx.strokeRect(38,38,824,564)
+    // Title
+    ctx.font='40px "Dancing Script"'; ctx.fillStyle='#3e2408'; ctx.textAlign='center'
+    ctx.fillText('Para José Augusto 🐻',450,110)
+    // Divider
+    const g=ctx.createLinearGradient(200,0,700,0)
+    g.addColorStop(0,'transparent'); g.addColorStop(.3,'#c9a87c'); g.addColorStop(.7,'#c9a87c'); g.addColorStop(1,'transparent')
+    ctx.strokeStyle=g; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(200,128); ctx.lineTo(700,128); ctx.stroke()
+    // Message body
+    ctx.font='25px "Cormorant Garamond"'; ctx.fillStyle='#2a1400'; ctx.textAlign='left'
+    const words=message.split(' '); const maxW=800; const sx=58
+    let y=178, line=''
+    for(const w of words){
+      const t=line?line+' '+w:w
+      if(ctx.measureText(t).width>maxW&&line){ ctx.fillText(line,sx,y); line=w; y+=40; if(y>540){ctx.fillText('…',sx,y);break} }
+      else line=t
+    }
+    if(line&&y<=540) ctx.fillText(line,sx,y)
+    // Author + date
+    const date=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})
+    ctx.font='17px "Cormorant Garamond"'; ctx.fillStyle='#8a5e35'; ctx.textAlign='left'; ctx.fillText(date,58,595)
+    ctx.font='26px "Dancing Script"';     ctx.fillStyle='#7a4e28'; ctx.textAlign='right'; ctx.fillText(`— ${author}`,842,595)
+    return await new Promise(r=>cv.toBlob(b=>r(b),'image/png',0.92))
+  } catch { return null }
+}
+
+// ── Capsule Section ───────────────────────────────────────────────────────
+function CapsuleSection({ defaultAuthor }:{ defaultAuthor:string }) {
+  const [count,    setCount]    = useState<number|null>(null)
+  const [openDate, setOpenDate] = useState('18 anos')
+  const [author,   setAuthor]   = useState(defaultAuthor)
+  const [message,  setMessage]  = useState('')
+  const [phase,    setPhase]    = useState<'idle'|'generating'|'sending'|'done'>('idle')
+
+  useEffect(()=>{
+    setAuthor(defaultAuthor)
+  },[defaultAuthor])
+
+  useEffect(()=>{
+    fetch('/api/capsule').then(r=>r.json()).then(d=>{
+      setCount(d.count??0); setOpenDate(d.openDate??'18 anos')
+    })
+  },[])
+
+  const submit=async()=>{
+    if(!author.trim()||!message.trim()||phase!=='idle') return
+    setPhase('generating')
+    const blob=await generateCapsuleCanvas(author.trim(),message.trim())
+    setPhase('sending')
+    try {
+      const fd=new FormData()
+      if(blob) fd.append('image',blob,'capsule.png')
+      fd.append('author',author.trim())
+      fd.append('message',message.trim())
+      const res=await fetch('/api/capsule',{method:'POST',body:fd})
+      if(res.ok){ setPhase('done'); setCount(c=>(c??0)+1) }
+      else setPhase('idle')
+    }catch{ setPhase('idle') }
+  }
+
+  return (
+    <section className="capsule-section reveal">
+      <div className="capsule-inner">
+        <div className="capsule-header">
+          <span className="capsule-envelope">💌</span>
+          <p className="capsule-label">✦ Cápsula do Tempo ✦</p>
+          <h2 className="capsule-title">Uma mensagem para<br/>quando ele crescer</h2>
+          <p className="capsule-subtitle">
+            Escreva algo para o José Augusto ler quando completar <strong>{openDate}</strong>.
+            Esta mensagem ficará guardada com muito carinho.
+          </p>
+          {count!==null&&(
+            <div className="capsule-counter">
+              💌 {count===0?'Seja o primeiro a deixar uma mensagem':count===1?'1 pessoa já deixou uma mensagem':`${count} pessoas já deixaram uma mensagem`}
+            </div>
+          )}
+        </div>
+
+        {phase!=='done'?(
+          <div className="capsule-form">
+            <div className="capsule-lock-badge">🔒 Abre em {openDate}</div>
+            <input className="capsule-input" type="text" placeholder="Seu nome"
+              value={author} onChange={e=>setAuthor(e.target.value)} maxLength={80}/>
+            <div className="capsule-textarea-wrap">
+              <textarea className="capsule-textarea"
+                placeholder={"Escreva sua mensagem para o José Augusto…\n\nEle vai ler quando for grande 💛"}
+                value={message} onChange={e=>setMessage(e.target.value)} maxLength={500}/>
+              <span className="capsule-chars">{message.length}/500</span>
+            </div>
+            <button className="capsule-btn"
+              disabled={!author.trim()||!message.trim()||phase!=='idle'}
+              onClick={submit}>
+              {phase==='generating'?'✨ Preparando…':phase==='sending'?'📮 Enviando…':'🔒 Guardar mensagem'}
+            </button>
+          </div>
+        ):(
+          <div className="capsule-success">
+            <span className="capsule-success-icon">💌</span>
+            <h3 className="capsule-success-title">Mensagem guardada!</h3>
+            <p className="capsule-success-text">O José Augusto vai encontrar seu carinho quando crescer.</p>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -549,21 +806,55 @@ export default function Home() {
   },[])
 
   useEffect(()=>{
+    // Seed the last-known timestamp so we don't fire stale toasts on reconnect
     fetch('/api/realtime').then(r=>r.json()).then(({data})=>{if(data?.ts)lastRtTs.current=data.ts})
-    const poll=async()=>{
-      try{
-        const {data}=await(await fetch('/api/realtime')).json()
-        if(data?.ts&&data.ts>lastRtTs.current&&data.ts>Date.now()-30000){
-          lastRtTs.current=data.ts
-          const id=Math.random().toString(36).slice(2)
-          const text=data.author!=='Convidado'?`${data.author} adicionou uma foto! 📷`:'Nova foto adicionada! 📷'
-          setToasts(prev=>[...prev.slice(-2),{id,text,thumb:data.thumbUrl}])
-          setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4500)
-          setTimeout(()=>fetchMedia(),2000)
-        }
-      }catch{}
+
+    const handleNewPhoto=(data:any)=>{
+      if(!data?.ts||data.ts<=lastRtTs.current||data.ts<=Date.now()-30000)return
+      lastRtTs.current=data.ts
+      const id=Math.random().toString(36).slice(2)
+      const text=data.author!=='Convidado'?`${data.author} adicionou uma foto! 📷`:'Nova foto adicionada! 📷'
+      setToasts(prev=>[...prev.slice(-2),{id,text,thumb:data.thumbUrl}])
+      setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4500)
+      setTimeout(()=>fetchMedia(),2000)
     }
-    const t=setInterval(poll,10000); return()=>clearInterval(t)
+
+    // Fallback polling — used when EventSource is unavailable or times out
+    let fallback:ReturnType<typeof setInterval>|null=null
+    const startFallback=()=>{
+      if(fallback)return
+      fallback=setInterval(async()=>{
+        try{const{data}=await(await fetch('/api/realtime')).json();handleNewPhoto(data)}catch{}
+      },10000)
+    }
+
+    if(typeof EventSource==='undefined'){
+      startFallback()
+      return()=>{if(fallback)clearInterval(fallback)}
+    }
+
+    let es=new EventSource('/api/stream')
+
+    // If SSE hasn't confirmed connection within 5s, fall back to polling
+    let fbTimer:ReturnType<typeof setTimeout>|null=setTimeout(()=>{
+      if(es.readyState!==EventSource.OPEN){es.close();startFallback()}
+    },5000)
+
+    es.addEventListener('ping',()=>{
+      if(fbTimer){clearTimeout(fbTimer);fbTimer=null}
+    })
+    es.addEventListener('new-photo',(e:MessageEvent)=>{
+      try{handleNewPhoto(JSON.parse(e.data))}catch{}
+    })
+    es.addEventListener('message-update',(e:MessageEvent)=>{
+      try{const{message}=JSON.parse(e.data);if(message)setParentsMsg(message)}catch{}
+    })
+
+    return()=>{
+      es.close()
+      if(fallback)clearInterval(fallback)
+      if(fbTimer)clearTimeout(fbTimer)
+    }
   },[fetchMedia])
 
   useEffect(()=>{
@@ -578,6 +869,17 @@ export default function Home() {
     setToasts(prev=>[...prev.slice(-2),{id,text,thumb}])
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4000)
   }
+
+  const handleReact=useCallback(async(id:string,emoji:string)=>{
+    const reacted=getReacted(id)
+    if(reacted.includes(emoji))return
+    markReacted(id,emoji)
+    // Optimistic update
+    setMedia(prev=>prev.map(m=>m.id===id?{...m,reactions:{...m.reactions,[emoji]:(m.reactions[emoji]??0)+1}}:m))
+    try{
+      await fetch('/api/react',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,emoji})})
+    }catch{}
+  },[])
 
   const handleUploadSuccess=(author:string,thumb:string)=>{
     if(author&&author!=='Convidado'){localStorage.setItem('cha_author',author);setSavedAuthor(author)}
@@ -682,6 +984,7 @@ export default function Home() {
                     )}
                   </div>
                   <div className="gallery-card-footer"><span className="gallery-card-author">{item.type==='video'?'🎥':'📷'} {item.author}</span></div>
+                  <ReactionBar item={item} onReact={handleReact}/>
                 </div>
               ))}
             </div>
@@ -706,6 +1009,8 @@ export default function Home() {
         </div>
       </div>
 
+      <CapsuleSection defaultAuthor={savedAuthor}/>
+
       <footer className="reveal">
         <span className="footer-bear">🐻</span>
         <p className="footer-text">Bem-vindo ao mundo, José Augusto</p>
@@ -723,7 +1028,8 @@ export default function Home() {
 
       {lbIdx!==null&&(
         <Lightbox items={media} index={lbIdx} onClose={()=>setLbIdx(null)}
-          onNav={d=>setLbIdx(prev=>prev!==null?Math.max(0,Math.min(media.length-1,prev+d)):null)}/>
+          onNav={d=>setLbIdx(prev=>prev!==null?Math.max(0,Math.min(media.length-1,prev+d)):null)}
+          onReact={handleReact}/>
       )}
 
       {showUpload&&<UploadModal authorDefault={savedAuthor} onClose={()=>setShowUpload(false)} onSuccess={handleUploadSuccess}/>}

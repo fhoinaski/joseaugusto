@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 
-interface MediaItem { id: string; thumbUrl: string; fullUrl: string; author: string; type: 'image' | 'video'; createdAt: string }
+interface MediaItem   { id: string; thumbUrl: string; fullUrl: string; author: string; type: 'image' | 'video'; createdAt: string }
+interface CapsuleItem { id: string; author: string; message: string; createdAt: string; imageUrl: string }
 
 function LoginForm({ onLogin }: { onLogin: () => void }) {
   const [pw, setPw] = useState('')
@@ -33,11 +34,16 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message'>('pending')
-  const [pending, setPending] = useState<MediaItem[]>([])
-  const [approved, setApproved] = useState<MediaItem[]>([])
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule'>('pending')
+  const [pending,   setPending]   = useState<MediaItem[]>([])
+  const [approved,  setApproved]  = useState<MediaItem[]>([])
+  const [capsules,  setCapsules]  = useState<CapsuleItem[]>([])
+  const [capsuleOpenDate, setCapsuleOpenDate] = useState('18 anos')
+  const [editingOpenDate, setEditingOpenDate] = useState('')
   const [msg, setMsg] = useState('')
-  const [savingMsg, setSavingMsg] = useState(false)
+  const [savingMsg,       setSavingMsg]       = useState(false)
+  const [savingOpenDate,  setSavingOpenDate]  = useState(false)
+  const [loadingC, setLoadingC] = useState(false)
   const [toast, setToast] = useState('')
   const [loadingP, setLoadingP] = useState(true)
   const [loadingA, setLoadingA] = useState(true)
@@ -60,6 +66,16 @@ function AdminPanel() {
     setLoadingA(false)
   }, [])
 
+  const fetchCapsules = useCallback(async () => {
+    setLoadingC(true)
+    const res = await fetch('/api/admin/capsule')
+    const data = await res.json()
+    setCapsules(data.capsules ?? [])
+    setCapsuleOpenDate(data.openDate ?? '18 anos')
+    setEditingOpenDate(data.openDate ?? '18 anos')
+    setLoadingC(false)
+  }, [])
+
   useEffect(() => {
     fetchPending(); fetchApproved()
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_message' }) })
@@ -71,6 +87,18 @@ function AdminPanel() {
     if (act === 'approve') { setPending(p => p.filter(x => x.id !== id)); fetchApproved(); showToast('✓ Aprovada!') }
     else if (act === 'reject') { setPending(p => p.filter(x => x.id !== id)); showToast('Rejeitada.') }
     else { setPending(p => p.filter(x => x.id !== id)); setApproved(a => a.filter(x => x.id !== id)); showToast('🗑 Excluída permanentemente.') }
+  }
+
+  const saveOpenDate = async () => {
+    setSavingOpenDate(true)
+    await fetch('/api/admin/capsule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set_open_date', openDate: editingOpenDate }) })
+    setCapsuleOpenDate(editingOpenDate); setSavingOpenDate(false); showToast('🔒 Data de abertura salva!')
+  }
+
+  const deleteCapsule = async (id: string, author: string) => {
+    if (!confirm(`Excluir mensagem de ${author}?`)) return
+    await fetch('/api/admin/capsule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id }) })
+    setCapsules(prev => prev.filter(c => c.id !== id)); showToast('🗑 Mensagem excluída.')
   }
 
   const saveMsg = async () => {
@@ -147,14 +175,20 @@ function AdminPanel() {
       </div>
 
       <div style={S.statsRow}>
-        {[{ num: pending.length, lbl: 'Pendentes' }, { num: approved.length, lbl: 'No mural' }].map(s => (
+        {[{ num: pending.length, lbl: 'Pendentes' }, { num: approved.length, lbl: 'No mural' }, { num: capsules.length, lbl: 'Cápsulas' }].map(s => (
           <div key={s.lbl} style={S.statCard}><span style={S.statNum}>{s.num}</span><span style={S.statLbl}>{s.lbl}</span></div>
         ))}
       </div>
 
       <div style={S.tabs}>
-        {[{ key: 'pending', label: 'Pendentes', count: pending.length }, { key: 'approved', label: 'Aprovadas', count: 0 }, { key: 'message', label: 'Mensagem', count: 0 }].map(t => (
-          <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => setTab(t.key as any)}>
+        {[
+          { key: 'pending',  label: 'Pendentes', count: pending.length },
+          { key: 'approved', label: 'Aprovadas',  count: 0 },
+          { key: 'message',  label: 'Mensagem',   count: 0 },
+          { key: 'capsule',  label: '💌 Cápsula', count: 0 },
+        ].map(t => (
+          <button key={t.key} style={tabStyle(tab === t.key)}
+            onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
           </button>
         ))}
@@ -191,6 +225,50 @@ function AdminPanel() {
           <button className="btn-primary" onClick={saveMsg} disabled={savingMsg} style={{ fontSize: '.95rem', padding: '11px 28px' }}>
             {savingMsg ? 'Salvando…' : '🌸 Salvar mensagem'}
           </button>
+        </div>
+      )}
+
+      {tab === 'capsule' && (
+        <div style={S.card}>
+          <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>💌 Cápsula do Tempo</h2>
+          <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Mensagens dos convidados para o José Augusto.</p>
+
+          {/* Open date config */}
+          <div style={{ background: 'rgba(62,36,8,.05)', border: '1px solid var(--beige)', borderRadius: 14, padding: '16px 18px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
+            <span style={{ fontSize: '.84rem', color: 'var(--bl)', fontWeight: 600 }}>🔒 Abre em:</span>
+            <input
+              style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '7px 12px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', flex: 1, minWidth: 120 }}
+              value={editingOpenDate}
+              onChange={e => setEditingOpenDate(e.target.value)}
+              placeholder="ex: 18 anos"
+            />
+            <button style={S.btnApprove} onClick={saveOpenDate} disabled={savingOpenDate}>
+              {savingOpenDate ? 'Salvando…' : '✓ Salvar'}
+            </button>
+          </div>
+
+          {loadingC ? <p style={S.empty}>Carregando…</p> : capsules.length === 0
+            ? <p style={S.empty}>Nenhuma mensagem ainda 💌</p>
+            : (
+              <div style={S.grid}>
+                {capsules.map(c => (
+                  <div key={c.id} style={{ ...S.photoCard, display: 'flex', flexDirection: 'column' as const }}>
+                    <img src={c.imageUrl} alt={c.author} style={{ width: '100%', aspectRatio: '9/6', objectFit: 'cover', display: 'block' }} />
+                    <div style={{ ...S.photoInfo, flex: 1 }}>
+                      <p style={S.photoAuthor}>✍️ {c.author}</p>
+                      <p style={S.photoDate}>{new Date(c.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                      <p style={{ fontSize: '.82rem', color: 'var(--bd)', fontStyle: 'italic', lineHeight: 1.5, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                        "{c.message}"
+                      </p>
+                      <div style={S.actionRow}>
+                        <button style={S.btnDelete} onClick={() => deleteCapsule(c.id, c.author)}>🗑 Excluir</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          }
         </div>
       )}
 
