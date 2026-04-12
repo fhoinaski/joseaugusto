@@ -45,6 +45,17 @@ async function compressImage(file: File, maxPx = 1200, q = 0.88): Promise<Blob> 
   })
 }
 
+async function fetchJsonSafe<T>(url: string, fallback: T): Promise<T> {
+  try {
+    const res = await fetch(url)
+    const text = await res.text()
+    if (!text) return fallback
+    return JSON.parse(text) as T
+  } catch {
+    return fallback
+  }
+}
+
 // ── Onboarding ────────────────────────────────────────────────────────────
 function Onboarding({ onDone }: { onDone:()=>void }) {
   const [hiding, setHiding] = useState(false)
@@ -692,7 +703,7 @@ function CapsuleSection({ defaultAuthor }:{ defaultAuthor:string }) {
   },[defaultAuthor])
 
   useEffect(()=>{
-    fetch('/api/capsule').then(r=>r.json()).then(d=>{
+    fetchJsonSafe<{ count?: number; openDate?: string }>('/api/capsule', {}).then(d=>{
       setCount(d.count??0); setOpenDate(d.openDate??'18 anos')
     })
   },[])
@@ -819,8 +830,10 @@ export default function Home() {
   const toggleSimple=()=>setSimpleMode(p=>{localStorage.setItem('cha_simple',p?'0':'1');return!p})
 
   const fetchMedia=useCallback(async(cursor?:string)=>{
-    const res=await fetch(cursor?`/api/photos?cursor=${cursor}`:'/api/photos')
-    const data=await res.json()
+    const data=await fetchJsonSafe<{ media?: MediaItem[]; nextCursor?: string | null }>(
+      cursor?`/api/photos?cursor=${cursor}`:'/api/photos',
+      {},
+    )
     setMedia(prev=>cursor?[...prev,...(data.media??[])]:(data.media??[]))
     setNextCursor(data.nextCursor??null)
     setLoading(false)
@@ -837,14 +850,16 @@ export default function Home() {
   },[nextCursor,fetchMedia])
 
   useEffect(()=>{
-    fetch('/api/admin/message').then(r=>r.json()).then(d=>setParentsMsg(d.message??''))
-    const t=setInterval(()=>fetch('/api/admin/message').then(r=>r.json()).then(d=>setParentsMsg(d.message??'')),30000)
+    fetchJsonSafe<{ message?: string }>('/api/admin/message', {}).then(d=>setParentsMsg(d.message??''))
+    const t=setInterval(()=>{
+      fetchJsonSafe<{ message?: string }>('/api/admin/message', {}).then(d=>setParentsMsg(d.message??''))
+    },30000)
     return()=>clearInterval(t)
   },[])
 
   useEffect(()=>{
     // Seed the last-known timestamp so we don't fire stale toasts on reconnect
-    fetch('/api/realtime').then(r=>r.json()).then(({data})=>{if(data?.ts)lastRtTs.current=data.ts})
+    fetchJsonSafe<{ data?: { ts?: number } }>('/api/realtime', {}).then(({data})=>{if(data?.ts)lastRtTs.current=data.ts})
 
     const handleNewPhoto=(data:any)=>{
       if(!data?.ts||data.ts<=lastRtTs.current||data.ts<=Date.now()-30000)return
@@ -861,7 +876,8 @@ export default function Home() {
     const startFallback=()=>{
       if(fallback)return
       fallback=setInterval(async()=>{
-        try{const{data}=await(await fetch('/api/realtime')).json();handleNewPhoto(data)}catch{}
+        const { data } = await fetchJsonSafe<{ data?: any }>('/api/realtime', {})
+        handleNewPhoto(data)
       },10000)
     }
 
