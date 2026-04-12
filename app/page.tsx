@@ -24,21 +24,71 @@ const FILTERS: FilterDef[] = [
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-async function compressImage(file: File, maxPx = 1800, q = 0.88): Promise<Blob> {
+function isHeicLike(file: File): boolean {
+  const type = file.type.toLowerCase()
+  const name = file.name.toLowerCase()
+  return type.includes('heic') || type.includes('heif') || name.endsWith('.heic') || name.endsWith('.heif')
+}
+
+function withExt(name: string, ext: string): string {
+  const base = name.replace(/\.[^/.]+$/, '')
+  return `${base}.${ext}`
+}
+
+async function maybeConvertHeic(file: File): Promise<File> {
+  if (!isHeicLike(file)) return file
+  const heic2anyModule = await import('heic2any')
+  const heic2any = (heic2anyModule as any).default ?? heic2anyModule
+  const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+  const convertedBlob = Array.isArray(converted) ? converted[0] : converted
+  const jpegBlob = convertedBlob instanceof Blob
+    ? convertedBlob
+    : new Blob([convertedBlob as BlobPart], { type: 'image/jpeg' })
+  return new File([jpegBlob], withExt(file.name, 'jpg'), { type: 'image/jpeg', lastModified: Date.now() })
+}
+
+async function optimizeImageForUpload(file: File, maxPx = 1200, q = 0.84): Promise<File> {
+  const normalized = await maybeConvertHeic(file)
   return new Promise(resolve => {
     const img = new Image()
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(normalized)
     img.onload = () => {
       URL.revokeObjectURL(url)
       let { width: w, height: h } = img
       const ratio = Math.min(maxPx / w, maxPx / h)
-      if (ratio < 1) { w = Math.round(w * ratio); h = Math.round(h * ratio) }
+      if (ratio < 1) {
+        w = Math.round(w * ratio)
+        h = Math.round(h * ratio)
+      }
+
       const cv = document.createElement('canvas')
-      cv.width = w; cv.height = h
-      cv.getContext('2d')!.drawImage(img, 0, 0, w, h)
-      cv.toBlob(b => resolve(b || file), 'image/jpeg', q)
+      cv.width = w
+      cv.height = h
+      const ctx = cv.getContext('2d')
+      if (!ctx) {
+        resolve(normalized)
+        return
+      }
+
+      ctx.drawImage(img, 0, 0, w, h)
+      cv.toBlob((webpBlob) => {
+        if (webpBlob) {
+          resolve(new File([webpBlob], withExt(normalized.name, 'webp'), { type: 'image/webp', lastModified: Date.now() }))
+          return
+        }
+        cv.toBlob((jpegBlob) => {
+          if (jpegBlob) {
+            resolve(new File([jpegBlob], withExt(normalized.name, 'jpg'), { type: 'image/jpeg', lastModified: Date.now() }))
+            return
+          }
+          resolve(normalized)
+        }, 'image/jpeg', q)
+      }, 'image/webp', q)
     }
-    img.onerror = () => resolve(file)
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(normalized)
+    }
     img.src = url
   })
 }
@@ -233,10 +283,11 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
 
   const handleImgFiles=async(files:FileList|null)=>{
     if(!files||!files[0])return
-    if(files.length===1&&files[0].type.startsWith('image/')){
-      setStep('loading'); setCompPct(0)
+    if(files.length===1&&(files[0].type.startsWith('image/')||isHeicLike(files[0]))){
+      setStep('loading'); setCompPct(5)
       const interval=setInterval(()=>setCompPct(p=>Math.min(p+20,90)),80)
-      setEditFile(files[0])
+      const optimized = await optimizeImageForUpload(files[0], 1200)
+      setEditFile(optimized)
       clearInterval(interval); setCompPct(100)
       setTimeout(()=>setStep('edit'),150)
     } else {
@@ -244,9 +295,9 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
       const items:QItem[]=[]
       for(let i=0;i<files.length;i++){
         const f=files[i]; setCompPct(Math.round(((i+1)/files.length)*100))
-        const isImg=f.type.startsWith('image/')
-        const blob=isImg?await compressImage(f,1800):f
-        items.push({file:blob,name:f.name,preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:isImg?'image':'video',retries:0,isOfflineError:false})
+        const isImg=f.type.startsWith('image/')||isHeicLike(f)
+        const media=isImg?await optimizeImageForUpload(f,1200):f
+        items.push({file:media,name:media.name,preview:URL.createObjectURL(media),status:'waiting',progress:0,type:isImg?'image':'video',retries:0,isOfflineError:false})
       }
       setQueue(items); setStep('queue')
     }
@@ -320,8 +371,8 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 </button>
               ))}
             </div>
-            <input ref={camRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
-            <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={vidRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
               if(!e.target.files)return
               const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}))
