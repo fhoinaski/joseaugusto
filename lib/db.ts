@@ -37,6 +37,11 @@ interface D1Response<T> {
   errors: Array<{ message: string }>
 }
 
+export function isD1AuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.includes('D1 HTTP 401') || msg.includes('"code":10000') || /authentication error/i.test(msg)
+}
+
 function endpoint() {
   const acct = process.env.CLOUDFLARE_ACCOUNT_ID
   const db   = process.env.CLOUDFLARE_D1_DATABASE_ID

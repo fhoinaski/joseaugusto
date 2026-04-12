@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dbGetMedia } from '@/lib/db'
+import { isD1AuthError } from '@/lib/db'
 import { objectUrl } from '@/lib/r2'
 
 export async function GET(req: NextRequest) {
@@ -16,6 +17,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ media, nextCursor: null })
   } catch (err) {
+    if (isD1AuthError(err)) {
+      console.warn('GET /api/photos degraded: D1 auth error')
+      return NextResponse.json({ media: [], nextCursor: null, degraded: true, reason: 'd1-auth' })
+    }
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
