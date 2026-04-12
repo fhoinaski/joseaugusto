@@ -1,36 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
-import { getMedia, updateStatus, getParentsMessage, setParentsMessage } from '@/lib/cloudinary'
+import { dbGetMedia, dbUpdateStatus, dbDeleteMedia, dbGetConfig, dbSetConfig } from '@/lib/db'
+import { objectUrl, deleteObject } from '@/lib/r2'
 
 export async function GET(req: NextRequest) {
   if (!isAuthenticated()) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  const type = req.nextUrl.searchParams.get('type') ?? 'pending'
-  const { media } = await getMedia(type)
+
+  const status = req.nextUrl.searchParams.get('type') ?? 'pending'
+  const rows   = await dbGetMedia(status)
+  const media  = rows.map(row => ({
+    ...row,
+    thumbUrl: objectUrl(row.id),
+    fullUrl:  objectUrl(row.id),
+  }))
   return NextResponse.json({ media })
 }
 
 export async function POST(req: NextRequest) {
   if (!isAuthenticated()) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
   const body = await req.json()
 
   if (body.action === 'update_message') {
-    await setParentsMessage(body.message)
+    await dbSetConfig('parents_message', body.message)
     return NextResponse.json({ ok: true })
   }
 
   if (body.action === 'get_message') {
-    const message = await getParentsMessage()
+    const message = await dbGetConfig('parents_message')
     return NextResponse.json({ message })
   }
 
-  if (['approve', 'reject'].includes(body.action)) {
-    await updateStatus(body.id, body.action === 'approve' ? 'approved' : 'rejected', body.resourceType ?? 'image')
+  if (body.action === 'approve' || body.action === 'reject') {
+    await dbUpdateStatus(body.id, body.action === 'approve' ? 'approved' : 'rejected')
     return NextResponse.json({ ok: true })
   }
 
   if (body.action === 'delete') {
-    const cld = (await import('@/lib/cloudinary')).default
-    await cld.uploader.destroy(body.id, { resource_type: body.resourceType ?? 'image', invalidate: true })
+    // Remove from D1 first (cascades reactions)
+    await dbDeleteMedia(body.id)
+    // Then delete the R2 object
+    await deleteObject(body.id).catch(() => {})
     return NextResponse.json({ ok: true })
   }
 

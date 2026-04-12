@@ -1,0 +1,22 @@
+# Cloudflare Workers / Pages configuration
+# Used for local dev with: wrangler pages dev .next/
+# See: https://developers.cloudflare.com/pages/framework-guides/nextjs/
+
+name = "cha-jose-augusto"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# D1 Database binding (name must match CLOUDFLARE_D1_DATABASE_ID env var)
+[[d1_databases]]
+binding       = "DB"
+database_name = "cha-jose-augusto-db"
+database_id   = "b0247aca-caa3-4c5d-a6fa-cf8e4200d249"
+
+# R2 Bucket binding (optional — app uses S3 SDK directly via env vars)
+[[r2_buckets]]
+binding     = "R2"
+bucket_name = "jose-augusto"
+
+# Environment variables for local dev (use .dev.vars for secrets instead)
+[vars]
+R2_PUBLIC_URL = "https://pub-6a7746c46db94363801b0c961f812e8b.r2.dev"
