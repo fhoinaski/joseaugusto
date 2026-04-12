@@ -1,6 +1,7 @@
-import { getRealtimeData, getParentsMessage } from '@/lib/cloudinary'
+import { getParentsMessage } from '@/lib/cloudinary'
+import { getRealtimeDataR2 } from '@/lib/r2'
 
-export const dynamic    = 'force-dynamic'
+export const dynamic     = 'force-dynamic'
 export const maxDuration = 30 // Vercel Pro / self-hosted; hobby closes at ~10s (EventSource reconnects)
 
 export async function GET() {
@@ -25,16 +26,16 @@ export async function GET() {
       let lastRtTs = 0
       let lastMsg  = ''
       try {
-        const rt = await getRealtimeData()
+        const rt = await getRealtimeDataR2()
         if (rt?.ts) lastRtTs = rt.ts
         lastMsg = await getParentsMessage()
       } catch {}
 
-      // Poll Cloudinary every 8s, emit only when something changed
+      // Poll every 8s, emit only when something changed
       interval = setInterval(async () => {
         if (closed) return
         try {
-          const rt = await getRealtimeData()
+          const rt = await getRealtimeDataR2()
           if (rt?.ts && rt.ts > lastRtTs) {
             lastRtTs = rt.ts
             send('new-photo', rt)
@@ -65,10 +66,10 @@ export async function GET() {
 
   return new Response(stream, {
     headers: {
-      'Content-Type':     'text/event-stream',
-      'Cache-Control':    'no-cache, no-transform',
-      'Connection':       'keep-alive',
-      'X-Accel-Buffering':'no', // disable Nginx buffering
+      'Content-Type':      'text/event-stream',
+      'Cache-Control':     'no-cache, no-transform',
+      'Connection':        'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
 }

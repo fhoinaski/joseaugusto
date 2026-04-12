@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import cloudinary, { pingRealtime } from '@/lib/cloudinary'
+import { PutObjectCommand } from '@aws-sdk/client-s3'
+import sharp from 'sharp'
+import { r2, BUCKET, objectUrl, pingRealtimeR2 } from '@/lib/r2'
 
 const MAX_IMAGE = 20 * 1024 * 1024  // 20MB
 const MAX_VIDEO = 100 * 1024 * 1024 // 100MB
@@ -23,26 +25,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Arquivo muito grande. Máximo ${isVideo ? '100' : '20'}MB.` }, { status: 400 })
 
     const arrayBuffer = await file.arrayBuffer()
-    const base64  = Buffer.from(arrayBuffer).toString('base64')
-    const dataUri = `data:${file.type};base64,${base64}`
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
-    const publicId = `foto_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    let body: Buffer
+    let contentType: string
+    let ext: string
 
-    const result = await cloudinary.uploader.upload(dataUri, {
-      folder:        'cha-jose-augusto',
-      public_id:     publicId,
-      resource_type: isVideo ? 'video' : 'image',
-      // Auto-approve: photos appear immediately
-      // Only flag if explicitly suspicious (handled below)
-      context: `author=${author}|status=approved`,
-    })
+    if (isVideo) {
+      body = Buffer.from(arrayBuffer)
+      contentType = file.type
+      ext = file.name.split('.').pop() ?? 'mp4'
+    } else {
+      body = await sharp(Buffer.from(arrayBuffer))
+        .webp({ quality: 80 })
+        .toBuffer()
+      contentType = 'image/webp'
+      ext = 'webp'
+    }
 
-    // Ping realtime so online users get notified
-    const thumbUrl = isVideo
-      ? cloudinary.url(result.public_id, { resource_type: 'video', format: 'jpg', width: 80, height: 80, crop: 'fill' })
-      : cloudinary.url(result.public_id, { width: 80, height: 80, crop: 'fill', quality: 'auto', fetch_format: 'auto' })
+    const key = `cha-jose-augusto/foto_${suffix}.${ext}`
 
-    await pingRealtime(author, thumbUrl).catch(() => {})
+    await r2.send(new PutObjectCommand({
+      Bucket:      BUCKET,
+      Key:         key,
+      Body:        body,
+      ContentType: contentType,
+      CacheControl:'public, max-age=31536000, immutable',
+      Metadata: {
+        author: author,
+        status: 'approved',
+      },
+    }))
+
+    const thumbUrl = objectUrl(key)
+    await pingRealtimeR2(author, thumbUrl).catch(() => {})
 
     return NextResponse.json({ success: true, type: isVideo ? 'video' : 'image' })
   } catch (err) {

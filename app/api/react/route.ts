@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import cloudinary, { parseReactions, stringifyReactions } from '@/lib/cloudinary'
+import { HeadObjectCommand } from '@aws-sdk/client-s3'
+import { r2, BUCKET, decodeReactions, encodeReactions, updateObjectMetadata } from '@/lib/r2'
 
 const ALLOWED_EMOJIS = ['♥', '😍', '🎉', '👶']
 
 export async function POST(req: NextRequest) {
   try {
-    const { id, emoji, resourceType = 'image' } = await req.json()
+    const { id, emoji } = await req.json()
 
     if (!id || !ALLOWED_EMOJIS.includes(emoji)) {
       return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 })
     }
 
-    // Fetch current context
-    const resource = await (cloudinary.api as any).resource(id, {
-      context: true,
-      resource_type: resourceType,
-    })
+    // Read current metadata
+    const head = await r2.send(new HeadObjectCommand({ Bucket: BUCKET, Key: id }))
+    const meta = head.Metadata ?? {}
 
-    const reactions = parseReactions(resource.context?.custom?.reactions)
+    const reactions = decodeReactions(meta.reactions)
     reactions[emoji] = (reactions[emoji] ?? 0) + 1
 
-    await (cloudinary.api as any).update(
-      id,
-      { context: `reactions=${stringifyReactions(reactions)}` },
-      { resource_type: resourceType }
-    )
+    // Update metadata via copy-to-self (S3/R2 pattern)
+    await updateObjectMetadata(id, { reactions: encodeReactions(reactions) }, head.ContentType ?? 'image/webp')
 
     return NextResponse.json({ reactions })
   } catch (err) {
