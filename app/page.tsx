@@ -1,8 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'; createdAt:string }
+interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
+
+const REACTION_EMOJIS = ['♥','😍','🎉','👶']
+
+function getReacted(id:string):string[] { try{ return JSON.parse(localStorage.getItem(`cha_reacted_${id}`)??'[]') }catch{return[]} }
+function markReacted(id:string,emoji:string){ const r=getReacted(id); if(!r.includes(emoji))localStorage.setItem(`cha_reacted_${id}`,JSON.stringify([...r,emoji])) }
 interface FilterDef { id:string; label:string; css:string }
 
 const FILTERS: FilterDef[] = [
@@ -54,6 +59,21 @@ function Onboarding({ onDone }: { onDone:()=>void }) {
       </div>
       <button className="onboard-btn" onClick={finish}>Entrar no álbum</button>
       <p className="onboard-pwa">📲 Adicione à tela inicial para acesso rápido</p>
+    </div>
+  )
+}
+
+// ── Reaction Bar (gallery cards) ──────────────────────────────────────────
+function ReactionBar({ item, onReact }:{ item:MediaItem; onReact:(id:string,emoji:string)=>void }) {
+  const hasAny = REACTION_EMOJIS.some(e=>(item.reactions[e]??0)>0)
+  if(!hasAny) return null
+  return (
+    <div className="reaction-bar" onClick={e=>e.stopPropagation()}>
+      {REACTION_EMOJIS.filter(e=>(item.reactions[e]??0)>0).map(emoji=>(
+        <button key={emoji} className="reaction-pill" onClick={()=>onReact(item.id,emoji)}>
+          {emoji} <span>{item.reactions[emoji]}</span>
+        </button>
+      ))}
     </div>
   )
 }
@@ -391,10 +411,11 @@ function Carousel3D({ items, onOpenLightbox }:{ items:MediaItem[]; onOpenLightbo
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
-function Lightbox({ items, index, onClose, onNav }:{ items:MediaItem[]; index:number; onClose:()=>void; onNav:(n:number)=>void }) {
+function Lightbox({ items, index, onClose, onNav, onReact }:{ items:MediaItem[]; index:number; onClose:()=>void; onNav:(n:number)=>void; onReact:(id:string,emoji:string)=>void }) {
   const [displayIdx, setDisplayIdx] = useState(index)
   const [slideDir, setSlideDir]     = useState<'left'|'right'|null>(null)
   const [animating, setAnimating]   = useState(false)
+  const [popping,   setPopping]     = useState<string|null>(null)
   const touchStart = useRef<number|null>(null)
 
   // When index changes externally, trigger slide transition
@@ -451,6 +472,24 @@ function Lightbox({ items, index, onClose, onNav }:{ items:MediaItem[]; index:nu
           <p className="lightbox-caption">
             {item.type==='video'?'🎥':'📷'} {item.author} · {new Date(item.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'long'})}
           </p>
+          <div className="lb-reactions">
+            {REACTION_EMOJIS.map(emoji=>{
+              const reacted=typeof window!=='undefined'&&getReacted(item.id).includes(emoji)
+              const count=item.reactions[emoji]??0
+              return (
+                <button key={emoji}
+                  className={`lb-reaction-btn${reacted?' reacted':''}${popping===emoji?' popping':''}`}
+                  onClick={()=>{
+                    if(reacted)return
+                    setPopping(emoji); setTimeout(()=>setPopping(null),400)
+                    onReact(item.id,emoji)
+                  }}>
+                  <span className="lb-reaction-emoji">{emoji}</span>
+                  {count>0&&<span className="lb-reaction-count">{count}</span>}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
@@ -579,6 +618,17 @@ export default function Home() {
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4000)
   }
 
+  const handleReact=useCallback(async(id:string,emoji:string)=>{
+    const reacted=getReacted(id)
+    if(reacted.includes(emoji))return
+    markReacted(id,emoji)
+    // Optimistic update
+    setMedia(prev=>prev.map(m=>m.id===id?{...m,reactions:{...m.reactions,[emoji]:(m.reactions[emoji]??0)+1}}:m))
+    try{
+      await fetch('/api/react',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,emoji})})
+    }catch{}
+  },[])
+
   const handleUploadSuccess=(author:string,thumb:string)=>{
     if(author&&author!=='Convidado'){localStorage.setItem('cha_author',author);setSavedAuthor(author)}
     addToast('Foto enviada ao álbum! 🌸',thumb)
@@ -682,6 +732,7 @@ export default function Home() {
                     )}
                   </div>
                   <div className="gallery-card-footer"><span className="gallery-card-author">{item.type==='video'?'🎥':'📷'} {item.author}</span></div>
+                  <ReactionBar item={item} onReact={handleReact}/>
                 </div>
               ))}
             </div>
@@ -723,7 +774,8 @@ export default function Home() {
 
       {lbIdx!==null&&(
         <Lightbox items={media} index={lbIdx} onClose={()=>setLbIdx(null)}
-          onNav={d=>setLbIdx(prev=>prev!==null?Math.max(0,Math.min(media.length-1,prev+d)):null)}/>
+          onNav={d=>setLbIdx(prev=>prev!==null?Math.max(0,Math.min(media.length-1,prev+d)):null)}
+          onReact={handleReact}/>
       )}
 
       {showUpload&&<UploadModal authorDefault={savedAuthor} onClose={()=>setShowUpload(false)} onSuccess={handleUploadSuccess}/>}

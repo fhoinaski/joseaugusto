@@ -411,6 +411,43 @@ footer { text-align:center; padding:56px 24px 72px; }
 .reveal { opacity:0; transform:translateY(30px); transition:opacity .7s ease, transform .7s ease; }
 .reveal.visible { opacity:1; transform:translateY(0); }
 
+/* ── Reactions ── */
+.reaction-bar {
+  position:absolute; bottom:0; left:0; right:0;
+  display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px;
+  background:linear-gradient(transparent, rgba(10,4,0,.7));
+  pointer-events:all;
+}
+.reaction-pill {
+  display:inline-flex; align-items:center; gap:3px;
+  background:rgba(0,0,0,.45); backdrop-filter:blur(4px);
+  border:1px solid rgba(255,255,255,.2); border-radius:50px;
+  color:#fff; font-size:.82rem; padding:2px 8px;
+  cursor:pointer; transition:transform .15s, background .15s;
+  line-height:1.5;
+}
+.reaction-pill:hover { background:rgba(255,255,255,.2); transform:scale(1.08); }
+.reaction-pill span  { font-size:.75rem; font-weight:700; }
+
+/* Lightbox reaction buttons */
+.lb-reactions {
+  display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:4px;
+}
+.lb-reaction-btn {
+  display:flex; align-items:center; gap:5px;
+  background:rgba(255,255,255,.12); backdrop-filter:blur(6px);
+  border:1.5px solid rgba(255,255,255,.22); border-radius:50px;
+  color:#fff; padding:8px 16px; cursor:pointer;
+  transition:background .2s, transform .2s, border-color .2s;
+  font-size:1rem;
+}
+.lb-reaction-btn:hover    { background:rgba(255,255,255,.25); }
+.lb-reaction-btn.reacted  { background:rgba(255,255,255,.28); border-color:rgba(255,255,255,.6); }
+.lb-reaction-btn.popping  { animation:reactionPop .35s cubic-bezier(.34,1.7,.64,1); }
+@keyframes reactionPop { 0%{transform:scale(1)} 40%{transform:scale(1.45)} 100%{transform:scale(1)} }
+.lb-reaction-emoji { font-size:1.25rem; line-height:1; }
+.lb-reaction-count { font-size:.82rem; font-weight:700; min-width:14px; text-align:center; }
+
 /* ── TV Slideshow ── */
 .tv-root {
   position:fixed; inset:0;

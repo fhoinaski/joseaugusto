@@ -16,6 +16,22 @@ export interface MediaItem {
   status: 'approved' | 'pending' | 'rejected'
   type: 'image' | 'video'
   createdAt: string
+  reactions: Record<string, number>
+}
+
+export function parseReactions(raw: string | undefined): Record<string, number> {
+  if (!raw) return {}
+  return Object.fromEntries(
+    raw.split(',')
+      .filter(Boolean)
+      .map(p => p.split(':'))
+      .filter(([e, n]) => e && !isNaN(Number(n)))
+      .map(([e, n]) => [e, Number(n)])
+  )
+}
+
+export function stringifyReactions(r: Record<string, number>): string {
+  return Object.entries(r).filter(([, n]) => n > 0).map(([e, n]) => `${e}:${n}`).join(',')
 }
 
 function mapResource(r: any): MediaItem {
@@ -40,6 +56,7 @@ function mapResource(r: any): MediaItem {
     status:    (r.context?.custom?.status ?? 'pending') as MediaItem['status'],
     type:      isVideo ? 'video' : 'image',
     createdAt: r.created_at,
+    reactions: parseReactions(r.context?.custom?.reactions),
   }
 }
 
