@@ -711,7 +711,10 @@ export default function Home() {
         <p className="footer-text">Bem-vindo ao mundo, José Augusto</p>
         <div style={{width:80,height:1.5,background:'linear-gradient(to right,transparent,var(--accent),transparent)',margin:'16px auto'}}/>
         <p className="footer-sub">com muito amor · papai e mamãe</p>
-        <a href="/admin" style={{display:'block',marginTop:24,fontSize:'.72rem',color:'var(--text-lo)',textDecoration:'none',letterSpacing:'.12em',opacity:.5}}>⚙ admin</a>
+        <div style={{display:'flex',justifyContent:'center',gap:24,marginTop:24}}>
+          <a href="/tv" className="tv-footer-link">📺 Modo TV</a>
+          <a href="/admin" style={{fontSize:'.72rem',color:'var(--text-lo)',textDecoration:'none',letterSpacing:'.12em',opacity:.5}}>⚙ admin</a>
+        </div>
       </footer>
 
       <button className="fab" onClick={()=>setShowUpload(true)} aria-label="Enviar foto">

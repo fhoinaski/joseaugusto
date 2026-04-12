@@ -1,0 +1,177 @@
+'use client'
+import { useState, useEffect, useRef, useCallback } from 'react'
+
+interface MediaItem {
+  id: string
+  thumbUrl: string
+  fullUrl: string
+  author: string
+  type: 'image' | 'video'
+}
+
+type Phase = 'visible' | 'fading-out'
+
+export default function TVPage() {
+  const [photos, setPhotos]       = useState<MediaItem[]>([])
+  const [current, setCurrent]     = useState(0)
+  const [phase, setPhase]         = useState<Phase>('visible')
+  const [showAuthor, setShowAuthor] = useState(true)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [hideCursor, setHideCursor] = useState(false)
+
+  const slideTimer  = useRef<ReturnType<typeof setTimeout>>()
+  const authorTimer = useRef<ReturnType<typeof setTimeout>>()
+  const cursorTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  // ── Fetch photos ─────────────────────────────────────────────────────────
+  const fetchPhotos = useCallback(async () => {
+    try {
+      const res  = await fetch('/api/photos')
+      const data = await res.json()
+      if (data.media?.length > 0) {
+        setPhotos((prev) => {
+          // Only update if count changed (avoid resetting current index)
+          if (prev.length !== data.media.length) return data.media
+          return prev
+        })
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    fetchPhotos()
+    const t = setInterval(fetchPhotos, 15_000)
+    return () => clearInterval(t)
+  }, [fetchPhotos])
+
+  // ── QR Code ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const siteUrl = window.location.origin
+    import('qrcode').then((QRCode) => {
+      QRCode.toDataURL(siteUrl, {
+        width: 140,
+        margin: 1,
+        color: { dark: '#ffffff', light: '#00000000' },
+      }).then(setQrDataUrl)
+    }).catch(() => {})
+  }, [])
+
+  // ── Slideshow timer ───────────────────────────────────────────────────────
+  const advance = useCallback(() => {
+    setPhase('fading-out')
+    setTimeout(() => {
+      setCurrent((c) => (c + 1) % Math.max(photos.length, 1))
+      setPhase('visible')
+      setShowAuthor(true)
+      clearTimeout(authorTimer.current)
+      authorTimer.current = setTimeout(() => setShowAuthor(false), 2000)
+    }, 600)
+  }, [photos.length])
+
+  useEffect(() => {
+    if (photos.length === 0) return
+    clearTimeout(slideTimer.current)
+    slideTimer.current = setTimeout(advance, 5000)
+    return () => clearTimeout(slideTimer.current)
+  }, [current, photos.length, advance])
+
+  // Show author briefly on first load
+  useEffect(() => {
+    if (photos.length === 0) return
+    setShowAuthor(true)
+    clearTimeout(authorTimer.current)
+    authorTimer.current = setTimeout(() => setShowAuthor(false), 2000)
+  }, [current, photos.length])
+
+  // ── Cursor hide after 3s ──────────────────────────────────────────────────
+  const resetCursor = useCallback(() => {
+    setHideCursor(false)
+    clearTimeout(cursorTimer.current)
+    cursorTimer.current = setTimeout(() => setHideCursor(true), 3000)
+  }, [])
+
+  useEffect(() => {
+    resetCursor()
+    window.addEventListener('mousemove', resetCursor)
+    window.addEventListener('touchstart', resetCursor)
+    return () => {
+      window.removeEventListener('mousemove', resetCursor)
+      window.removeEventListener('touchstart', resetCursor)
+      clearTimeout(cursorTimer.current)
+    }
+  }, [resetCursor])
+
+  // ── ESC / click to exit ───────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') window.location.href = '/'
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const item = photos[current]
+
+  return (
+    <div
+      className="tv-root"
+      style={{ cursor: hideCursor ? 'none' : 'default' }}
+      onClick={() => { window.location.href = '/' }}
+    >
+      {/* Media */}
+      {item ? (
+        <div
+          key={item.id}
+          className={`tv-media-wrap ${phase === 'fading-out' ? 'tv-fade-out' : 'tv-fade-in'}`}
+        >
+          {item.type === 'video' ? (
+            <video
+              src={item.fullUrl}
+              className="tv-media"
+              autoPlay
+              muted
+              playsInline
+              loop
+            />
+          ) : (
+            <img
+              src={item.fullUrl}
+              alt={item.author}
+              className="tv-media tv-ken-burns"
+            />
+          )}
+        </div>
+      ) : (
+        <div className="tv-empty">
+          <span style={{ fontSize: '5rem' }}>🐻</span>
+          <p style={{ color: 'rgba(255,255,255,.5)', marginTop: 24, fontFamily: 'serif', fontSize: '1.4rem', letterSpacing: '.1em' }}>
+            Aguardando fotos…
+          </p>
+        </div>
+      )}
+
+      {/* Author name */}
+      {item && (
+        <div className={`tv-author ${showAuthor ? 'tv-author-visible' : ''}`}>
+          {item.type === 'video' ? '🎥' : '📷'} {item.author}
+        </div>
+      )}
+
+      {/* QR Code */}
+      {qrDataUrl && (
+        <div className="tv-qr" onClick={(e) => e.stopPropagation()}>
+          <img src={qrDataUrl} alt="QR Code" width={100} height={100} />
+          <span className="tv-qr-label">Acesse o álbum</span>
+        </div>
+      )}
+
+      {/* Slide counter */}
+      {photos.length > 0 && (
+        <div className="tv-counter">
+          {current + 1} / {photos.length}
+        </div>
+      )}
+    </div>
+  )
+}
