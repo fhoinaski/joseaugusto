@@ -28,6 +28,11 @@ function isHeicFile(f: File): boolean {
   return /\.(heic|heif)$/i.test(f.name) || f.type === 'image/heic' || f.type === 'image/heif'
 }
 
+function withExt(name: string, ext: string): string {
+  const base = name.replace(/\.[^/.]+$/, '')
+  return `${base}.${ext}`
+}
+
 /** Convert + resize. Returns { blob, previewUrl } ready to display and upload. */
 async function prepareImageBlob(
   file: File,
@@ -39,7 +44,6 @@ async function prepareImageBlob(
   // 1. HEIC/HEIF → JPEG (iPhone photos)
   if (isHeicFile(file)) {
     try {
-      // Dynamic import keeps this out of the server bundle
       const mod = await import('heic2any')
       const heic2any = mod.default as (o: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>
       const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
@@ -384,7 +388,7 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
         const {blob}=await prepareImageBlob(f0,2000)
         clearInterval(pct); setCompPct(100)
         const ext=blob.type==='image/webp'?'webp':'jpg'
-        const prepared=new File([blob],f0.name.replace(/\.(heic|heif|jpg|jpeg|png)$/i,`.${ext}`),{type:blob.type})
+        const prepared=new File([blob],withExt(f0.name,ext),{type:blob.type})
         setEditFile(prepared)
         setTimeout(()=>setStep('edit'),150)
       }catch{
@@ -489,9 +493,9 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 </button>
               ))}
             </div>
-            <input ref={camRef}  type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
-            <input ref={vidRef}  type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
+            <input ref={vidRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
               if(!e.target.files)return
               const items:QItem[]=Array.from(e.target.files).map(f=>({file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}))
               setQueue(items);setStep('queue')
