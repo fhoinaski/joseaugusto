@@ -77,37 +77,6 @@ async function fetchJsonSafe<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-// ── Corner Menu ───────────────────────────────────────────────────────────
-function CornerMenu() {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="corner-menu">
-      <button className="corner-menu-btn" onClick={()=>setOpen(p=>!p)} aria-label="Menu">
-        {open ? '✕' : '···'}
-      </button>
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="corner-menu-backdrop" onClick={()=>setOpen(false)}/>
-            <motion.div
-              className="corner-menu-dropdown"
-              initial={{opacity:0, scale:0.92, y:-8}}
-              animate={{opacity:1, scale:1, y:0}}
-              exit={{opacity:0, scale:0.92, y:-8}}
-              transition={{duration:0.15, ease:'easeOut'}}
-            >
-              <a href="/feed"  className="corner-menu-item" onClick={()=>setOpen(false)}>📱 <span>Feed</span></a>
-              <a href="/tv"    className="corner-menu-item" onClick={()=>setOpen(false)}>📺 <span>Modo TV</span></a>
-              <div className="corner-menu-divider"/>
-              <a href="/admin" className="corner-menu-item corner-menu-admin" onClick={()=>setOpen(false)}>⚙ <span>Admin</span></a>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
-
 // ── Onboarding ────────────────────────────────────────────────────────────
 function Onboarding({ onDone }: { onDone:()=>void }) {
   const [hiding, setHiding] = useState(false)
@@ -937,6 +906,7 @@ export default function Home() {
   const [nextCursor,  setNextCursor]   = useState<string|null>(null)
   const [lbIdx,       setLbIdx]        = useState<number|null>(null)
   const [showUpload,  setShowUpload]   = useState(false)
+  const [uploadModalKey, setUploadModalKey] = useState(0)
   const [showAll,     setShowAll]      = useState(false)
   const [toasts,      setToasts]       = useState<ToastMsg[]>([])
   const [topAuthors,  setTopAuthors]   = useState<TopAuthor[]>([])
@@ -953,19 +923,42 @@ export default function Home() {
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
 
+  const openUploadModal = useCallback(() => {
+    setUploadModalKey(k => k + 1)
+    setShowUpload(true)
+  }, [])
+
+  const closeUploadModal = useCallback(() => {
+    setShowUpload(false)
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname
+      if (window.location.search.includes('upload=1')) {
+        window.history.replaceState({}, '', path || '/')
+      }
+    }
+  }, [])
+
   useEffect(()=>{
     if(typeof window==='undefined')return
     if(!localStorage.getItem('cha_visited'))setShowOnboard(true)
     setSavedAuthor(localStorage.getItem('cha_author')?? '')
   },[])
 
+  // Register the upload-modal opener once on mount — independent of canWrite
+  // so the listener is always present; the button in GlobalInstagramNav is
+  // already disabled when canWrite is false, so no extra guard needed here.
   useEffect(() => {
-    if (typeof window === 'undefined' || !canWrite) return
+    // Handle direct link /?upload=1 (e.g. navigating from another page)
     const params = new URLSearchParams(window.location.search)
     if (params.get('upload') === '1') {
-      setShowUpload(true)
+      openUploadModal()
+      window.history.replaceState({}, '', '/')
     }
-  }, [canWrite])
+    // Handle bottom-nav "Postar" button (fires custom event when already on /)
+    const handleOpenUpload = () => openUploadModal()
+    window.addEventListener('cha:open-upload', handleOpenUpload)
+    return () => window.removeEventListener('cha:open-upload', handleOpenUpload)
+  }, [openUploadModal])
 
   useEffect(()=>{ mediaRef.current = media },[media])
   useEffect(()=>{ authorRef.current = savedAuthor },[savedAuthor])
@@ -1137,7 +1130,6 @@ export default function Home() {
         <div key={i} className="balloon" style={{left:l,animationDuration:d,animationDelay:delay}}>🎈</div>
       ))}
 
-      <CornerMenu/>
       {showOnboard&&<Onboarding onDone={()=>{localStorage.setItem('cha_visited','1');setShowOnboard(false)}}/>}
       <GeoBanner geoStatus={geoStatus} unlockWithKey={unlockWithKey}/>
 
@@ -1368,7 +1360,7 @@ export default function Home() {
           onReact={handleReact}/>
       )}
 
-      {showUpload&&<UploadModal authorDefault={savedAuthor} onClose={()=>setShowUpload(false)} onSuccess={handleUploadSuccess}/>}
+      {showUpload&&<UploadModal key={uploadModalKey} authorDefault={savedAuthor} onClose={closeUploadModal} onSuccess={handleUploadSuccess}/>}
 
       <ToastManager toasts={toasts} onRemove={id=>setToasts(prev=>prev.filter(t=>t.id!==id))}/>
       <PWABanner/>

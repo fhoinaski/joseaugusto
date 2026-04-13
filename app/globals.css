@@ -227,9 +227,11 @@ body.stories-open .ig-shell-nav {
 
 .hero-preview-image {
   width: 100%;
-  height: 180px;
-  object-fit: cover;
+  height: auto;
+  max-height: 340px;
+  object-fit: contain;
   display: block;
+  background: rgba(253, 246, 238, .6);
 }
 
 .hero-preview-caption {
