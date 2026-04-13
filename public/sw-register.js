@@ -11,6 +11,12 @@ if ('serviceWorker' in navigator) {
         // Background sync completed an upload — trigger gallery refresh
         if (e.data?.type === 'UPLOAD_SYNCED') {
           window.dispatchEvent(new CustomEvent('cha:upload-synced', { detail: { name: e.data.name } }))
+          window.dispatchEvent(new CustomEvent('cha:toast', {
+            detail: {
+              text: `Upload enviado: ${e.data.name}`,
+              duration: 3800,
+            },
+          }))
         }
       })
     } catch(err) {
