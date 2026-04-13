@@ -45,7 +45,7 @@ export function isD1AuthError(err: unknown): boolean {
 
 function isMissingCaptionColumnError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
-  return /no such column:\s*m\.caption/i.test(msg)
+  return /no such column:\s*(m\.)?caption/i.test(msg) || /has no column named\s+caption/i.test(msg)
 }
 
 function endpoint() {

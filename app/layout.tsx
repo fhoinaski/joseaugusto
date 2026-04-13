@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   description: 'Registre e compartilhe os momentos especiais do Chá de Bebê do José Augusto',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Chá · José Augusto' },
+  other: { 'mobile-web-app-capable': 'yes' },
   icons: { apple: '/icon-192.png' },
 }
 

@@ -73,6 +73,13 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
   }, [])
 
   useEffect(() => {
+    document.body.classList.toggle('stories-open', open)
+    return () => {
+      document.body.classList.remove('stories-open')
+    }
+  }, [open])
+
+  useEffect(() => {
     if (!open || !activeStory || !userId) return
 
     fetch('/api/stories/seen', {
@@ -166,7 +173,7 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
                 <img
                   src={group.items[group.items.length - 1]?.thumbUrl || group.items[group.items.length - 1]?.fullUrl}
                   alt={group.author}
-                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '2px solid #fff4e6' }}
+                  style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'contain', border: '2px solid #fff4e6', background: '#120d08' }}
                 />
               </div>
               <span style={{ fontSize: 12, color: '#5c3410', maxWidth: 74, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -216,7 +223,7 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
 
               <div style={{ position: 'relative', flex: 1, display: 'grid', placeItems: 'center', padding: '0 10px 14px' }}>
                 {activeStory.type === 'video' ? (
-                  <div style={{ width: 'min(96vw, 920px)', height: 'min(76vh, 920px)', display: 'grid', placeItems: 'center' }}>
+                  <div style={{ width: 'min(96vw, 920px)', height: 'min(72dvh, 920px)', maxHeight: 'calc(100dvh - 210px)', display: 'grid', placeItems: 'center' }}>
                     <video src={activeStory.fullUrl} autoPlay muted playsInline controls style={{ width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', borderRadius: 14, objectFit: 'contain' }} />
                   </div>
                 ) : activeStory.type === 'audio' ? (
@@ -225,7 +232,7 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
                     <audio src={activeStory.fullUrl} autoPlay controls style={{ width: '100%' }} />
                   </div>
                 ) : (
-                  <div style={{ width: 'min(96vw, 920px)', height: 'min(76vh, 920px)', display: 'grid', placeItems: 'center' }}>
+                  <div style={{ width: 'min(96vw, 920px)', height: 'min(72dvh, 920px)', maxHeight: 'calc(100dvh - 210px)', display: 'grid', placeItems: 'center' }}>
                     <img
                       src={activeStory.fullUrl}
                       srcSet={`${activeStory.thumbUrl} 720w, ${activeStory.fullUrl} 1600w`}

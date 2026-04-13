@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import FeedItem, { FeedMediaItem } from '@/components/FeedItem'
 import Stories from '@/components/Stories'
 import { useGeoAccess } from '@/components/GeoAccessProvider'
@@ -38,7 +38,33 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
   const [manualKey, setManualKey] = useState('')
   const [keyError, setKeyError] = useState('')
+  const [headerHeight, setHeaderHeight] = useState(132)
+  const headerRef = useRef<HTMLElement | null>(null)
   const { canWrite, geoStatus, unlockWithKey } = useGeoAccess()
+  const bottomNavInset = 'max(96px, calc(84px + env(safe-area-inset-bottom)))'
+
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+
+    const sync = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height)
+      if (h > 0) setHeaderHeight(h)
+    }
+
+    sync()
+
+    const obs = new ResizeObserver(sync)
+    obs.observe(el)
+    window.addEventListener('resize', sync)
+    window.addEventListener('orientationchange', sync)
+
+    return () => {
+      obs.disconnect()
+      window.removeEventListener('resize', sync)
+      window.removeEventListener('orientationchange', sync)
+    }
+  }, [])
 
   const fetchMedia = useCallback(async () => {
     const data = await fetchJsonSafe<{ media?: MediaItem[] }>('/api/photos', {})
@@ -151,38 +177,53 @@ export default function FeedPage() {
 
   return (
     <div style={{ minHeight: '100dvh', background: '#0f0d0b', color: '#fff' }}>
-      <header style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 120, backdropFilter: 'blur(10px)', background: 'rgba(15,13,11,.55)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px' }}>
-          <strong style={{ letterSpacing: '.08em', fontFamily: "'Playfair Display', serif" }}>FEED AO VIVO</strong>
-        </div>
+      <header ref={headerRef} style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 120, background: '#f9f3eb' }}>
         <Stories items={storiesItems} />
       </header>
 
-      <main style={{ height: '100dvh', overflowY: 'auto', scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', paddingTop: 124, paddingBottom: 'max(96px, calc(84px + env(safe-area-inset-bottom)))' }}>
-        {!canWrite && (
-          <section style={{ margin: '10px 12px', padding: 12, borderRadius: 12, border: '1px solid rgba(245,199,143,.45)', background: 'rgba(18,15,12,.75)', color: '#f5dab6' }}>
-            <p style={{ margin: 0, fontSize: 13 }}>
-              {geoStatus === 'observer' ? 'Modo observador: comentarios e posts bloqueados fora da area do evento.' : 'Ative acesso por chave para comentar.'}
-            </p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input
-                value={manualKey}
-                onChange={(e) => setManualKey(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') unlock() }}
-                placeholder="Chave de acesso"
-                style={{ flex: 1, borderRadius: 999, border: '1px solid rgba(245,199,143,.4)', background: 'rgba(255,255,255,.08)', color: '#fff', padding: '8px 12px' }}
-              />
-              <button onClick={unlock} style={{ borderRadius: 999, border: '1px solid rgba(245,199,143,.55)', background: 'rgba(245,199,143,.18)', color: '#fff', padding: '8px 14px', cursor: 'pointer' }}>
-                Liberar
-              </button>
-            </div>
-            {keyError && <p style={{ margin: '6px 2px 0', fontSize: 12, color: '#ffb6a7' }}>{keyError}</p>}
-          </section>
-        )}
-        {media.map(item => (
-          <FeedItem key={item.id} item={item} onLike={like} canWrite={canWrite} />
-        ))}
-      </main>
+      {(() => {
+        const feedTopPadding = headerHeight + 14
+        const feedViewportHeight = `calc(100dvh - ${feedTopPadding}px - ${bottomNavInset})`
+
+        return (
+          <main
+            className="feed-scroll-shell"
+            style={{
+              height: '100dvh',
+              overflowY: 'auto',
+              scrollSnapType: 'y mandatory',
+              scrollPaddingTop: feedTopPadding,
+              WebkitOverflowScrolling: 'touch',
+              paddingTop: feedTopPadding,
+              paddingBottom: bottomNavInset,
+            }}
+          >
+            {!canWrite && (
+              <section style={{ margin: '10px 12px', padding: 12, borderRadius: 12, border: '1px solid rgba(245,199,143,.45)', background: 'rgba(18,15,12,.75)', color: '#f5dab6' }}>
+                <p style={{ margin: 0, fontSize: 13 }}>
+                  {geoStatus === 'observer' ? 'Modo observador: comentarios e posts bloqueados fora da area do evento.' : 'Ative acesso por chave para comentar.'}
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <input
+                    value={manualKey}
+                    onChange={(e) => setManualKey(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') unlock() }}
+                    placeholder="Chave de acesso"
+                    style={{ flex: 1, borderRadius: 999, border: '1px solid rgba(245,199,143,.4)', background: 'rgba(255,255,255,.08)', color: '#fff', padding: '8px 12px' }}
+                  />
+                  <button onClick={unlock} style={{ borderRadius: 999, border: '1px solid rgba(245,199,143,.55)', background: 'rgba(245,199,143,.18)', color: '#fff', padding: '8px 14px', cursor: 'pointer' }}>
+                    Liberar
+                  </button>
+                </div>
+                {keyError && <p style={{ margin: '6px 2px 0', fontSize: 12, color: '#ffb6a7' }}>{keyError}</p>}
+              </section>
+            )}
+            {media.map(item => (
+              <FeedItem key={item.id} item={item} onLike={like} canWrite={canWrite} viewportHeight={feedViewportHeight} />
+            ))}
+          </main>
+        )
+      })()}
     </div>
   )
 }

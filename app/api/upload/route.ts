@@ -44,6 +44,35 @@ async function moderateImage(imageBuffer: Buffer): Promise<'approved' | 'rejecte
 
 export async function POST(req: NextRequest) {
   try {
+    const r2AccessKeyId = (process.env.R2_ACCESS_KEY_ID ?? '').trim()
+    const r2Secret      = (process.env.R2_SECRET_ACCESS_KEY ?? '').trim()
+    const r2Endpoint    = (process.env.R2_ENDPOINT ?? '').trim()
+    const r2Bucket      = (process.env.R2_BUCKET_NAME ?? '').trim()
+    const r2PublicUrl   = (process.env.R2_PUBLIC_URL ?? '').trim()
+
+    const missingR2Env = [
+      !r2Endpoint ? 'R2_ENDPOINT' : '',
+      !r2AccessKeyId ? 'R2_ACCESS_KEY_ID' : '',
+      !r2Secret ? 'R2_SECRET_ACCESS_KEY' : '',
+      !r2Bucket ? 'R2_BUCKET_NAME' : '',
+      !r2PublicUrl ? 'R2_PUBLIC_URL' : '',
+    ].filter(Boolean)
+
+    if (missingR2Env.length > 0) {
+      console.error('[upload] Missing R2 env vars:', missingR2Env.join(', '))
+      return NextResponse.json({ error: 'Configuração de armazenamento incompleta.' }, { status: 500 })
+    }
+
+    if (r2AccessKeyId.length !== 32) {
+      console.error('[upload] Invalid R2_ACCESS_KEY_ID length:', r2AccessKeyId.length)
+      return NextResponse.json({ error: 'Credencial R2 inválida (access key). Verifique o .env.local.' }, { status: 500 })
+    }
+
+    if (r2Secret.length < 32) {
+      console.error('[upload] Invalid R2_SECRET_ACCESS_KEY length:', r2Secret.length)
+      return NextResponse.json({ error: 'Credencial R2 inválida (secret key). Verifique o .env.local.' }, { status: 500 })
+    }
+
     const formData = await req.formData()
     const file   = formData.get('media') as File | null
     const authorRaw = ((formData.get('author') as string) || '').trim()
@@ -109,9 +138,11 @@ export async function POST(req: NextRequest) {
     try {
       await dbInsertMedia(key, author || 'Convidado', mediaType, status, caption)
     } catch (err) {
-      if (isD1AuthError(err)) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isD1ConfigError = /Missing CLOUDFLARE_(API_TOKEN|ACCOUNT_ID|D1_DATABASE_ID)/i.test(msg)
+      if (isD1AuthError(err) || isD1ConfigError) {
         degraded = true
-        console.warn('[upload] D1 auth error: upload kept in R2 without DB row')
+        console.warn('[upload] D1 indisponível/config ausente: upload mantido no R2 sem linha no DB')
       } else {
         throw err
       }
@@ -131,7 +162,17 @@ export async function POST(req: NextRequest) {
       ...(degraded ? { warning: 'Upload salvo, mas o banco D1 está indisponível.' } : {}),
     })
   } catch (err) {
-    console.error('[upload]', err)
+    const e = err as { name?: string; message?: string; Code?: string; $metadata?: { httpStatusCode?: number } }
+    console.error('[upload]', {
+      name: e?.name,
+      code: e?.Code,
+      message: e?.message,
+      httpStatus: e?.$metadata?.httpStatusCode,
+      raw: err,
+    })
+    if (String(e?.message ?? '').includes('Credential access key has length')) {
+      return NextResponse.json({ error: 'R2 access key inválida. Gere uma nova chave no Cloudflare e atualize o .env.local.' }, { status: 500 })
+    }
     return NextResponse.json({ error: 'Erro ao enviar. Tente novamente.' }, { status: 500 })
   }
 }

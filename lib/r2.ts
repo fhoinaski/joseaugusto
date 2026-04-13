@@ -6,16 +6,21 @@ import {
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3'
 
+const R2_ENDPOINT = (process.env.R2_ENDPOINT ?? '').trim()
+const R2_ACCESS_KEY_ID = (process.env.R2_ACCESS_KEY_ID ?? '').trim()
+const R2_SECRET_ACCESS_KEY = (process.env.R2_SECRET_ACCESS_KEY ?? '').trim()
+const R2_BUCKET_NAME = (process.env.R2_BUCKET_NAME ?? '').trim()
+
 export const r2 = new S3Client({
   region:   'auto',
-  endpoint: process.env.R2_ENDPOINT!,
+  endpoint: R2_ENDPOINT,
   credentials: {
-    accessKeyId:     process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    accessKeyId:     R2_ACCESS_KEY_ID,
+    secretAccessKey: R2_SECRET_ACCESS_KEY,
   },
 })
 
-export const BUCKET = process.env.R2_BUCKET_NAME!
+export const BUCKET = R2_BUCKET_NAME
 const PUBLIC_URL = (process.env.R2_PUBLIC_URL ?? '').replace(/\/$/, '')
 
 export function objectUrl(key: string): string {
@@ -30,13 +35,29 @@ export async function uploadBuffer(
   contentType: string,
   metadata: Record<string, string> = {},
 ): Promise<void> {
+  // R2/S3 metadata is carried in HTTP headers; keep it ASCII-safe to avoid 400 InvalidArgument.
+  const safeMetadata = Object.fromEntries(
+    Object.entries(metadata)
+      .map(([k, v]) => {
+        const safeKey = k.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 64)
+        const safeVal = (v ?? '')
+          .normalize('NFKD')
+          .replace(/[^\x20-\x7E]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 256)
+        return [safeKey, safeVal] as const
+      })
+      .filter(([k, v]) => Boolean(k) && Boolean(v)),
+  )
+
   await r2.send(new PutObjectCommand({
     Bucket:      BUCKET,
     Key:         key,
     Body:        body,
     ContentType: contentType,
     CacheControl:'public, max-age=31536000, immutable',
-    Metadata:    metadata,
+    Metadata:    safeMetadata,
   }))
 }
 

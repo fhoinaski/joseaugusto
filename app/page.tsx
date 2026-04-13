@@ -226,11 +226,11 @@ function removeFromLS(name:string){
 
 function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; onSuccess:(a:string,t:string)=>void; authorDefault:string }) {
   const [author,setAuthor]   = useState(authorDefault)
+  const [askName,setAskName] = useState(!authorDefault.trim())
   const [authorError,setAuthorError] = useState('')
+  const [mediaError,setMediaError] = useState('')
   const [caption,setCaption] = useState('')
-  const [suggestingCaption,setSuggestingCaption] = useState(false)
-  const [step,setStep]       = useState<'source'|'loading'|'edit'|'queue'>('source')
-  const [editFile,setEditFile]= useState<File|null>(null)
+  const [step,setStep]       = useState<'source'|'loading'|'queue'>('source')
   const [queue,setQueue]     = useState<QItem[]>([])
   const [uploading,setUploading]= useState(false)
   const [compPct,setCompPct] = useState(0)
@@ -242,6 +242,27 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   const uploadingRef=useRef(false)
   const uploadAllRef=useRef<()=>Promise<void>>(async()=>{})
   const allDone = queue.length>0 && queue.every(q=>q.status==='done'||q.status==='error')
+
+  useEffect(()=>{
+    if(authorDefault.trim()) { setAskName(false); return }
+    try {
+      const saved = localStorage.getItem('cha_author') ?? ''
+      if (saved.trim()) { setAuthor(saved.trim()); setAskName(false) }
+    } catch {}
+  },[authorDefault])
+
+  const persistAuthor = () => {
+    const safe = author.trim().slice(0, 60)
+    if (!safe) {
+      setAuthorError('Informe seu nome para continuar.')
+      return ''
+    }
+    try { localStorage.setItem('cha_author', safe) } catch {}
+    if (author !== safe) setAuthor(safe)
+    setAuthorError('')
+    setAskName(false)
+    return safe
+  }
 
   // Load persisted queue on mount
   useEffect(()=>{
@@ -269,72 +290,49 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   },[])
 
   const handleImgFiles=async(files:FileList|null)=>{
-    if(!author.trim()){ setAuthorError('Informe seu nome para enviar imagens.'); return }
+    if(!persistAuthor()){ return }
     if(!files||!files[0])return
     const f0=files[0]
-    const isSingle=files.length===1&&(f0.type.startsWith('image/')||isHeicFile(f0))
+    const isImageLike = f0.type.startsWith('image/') || isHeicFile(f0) || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f0.name)
+    if(!isImageLike){
+      setMediaError('Selecione uma imagem válida para postar.')
+      return
+    }
+    setMediaError('')
 
-    if(isSingle){
-      setStep('loading'); setCompPct(10)
-      const pct=setInterval(()=>setCompPct(p=>Math.min(p+12,85)),200)
-      try{
-        const {blob}=await prepareImageBlob(f0,2000)
-        clearInterval(pct); setCompPct(100)
-        const ext=blob.type==='image/webp'?'webp':'jpg'
-        const prepared=new File([blob],renameWithExt(f0.name,ext),{type:blob.type})
-        setEditFile(prepared)
-        setTimeout(()=>setStep('edit'),150)
-      }catch{
-        clearInterval(pct)
-        setEditFile(f0)
-        setTimeout(()=>setStep('edit'),150)
-      }
-    } else {
-      setStep('loading')
-      const items:QItem[]=[]
-      for(let i=0;i<files.length;i++){
-        const f=files[i]; setCompPct(Math.round(((i+1)/files.length)*100))
-        const isImg=f.type.startsWith('image/')||isHeicFile(f)
-        const isAud=f.type.startsWith('audio/')||/\.(mp3|webm|ogg|m4a|wav|aac)$/i.test(f.name)
-        const type:QItem['type']=isImg?'image':isAud?'audio':'video'
-        if(isImg){
-          const {blob,previewUrl}=await prepareImageBlob(f,2000)
-          items.push({file:blob,name:f.name,preview:previewUrl,status:'waiting',progress:0,type,retries:0,isOfflineError:false})
-        }else{
-          if(type==='video'){
-            const check=await validateShortVideo(f)
-            if(!check.ok){
-              items.push({file:f,name:f.name,preview:URL.createObjectURL(f),status:'error',progress:0,type,error:check.error,retries:0,isOfflineError:false})
-              continue
-            }
-          }
-          items.push({file:f,name:f.name,preview:isAud?'':URL.createObjectURL(f),status:'waiting',progress:0,type,retries:0,isOfflineError:false})
-        }
-      }
-      setQueue(items); setStep('queue')
+    setStep('loading'); setCompPct(10)
+    const pct=setInterval(()=>setCompPct(p=>Math.min(p+16,88)),180)
+    try{
+      const {blob,previewUrl}=await prepareImageBlob(f0,2000)
+      clearInterval(pct); setCompPct(100)
+      setQueue([{file:blob,name:renameWithExt(f0.name,'webp'),preview:previewUrl,status:'waiting',progress:0,type:'image',retries:0,isOfflineError:false}])
+      setTimeout(()=>setStep('queue'),120)
+    }catch{
+      clearInterval(pct)
+      setQueue([{file:f0,name:f0.name,preview:URL.createObjectURL(f0),status:'waiting',progress:0,type:'image',retries:0,isOfflineError:false}])
+      setTimeout(()=>setStep('queue'),120)
     }
   }
 
   const handleAudioFiles=(files:FileList|null)=>{
-    if(!author.trim()){ setAuthorError('Informe seu nome para enviar arquivos.'); return }
-    if(!files)return
-    const items:QItem[]=Array.from(files).map(f=>({
+    if(!persistAuthor()){ return }
+    if(!files||!files[0])return
+    setMediaError('')
+    const f = files[0]
+    const items:QItem[]=[{
       file:f,name:f.name,preview:'',status:'waiting' as const,
       progress:0,type:'audio' as const,retries:0,isOfflineError:false
-    }))
+    }]
     setQueue(items); setStep('queue')
   }
 
-  const handleEditorConfirm=async(blob:Blob)=>{
-    setStep('loading'); setCompPct(0)
-    const iv=setInterval(()=>setCompPct(p=>Math.min(p+25,90)),80)
-    await new Promise(r=>setTimeout(r,50)); clearInterval(iv); setCompPct(100)
-    setQueue([{file:blob,name:editFile?.name??'foto.jpg',preview:URL.createObjectURL(blob),status:'waiting',progress:0,type:'image',retries:0,isOfflineError:false}])
-    setTimeout(()=>setStep('queue'),100)
-  }
-
   const uploadAll=async()=>{
-    if(!author.trim()){
+    if(queue.length===0){
+      setMediaError('Escolha uma foto, vídeo ou áudio antes de enviar.')
+      return
+    }
+    const safeAuthor = persistAuthor()
+    if(!safeAuthor){
       setAuthorError('Informe seu nome antes de enviar.')
       return
     }
@@ -349,20 +347,23 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
       try{
         const fd=new FormData()
         fd.append('media',qi.file,qi.name)
-        fd.append('author',author.trim())
+        fd.append('author',safeAuthor)
         if (caption.trim()) fd.append('caption', caption.trim())
         const timer=setInterval(()=>setQueue(p=>p.map((q,idx)=>idx===i&&q.progress<85?{...q,progress:q.progress+15}:q)),250)
         const res=await fetch('/api/upload',{method:'POST',body:fd})
         clearInterval(timer)
         const data=await res.json()
         if(res.ok){
+          setMediaError('')
           lastThumb=qi.preview
           setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'done',progress:100}:q))
           removeFromLS(qi.name)
         }else{
+          setMediaError(data.error??'Erro no servidor ao enviar mídia.')
           setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:data.error??'Erro no servidor',isOfflineError:false}:q))
         }
       }catch{
+        setMediaError('Falha de conexão ao enviar. Tente novamente.')
         const nr=qi.retries+1
         setQueue(p=>p.map((q,idx)=>idx===i?{...q,status:'error',error:`Sem conexão (${nr}/3)`,isOfflineError:true,retries:nr}:q))
         if(qi.file.size<=MAX_LS_SIZE) saveToLS({...qi,retries:nr,isOfflineError:true,status:'error'})
@@ -370,47 +371,43 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
       }
     }
     uploadingRef.current=false; setUploading(false)
-    if(lastThumb)onSuccess(author.trim(),lastThumb)
+    if(lastThumb)onSuccess(safeAuthor,lastThumb)
   }
   uploadAllRef.current=uploadAll
 
-  const suggestCaption = async () => {
-    const target = queue.find(q => q.type === 'image')
-    if (!target || suggestingCaption) return
-    setSuggestingCaption(true)
-    try {
-      const fd = new FormData()
-      fd.append('media', target.file, target.name)
-      const res = await fetch('/api/upload/caption', { method: 'POST', body: fd })
-      const text = await res.text()
-      const data = text ? JSON.parse(text) as { caption?: string } : {}
-      if (data.caption) setCaption(data.caption)
-    } finally {
-      setSuggestingCaption(false)
-    }
-  }
-
   return (
     <div className="modal-overlay" onClick={step==='source'?onClose:undefined}>
-      <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+      <div className={`modal-sheet${step==='source' ? ' modal-sheet-source' : ''}`} onClick={e=>e.stopPropagation()}>
         <div className="modal-handle"/>
         {step==='source'&&(
           <>
-            <p className="modal-label">✦ Compartilhe suas fotos ✦</p>
-            <h2 className="modal-title">Adicionar ao álbum</h2>
-            <p className="modal-hint">Sua foto aparece no mural imediatamente 🌸</p>
-            <input className="name-input" placeholder="Seu nome (obrigatório)" value={author} onChange={e=>{setAuthor(e.target.value); if(e.target.value.trim()) setAuthorError('')}} maxLength={60}/>
-            {!!authorError&&<p style={{margin:'4px 2px 10px',fontSize:'.82rem',color:'#c0392b',fontStyle:'italic'}}>{authorError}</p>}
-            <input className="name-input" placeholder="Legenda opcional" value={caption} onChange={e=>setCaption(e.target.value)} maxLength={180}/>
+            <p className="modal-label">✦ Compartilhe no álbum ✦</p>
+            <h2 className="modal-title">Novo post</h2>
+            <p className="modal-hint">Imagem, vídeo ou áudio com legenda opcional.</p>
+            {askName ? (
+              <>
+                <input className="name-input" placeholder="Seu nome" value={author} onChange={e=>{setAuthor(e.target.value); if(e.target.value.trim()) setAuthorError('')}} maxLength={60}/>
+                {!!authorError&&<p style={{margin:'4px 2px 10px',fontSize:'.82rem',color:'#c0392b',fontStyle:'italic'}}>{authorError}</p>}
+                <button className="btn-primary" style={{width:'100%',justifyContent:'center',marginBottom:8}} onClick={persistAuthor}>Continuar</button>
+              </>
+            ) : (
+              <>
+                <p style={{margin:'0 0 8px',fontSize:'.86rem',color:'var(--text-lo)',fontStyle:'italic',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                  <span>Postando como <strong>{author}</strong></span>
+                  <button className="btn-secondary" style={{padding:'6px 14px',fontSize:'.82rem'}} onClick={()=>setAskName(true)}>Editar nome</button>
+                </p>
+                <input className="name-input" placeholder="Legenda opcional" value={caption} onChange={e=>setCaption(e.target.value)} maxLength={180}/>
+                {!!mediaError&&<p style={{margin:'0 2px 10px',fontSize:'.82rem',color:'#c0392b',fontStyle:'italic'}}>{mediaError}</p>}
+              </>
+            )}
             <div className="source-grid">
               {[
-                {icon:'📷',label:'Câmera',sub:'Tirar foto agora',action:()=>camRef.current?.click()},
-                {icon:'🖼️',label:'Galeria',sub:'Editar e enviar',action:()=>{if(fileRef.current){fileRef.current.multiple=false;fileRef.current.click()}}},
-                {icon:'🎥',label:'Vídeo',sub:'Compartilhar vídeo',action:()=>vidRef.current?.click()},
-                {icon:'📚',label:'Várias',sub:'Enviar de uma vez',action:()=>{if(fileRef.current){fileRef.current.multiple=true;fileRef.current.click()}}},
+                {icon:'📷',label:'Foto',sub:'Câmera',action:()=>camRef.current?.click()},
+                {icon:'🖼️',label:'Imagem',sub:'Galeria',action:()=>fileRef.current?.click()},
+                {icon:'🎥',label:'Vídeo',sub:'Gravar ou enviar',action:()=>vidRef.current?.click()},
                 {icon:'🎙️',label:'Áudio',sub:'Mensagem de voz',action:()=>audioRef.current?.click()},
               ].map(({icon,label,sub,action})=>(
-                <button key={label} className="source-btn" onClick={action} disabled={!author.trim()} style={!author.trim()?{opacity:.55,cursor:'not-allowed'}:undefined}>
+                <button key={label} className="source-btn" onClick={action} disabled={askName} style={askName?{opacity:.55,cursor:'not-allowed'}:undefined}>
                   <span className="source-btn-icon">{icon}</span>
                   <span className="source-btn-label">{label}</span>
                   <span className="source-btn-sub">{sub}</span>
@@ -419,16 +416,20 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             </div>
             <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
             <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
-            <input ref={vidRef} type="file" accept="video/*" style={{display:'none'}} onChange={e=>{
-              if(!author.trim()){ setAuthorError('Informe seu nome para enviar arquivos.'); return }
-              if(!e.target.files)return
-              Promise.all(Array.from(e.target.files).map(async f=>{
-                const check=await validateShortVideo(f)
+            <input ref={vidRef} type="file" accept="video/*" capture="environment" style={{display:'none'}} onChange={e=>{
+              if(!persistAuthor()){ return }
+              const f=e.target.files?.[0]
+              if(!f)return
+              validateShortVideo(f).then(check=>{
                 if(!check.ok){
-                  return {file:f,name:f.name,preview:URL.createObjectURL(f),status:'error' as const,progress:0,type:'video' as const,error:check.error,retries:0,isOfflineError:false}
+                  setMediaError(check.error ?? 'Vídeo inválido para envio.')
+                  setQueue([{file:f,name:f.name,preview:URL.createObjectURL(f),status:'error' as const,progress:0,type:'video' as const,error:check.error,retries:0,isOfflineError:false}])
+                }else{
+                  setMediaError('')
+                  setQueue([{file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}])
                 }
-                return {file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}
-              })).then(items=>{ setQueue(items); setStep('queue') })
+                setStep('queue')
+              })
             }}/>
             <input ref={audioRef} type="file" accept="audio/*,.mp3,.webm,.ogg,.m4a,.wav,.aac" style={{display:'none'}} onChange={e=>handleAudioFiles(e.target.files)}/>
           </>
@@ -442,22 +443,10 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
             </div>
           </div>
         )}
-        {step==='edit'&&editFile&&(
-          <>
-            <p className="modal-label">✦ Editar foto ✦</p>
-            <h2 className="modal-title" style={{marginBottom:16}}>Personalize</h2>
-            <PhotoEditor file={editFile} onConfirm={handleEditorConfirm} onCancel={()=>setStep('source')}/>
-          </>
-        )}
         {step==='queue'&&(
           <>
             <p className="modal-label">✦ {allDone?'Concluído':'Enviando'} ✦</p>
             <h2 className="modal-title" style={{marginBottom:16}}>{allDone?'🌸 Tudo enviado!':`${queue.length} arquivo${queue.length>1?'s':''}`}</h2>
-            {queue.some(q=>q.type==='image')&&!allDone&&(
-              <button className="btn-secondary" style={{width:'100%',justifyContent:'center',marginBottom:10}} onClick={suggestCaption} disabled={suggestingCaption||uploading}>
-                {suggestingCaption?'⏳ Gerando legenda IA…':'✨ Sugerir legenda com IA'}
-              </button>
-            )}
 
             {/* Offline banner */}
             {!isOnline&&(
@@ -491,17 +480,19 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 </div>
               ))}
             </div>
-            {!uploading&&!allDone&&<button className="btn-primary" style={{width:'100%',justifyContent:'center'}} onClick={uploadAll}>📤 Enviar {queue.length>1?`${queue.length} arquivos`:'agora'}</button>}
-            {uploading&&<p style={{textAlign:'center',color:'var(--text-md)',fontStyle:'italic',fontSize:'.92rem'}}>Não feche enquanto envia…</p>}
-            {allDone&&(
-              <div style={{display:'flex',gap:10}}>
+            <div className="queue-actions">
+              {!uploading&&!allDone&&<button className="btn-primary" style={{width:'100%',justifyContent:'center'}} onClick={uploadAll}>📤 Enviar {queue.length>1?`${queue.length} arquivos`:'agora'}</button>}
+              {uploading&&<p style={{textAlign:'center',color:'var(--text-md)',fontStyle:'italic',fontSize:'.92rem'}}>Não feche enquanto envia…</p>}
+              {allDone&&(
+                <div style={{display:'flex',gap:10}}>
                 {queue.some(q=>q.status==='error')&&<button className="btn-secondary" style={{flex:1}} onClick={()=>{
                   setQueue(p=>p.map(q=>q.status==='error'?{...q,status:'waiting' as const,progress:0,error:undefined,isOfflineError:false,retries:0}:q))
                   uploadingRef.current=false; setUploading(false)
                 }}>🔄 Tentar novamente</button>}
                 <button className="btn-primary" style={{flex:2,justifyContent:'center'}} onClick={onClose}>✓ Fechar</button>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -855,10 +846,9 @@ function CapsuleSection({ defaultAuthor }:{ defaultAuthor:string }) {
 
 // ── PWA Banner ────────────────────────────────────────────────────────────
 function PWABanner() {
-  const [prompt,setPrompt]=useState<any>(null)
   const [show,setShow]=useState(false)
   useEffect(()=>{
-    const h=(e:any)=>{e.preventDefault();setPrompt(e);setShow(true)}
+    const h=()=>setShow(true)
     window.addEventListener('beforeinstallprompt',h)
     return()=>window.removeEventListener('beforeinstallprompt',h)
   },[])
@@ -868,9 +858,9 @@ function PWABanner() {
       <span className="pwa-banner-icon">📱</span>
       <div className="pwa-banner-text">
         <p className="pwa-banner-title">Instalar o app</p>
-        <p className="pwa-banner-sub">Acesse rápido direto da tela inicial</p>
+        <p className="pwa-banner-sub">Use o menu do navegador para instalar na tela inicial</p>
       </div>
-      <button className="pwa-banner-btn" onClick={()=>{prompt?.prompt();setShow(false)}}>Instalar</button>
+      <button className="pwa-banner-btn" onClick={()=>setShow(false)}>Ok</button>
       <button className="pwa-dismiss" onClick={()=>setShow(false)}>✕</button>
     </div>
   )

@@ -34,10 +34,12 @@ export default function FeedItem({
   item,
   canWrite,
   onLike,
+  viewportHeight,
 }: {
   item: FeedMediaItem
   canWrite: boolean
   onLike: (id: string, emoji?: string) => Promise<void> | void
+  viewportHeight: string
 }) {
   const [showHeart, setShowHeart] = useState(false)
   const [comments, setComments] = useState<CommentItem[]>([])
@@ -143,49 +145,76 @@ export default function FeedItem({
   }, [item.reactions])
 
   return (
-    <article ref={rootRef} style={{ height: '100dvh', width: '100%', scrollSnapAlign: 'start', position: 'relative', background: '#000', display: 'flex', justifyContent: 'center' }}>
-      <div onClick={handleTap} style={{ width: '100%', height: '100%', maxWidth: isDesktop ? 760 : '100%', position: 'relative' }}>
-        {item.type === 'video' ? (
-          <video ref={videoRef} src={item.fullUrl} muted={videoMuted} playsInline loop controls={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : item.type === 'audio' ? (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#1a1a1a,#3d2c1e)', display: 'grid', placeItems: 'center', color: '#fff', padding: 24 }}>
-            <div style={{ textAlign: 'center', width: '100%', maxWidth: 380 }}>
-              <div style={{ fontSize: 62, marginBottom: 20 }}>🎙️</div>
-              <audio src={item.fullUrl} controls style={{ width: '100%' }} />
+    <article ref={rootRef} style={{ width: '100%', height: viewportHeight, scrollSnapAlign: 'start', position: 'relative', background: '#0f0d0b', display: 'flex', justifyContent: 'center', padding: isDesktop ? '16px 18px 20px' : '10px 8px 16px' }}>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: isDesktop ? 980 : '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          gap: 10,
+        }}
+      >
+        <div
+          onClick={handleTap}
+          style={{
+            flex: 1,
+            minHeight: isDesktop ? 360 : 260,
+            position: 'relative',
+            borderRadius: isDesktop ? 22 : 16,
+            overflow: 'hidden',
+            border: '1px solid rgba(255,255,255,.14)',
+            boxShadow: '0 18px 54px rgba(0,0,0,.38)',
+            background: '#000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {item.type === 'video' ? (
+            <video ref={videoRef} src={item.fullUrl} muted={videoMuted} playsInline loop controls={false} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+          ) : item.type === 'audio' ? (
+            <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#1a1a1a,#3d2c1e)', display: 'grid', placeItems: 'center', color: '#fff', padding: 24 }}>
+              <div style={{ textAlign: 'center', width: '100%', maxWidth: 380 }}>
+                <div style={{ fontSize: 62, marginBottom: 20 }}>🎙️</div>
+                <audio src={item.fullUrl} controls style={{ width: '100%' }} />
+              </div>
             </div>
-          </div>
-        ) : (
-          <img
-            src={item.fullUrl}
-            srcSet={`${item.thumbUrl} 720w, ${item.fullUrl} 1600w`}
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 75vw, 980px"
-            alt={item.author}
-            loading="lazy"
-            decoding="async"
-            style={{ width: '100%', height: '100%', objectFit: isDesktop ? 'contain' : 'cover', background: '#0f0d0b' }}
-          />
-        )}
+          ) : (
+            <img
+              src={item.fullUrl}
+              srcSet={`${item.thumbUrl} 720w, ${item.fullUrl} 1600w`}
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 75vw, 980px"
+              alt={item.author}
+              loading="lazy"
+              decoding="async"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#0f0d0b' }}
+            />
+          )}
 
-        {showHeart && (
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
-            <div style={{ fontSize: 86, animation: 'feed-heart-pop .56s ease forwards', textShadow: '0 10px 20px rgba(0,0,0,.45)' }}>❤</div>
-          </div>
-        )}
+          {showHeart && (
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
+              <div style={{ fontSize: 86, animation: 'feed-heart-pop .56s ease forwards', textShadow: '0 10px 20px rgba(0,0,0,.45)' }}>❤</div>
+            </div>
+          )}
 
-        {item.type === 'video' && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setVideoMuted(v => !v)
-            }}
-            style={{ position: 'absolute', right: 14, top: 14, border: '1px solid rgba(255,255,255,.35)', borderRadius: 999, color: '#fff', background: 'rgba(0,0,0,.4)', width: 42, height: 42, cursor: 'pointer' }}
-            aria-label={videoMuted ? 'Ativar som' : 'Silenciar vídeo'}
-          >
-            {videoMuted ? '🔇' : '🔊'}
-          </button>
-        )}
+          {item.type === 'video' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setVideoMuted(v => !v)
+              }}
+              style={{ position: 'absolute', right: 14, top: 14, border: '1px solid rgba(255,255,255,.35)', borderRadius: 999, color: '#fff', background: 'rgba(0,0,0,.4)', width: 42, height: 42, cursor: 'pointer' }}
+              aria-label={videoMuted ? 'Ativar som' : 'Silenciar vídeo'}
+            >
+              {videoMuted ? '🔇' : '🔊'}
+            </button>
+          )}
+        </div>
 
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '24px 14px calc(112px + env(safe-area-inset-bottom))', background: 'linear-gradient(180deg,rgba(0,0,0,0) 0%, rgba(0,0,0,.72) 35%, rgba(0,0,0,.88) 100%)', color: '#fff' }}>
+        <div style={{ flexShrink: 0, padding: isDesktop ? '2px 4px 0' : '0 2px', color: '#fff' }}>
           <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>@{item.author}</p>
           <p style={{ margin: '6px 0 0', fontSize: 14, opacity: 0.95 }}>{item.caption?.trim() || 'Sem legenda'}</p>
           <p style={{ margin: '6px 0 0', fontSize: 12, opacity: 0.75 }}>{timeAgo(item.createdAt)}</p>
