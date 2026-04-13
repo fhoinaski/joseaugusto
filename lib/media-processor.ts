@@ -51,7 +51,15 @@ export async function prepareImageBlob(
         const canvas = document.createElement('canvas')
         canvas.width = width
         canvas.height = height
-        canvas.getContext('2d')?.drawImage(img, 0, 0, width, height)
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          // Fill white background before drawing to prevent alpha-compositing
+          // against black (canvas default is transparent) on any image with
+          // transparency or partial alpha from HEIC/HDR conversions.
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, width, height)
+          ctx.drawImage(img, 0, 0, width, height)
+        }
         canvas.toBlob(b => resolve(b ?? sourceBlob), 'image/webp', quality)
       } catch {
         resolve(sourceBlob)

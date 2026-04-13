@@ -119,8 +119,10 @@ export async function POST(req: NextRequest) {
       mediaType   = 'video'
     } else {
       // Convert image to WebP 80 quality + run AI moderation in parallel
+      // .rotate() auto-applies EXIF orientation before processing and strips
+      // the tag from the output, preventing dark/rotated images on mobile uploads.
       const sourceBuffer = Buffer.from(arrayBuffer)
-      const webpBuf = await sharp(sourceBuffer).webp({ quality: 80 }).toBuffer()
+      const webpBuf = await sharp(sourceBuffer).rotate().webp({ quality: 80 }).toBuffer()
       const [modStatus] = await Promise.all([moderateImage(webpBuf)])
       body        = webpBuf
       contentType = 'image/webp'
@@ -129,10 +131,10 @@ export async function POST(req: NextRequest) {
       status      = modStatus
 
       imageVariants = await Promise.all([
-        sharp(sourceBuffer).resize({ width: 320, withoutEnlargement: true }).webp({ quality: 72 }).toBuffer(),
-        sharp(sourceBuffer).resize({ width: 640, withoutEnlargement: true }).webp({ quality: 76 }).toBuffer(),
-        sharp(sourceBuffer).resize({ width: 1080, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer(),
-        sharp(sourceBuffer).resize(400, 400, { fit: 'cover', position: 'attention' }).webp({ quality: 74 }).toBuffer(),
+        sharp(sourceBuffer).rotate().resize({ width: 320, withoutEnlargement: true }).webp({ quality: 72 }).toBuffer(),
+        sharp(sourceBuffer).rotate().resize({ width: 640, withoutEnlargement: true }).webp({ quality: 76 }).toBuffer(),
+        sharp(sourceBuffer).rotate().resize({ width: 1080, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer(),
+        sharp(sourceBuffer).rotate().resize(400, 400, { fit: 'cover', position: 'attention' }).webp({ quality: 74 }).toBuffer(),
       ]).then(([w320, w640, w1080, thumb400]) => ([
         { key: imageVariantKey(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`, 320), body: w320, contentType: 'image/webp' },
         { key: imageVariantKey(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`, 640), body: w640, contentType: 'image/webp' },
