@@ -118,6 +118,46 @@ body.stories-open .ig-shell-nav {
   cursor: not-allowed;
 }
 
+/* ── Post button: highlighted center action ── */
+.ig-shell-post {
+  background: linear-gradient(135deg, #3e2408, #7a4e28) !important;
+  color: #fff !important;
+  border-radius: 14px !important;
+  box-shadow: 0 4px 16px rgba(60,20,0,.35);
+  transform: scale(1.04);
+  transition: transform .18s, box-shadow .18s;
+}
+.ig-shell-post:not(:disabled):hover,
+.ig-shell-post:not(:disabled):focus {
+  transform: scale(1.1);
+  box-shadow: 0 6px 22px rgba(60,20,0,.5);
+}
+.ig-shell-post:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Reels page: hide nav while viewing ── */
+body.reels-fullscreen .ig-shell-nav {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px);
+}
+
+/* ── Stories strip: smooth scroll ── */
+.stories-strip {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Reel item: prevent text selection on double-tap ── */
+.reel-item {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 @media (min-width: 1024px) {
   .ig-app-content {
     padding-left: 104px;

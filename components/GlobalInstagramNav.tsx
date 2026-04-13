@@ -19,19 +19,18 @@ export default function GlobalInstagramNav() {
 
       <a className={`ig-shell-item ${isActive(pathname, '/') ? 'active' : ''}`} href="/">
         <span>🏠</span>
-        <small>Inicio</small>
+        <small>Início</small>
       </a>
 
       <a className={`ig-shell-item ${isActive(pathname, '/feed') ? 'active' : ''}`} href="/feed">
-        <span>📱</span>
+        <span>📷</span>
         <small>Feed</small>
       </a>
 
       <button
-        className={`ig-shell-item`}
+        className="ig-shell-item ig-shell-post"
         onClick={() => {
           if (pathname === '/') {
-            // Already on home — fire a custom event so the modal opens immediately
             window.dispatchEvent(new CustomEvent('cha:open-upload'))
           } else {
             router.push('/?upload=1')
@@ -44,14 +43,14 @@ export default function GlobalInstagramNav() {
         <small>Postar</small>
       </button>
 
-      <a className={`ig-shell-item ${isActive(pathname, '/tv') ? 'active' : ''}`} href="/tv">
-        <span>📺</span>
-        <small>Ao vivo</small>
+      <a className={`ig-shell-item ${isActive(pathname, '/reels') ? 'active' : ''}`} href="/reels">
+        <span>🎬</span>
+        <small>Reels</small>
       </a>
 
-      <a className={`ig-shell-item ${isActive(pathname, '/admin') ? 'active' : ''}`} href="/admin">
-        <span>⚙</span>
-        <small>Admin</small>
+      <a className={`ig-shell-item ${isActive(pathname, '/tv') ? 'active' : ''}`} href="/tv">
+        <span>📺</span>
+        <small>TV</small>
       </a>
     </nav>
   )
