@@ -28,8 +28,15 @@ export default function GlobalInstagramNav() {
       </a>
 
       <button
-        className={`ig-shell-item ${pathname === '/?upload=1' ? 'active' : ''}`}
-        onClick={() => router.push('/?upload=1')}
+        className={`ig-shell-item`}
+        onClick={() => {
+          if (pathname === '/') {
+            // Already on home — fire a custom event so the modal opens immediately
+            window.dispatchEvent(new CustomEvent('cha:open-upload'))
+          } else {
+            router.push('/?upload=1')
+          }
+        }}
         disabled={!canWrite}
         aria-label="Postar foto ou video"
       >
