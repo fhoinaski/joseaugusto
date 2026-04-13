@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { isHeicFile, prepareImageBlob, renameWithExt, validateShortVideo } from '@/lib/media-processor'
+import { emitToast } from '@/lib/ui-feedback'
+
+declare global {
+  interface Window {
+    __chaQueueUpload?: (blob: Blob, name: string, author?: string) => Promise<boolean>
+  }
+}
 
 interface QItem {
   file: Blob
@@ -195,6 +202,38 @@ export default function UploadModal({
     setUploading(true)
     let lastThumb = ''
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      let queuedCount = 0
+      for (let i = 0; i < queue.length; i++) {
+        const qi = queue[i]
+        if (qi.status === 'done') continue
+        const registrationQueueOk = typeof window.__chaQueueUpload === 'function'
+          ? await window.__chaQueueUpload(qi.file, qi.name, safeAuthor)
+          : false
+        const retries = qi.retries + 1
+        if (registrationQueueOk) queuedCount += 1
+        if (qi.file.size <= MAX_LS_SIZE) saveToLS({ ...qi, retries, isOfflineError: true, status: 'error' })
+        setQueue(p => p.map((q, idx) => idx === i
+          ? {
+              ...q,
+              status: 'error',
+              progress: 100,
+              retries,
+              error: registrationQueueOk ? 'Na fila offline' : `Sem conexao (${retries}/3)`,
+              isOfflineError: true,
+            }
+          : q,
+        ))
+      }
+      setMediaError('Sem conexao. Seus arquivos foram colocados na fila offline.')
+      emitToast(queuedCount > 0
+        ? `${queuedCount} arquivo${queuedCount > 1 ? 's' : ''} na fila offline`
+        : 'Sem conexao. Tentaremos enviar automaticamente.')
+      uploadingRef.current = false
+      setUploading(false)
+      return
+    }
+
     for (let i = 0; i < queue.length; i++) {
       const qi = queue[i]
       if (qi.status === 'done') continue
@@ -224,8 +263,19 @@ export default function UploadModal({
       } catch {
         setMediaError('Falha de conexao ao enviar. Tente novamente.')
         const nr = qi.retries + 1
-        setQueue(p => p.map((q, idx) => idx === i ? { ...q, status: 'error', error: `Sem conexao (${nr}/3)`, isOfflineError: true, retries: nr } : q))
+        const queuedInSw = typeof window.__chaQueueUpload === 'function'
+          ? await window.__chaQueueUpload(qi.file, qi.name, safeAuthor)
+          : false
+        setQueue(p => p.map((q, idx) => idx === i ? {
+          ...q,
+          status: 'error',
+          error: queuedInSw ? 'Na fila offline' : `Sem conexao (${nr}/3)`,
+          progress: queuedInSw ? 100 : q.progress,
+          isOfflineError: true,
+          retries: nr,
+        } : q))
         if (qi.file.size <= MAX_LS_SIZE) saveToLS({ ...qi, retries: nr, isOfflineError: true, status: 'error' })
+        emitToast(queuedInSw ? `Sem conexao. ${qi.name} ficou na fila offline.` : 'Sem conexao. Tentaremos novamente.')
         break
       }
     }
@@ -285,14 +335,40 @@ export default function UploadModal({
                 {!!mediaError && <p style={{ margin: '0 2px 10px', fontSize: '.82rem', color: '#c0392b', fontStyle: 'italic' }}>{mediaError}</p>}
               </>
             )}
-            <div className="source-grid">
+            {/* ── Primary actions: Camera + Gallery ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+              <button
+                className="upload-primary-btn"
+                onClick={() => camRef.current?.click()}
+                disabled={askName}
+              >
+                <span style={{ fontSize: 28 }}>📷</span>
+                <div style={{ textAlign: 'left' }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Tirar foto agora</p>
+                  <p style={{ margin: 0, fontSize: '.8rem', opacity: .7 }}>Abre a câmera do celular</p>
+                </div>
+              </button>
+              <button
+                className="upload-primary-btn upload-primary-btn--secondary"
+                onClick={() => fileRef.current?.click()}
+                disabled={askName}
+              >
+                <span style={{ fontSize: 28 }}>🖼️</span>
+                <div style={{ textAlign: 'left' }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Escolher da galeria</p>
+                  <p style={{ margin: 0, fontSize: '.8rem', opacity: .7 }}>Foto ou imagem salva</p>
+                </div>
+              </button>
+            </div>
+
+            {/* ── Secondary actions: Video + Audio ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { icon: '📷', label: 'Foto', sub: 'Camera', action: () => camRef.current?.click() },
-                { icon: '🖼️', label: 'Imagem', sub: 'Galeria', action: () => fileRef.current?.click() },
-                { icon: '🎥', label: 'Video', sub: 'Gravar ou enviar', action: () => vidRef.current?.click() },
-                { icon: '🎙️', label: 'Audio', sub: 'Mensagem de voz', action: () => audioRef.current?.click() },
+                { icon: '🎥', label: 'Vídeo', sub: 'Gravar ou enviar', action: () => vidRef.current?.click() },
+                { icon: '🎙️', label: 'Áudio', sub: 'Mensagem de voz', action: () => audioRef.current?.click() },
               ].map(({ icon, label, sub, action }) => (
-                <button key={label} className="source-btn" onClick={action} disabled={askName} style={askName ? { opacity: .55, cursor: 'not-allowed' } : undefined}>
+                <button key={label} className="source-btn" onClick={action} disabled={askName}
+                  style={askName ? { opacity: .55, cursor: 'not-allowed' } : undefined}>
                   <span className="source-btn-icon">{icon}</span>
                   <span className="source-btn-label">{label}</span>
                   <span className="source-btn-sub">{sub}</span>

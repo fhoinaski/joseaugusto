@@ -2,9 +2,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { GeoStatus, useGeoAccess } from '@/components/GeoAccessProvider'
 import Stories, { StoryMediaItem } from '@/components/Stories'
-import UploadModal from '@/components/home/UploadModal'
 import HeroSection from '@/components/home/HeroSection'
 import MediaGallery from '@/components/home/MediaGallery'
+import { vibrateSoft } from '@/lib/ui-feedback'
 
 interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
@@ -352,8 +352,6 @@ export default function Home() {
   const [loading,     setLoading]      = useState(true)
   const [nextCursor,  setNextCursor]   = useState<string|null>(null)
   const [lbIdx,       setLbIdx]        = useState<number|null>(null)
-  const [showUpload,  setShowUpload]   = useState(false)
-  const [uploadModalKey, setUploadModalKey] = useState(0)
   const [showAll,     setShowAll]      = useState(false)
   const [toasts,      setToasts]       = useState<ToastMsg[]>([])
   const [topAuthors,  setTopAuthors]   = useState<TopAuthor[]>([])
@@ -370,42 +368,26 @@ export default function Home() {
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
 
-  const openUploadModal = useCallback(() => {
-    setUploadModalKey(k => k + 1)
-    setShowUpload(true)
-  }, [])
-
-  const closeUploadModal = useCallback(() => {
-    setShowUpload(false)
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname
-      if (window.location.search.includes('upload=1')) {
-        window.history.replaceState({}, '', path || '/')
-      }
-    }
-  }, [])
-
   useEffect(()=>{
     if(typeof window==='undefined')return
     if(!localStorage.getItem('cha_visited'))setShowOnboard(true)
     setSavedAuthor(localStorage.getItem('cha_author')?? '')
   },[])
 
-  // Register the upload-modal opener once on mount — independent of canWrite
-  // so the listener is always present; the button in GlobalInstagramNav is
-  // already disabled when canWrite is false, so no extra guard needed here.
+  // Refresh gallery when a upload completes anywhere in the app
   useEffect(() => {
-    // Handle direct link /?upload=1 (e.g. navigating from another page)
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('upload') === '1') {
-      openUploadModal()
-      window.history.replaceState({}, '', '/')
+    const onUploadSuccess = (e: Event) => {
+      const { author, thumb } = (e as CustomEvent<{ author: string; thumb: string }>).detail ?? {}
+      if (author && author !== 'Convidado') setSavedAuthor(author)
+      const id = Math.random().toString(36).slice(2)
+      const text = author && author !== 'Convidado' ? `${author} enviou uma foto! 🌸` : 'Nova foto no álbum! 🌸'
+      setToasts(prev => [...prev.slice(-2), { id, text, thumb }])
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500)
+      setTimeout(() => fetchMedia(), 2000)
     }
-    // Handle bottom-nav "Postar" button (fires custom event when already on /)
-    const handleOpenUpload = () => openUploadModal()
-    window.addEventListener('cha:open-upload', handleOpenUpload)
-    return () => window.removeEventListener('cha:open-upload', handleOpenUpload)
-  }, [openUploadModal])
+    window.addEventListener('cha:upload-success', onUploadSuccess)
+    return () => window.removeEventListener('cha:upload-success', onUploadSuccess)
+  }, [fetchMedia])
 
   useEffect(()=>{ mediaRef.current = media },[media])
   useEffect(()=>{ authorRef.current = savedAuthor },[savedAuthor])
@@ -557,18 +539,14 @@ export default function Home() {
     const reacted=getReacted(id)
     if(reacted.includes(emoji))return
     markReacted(id,emoji)
+    vibrateSoft(18)
     // Optimistic update
     setMedia(prev=>prev.map(m=>m.id===id?{...m,reactions:{...m.reactions,[emoji]:(m.reactions[emoji]??0)+1}}:m))
+    addToast(`Voce reagiu com ${emoji}`)
     try{
       await fetch('/api/react',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,emoji})})
     }catch{}
   },[])
-
-  const handleUploadSuccess=(author:string,thumb:string)=>{
-    if(author&&author!=='Convidado'){localStorage.setItem('cha_author',author);setSavedAuthor(author)}
-    addToast('Foto enviada ao álbum! 🌸',thumb)
-    setTimeout(()=>fetchMedia(),2500)
-  }
 
   return (
     <>
@@ -718,8 +696,6 @@ export default function Home() {
           onNav={d=>setLbIdx(prev=>prev!==null?Math.max(0,Math.min(media.length-1,prev+d)):null)}
           onReact={handleReact}/>
       )}
-
-      {showUpload&&<UploadModal key={uploadModalKey} authorDefault={savedAuthor} onClose={closeUploadModal} onSuccess={handleUploadSuccess}/>}
 
       <ToastManager toasts={toasts} onRemove={id=>setToasts(prev=>prev.filter(t=>t.id!==id))}/>
       <PWABanner/>

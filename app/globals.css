@@ -118,6 +118,40 @@ body.stories-open .ig-shell-nav {
   cursor: not-allowed;
 }
 
+.connection-pill {
+  position: fixed;
+  top: max(10px, calc(8px + env(safe-area-inset-top)));
+  right: 12px;
+  z-index: 2100;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  padding: 6px 11px;
+  border: 1px solid rgba(255,255,255,.4);
+  backdrop-filter: blur(8px);
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #fff;
+}
+
+.connection-pill.online {
+  background: rgba(74,122,88,.75);
+}
+
+.connection-pill.offline {
+  background: rgba(180,96,34,.82);
+}
+
+.connection-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  animation: pulse 1.9s ease-in-out infinite;
+}
+
 /* ── Post button: highlighted center action ── */
 .ig-shell-post {
   background: linear-gradient(135deg, #3e2408, #7a4e28) !important;
@@ -198,6 +232,11 @@ body.reels-fullscreen .ig-shell-nav {
 
   .ig-shell-item small {
     font-size: .76rem;
+  }
+
+  .connection-pill {
+    right: 20px;
+    top: 16px;
   }
 }
 
@@ -693,7 +732,26 @@ body.reels-fullscreen .ig-shell-nav {
 .modal-label  { font-size:.72rem; letter-spacing:.45em; text-transform:uppercase; color:var(--sd); margin-bottom:8px; font-weight:700; }
 .modal-title  { font-family:'Playfair Display',serif; font-size:1.7rem; color:var(--text-hi); margin-bottom:6px; }
 .modal-hint   { font-size:.96rem; font-style:italic; color:var(--text-md); margin-bottom:20px; font-weight:500; }
-.source-grid  { display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-bottom:18px; }
+.source-grid  { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:0; }
+
+/* ── Primary upload buttons (Camera / Gallery) ── */
+.upload-primary-btn {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: 16px 18px; border-radius: 14px;
+  border: 2px solid var(--sand);
+  background: linear-gradient(135deg, rgba(62,36,8,.06), rgba(196,122,58,.08));
+  cursor: pointer; font-family: 'Cormorant Garamond', serif;
+  color: var(--text-hi); transition: all .2s;
+}
+.upload-primary-btn:hover:not(:disabled) {
+  border-color: var(--bl);
+  background: linear-gradient(135deg, rgba(62,36,8,.1), rgba(196,122,58,.14));
+  transform: translateY(-2px); box-shadow: 0 6px 18px rgba(62,36,8,.12);
+}
+.upload-primary-btn:active:not(:disabled) { transform: scale(.98); }
+.upload-primary-btn:disabled { opacity: .5; cursor: not-allowed; }
+.upload-primary-btn--secondary { border-style: dashed; background: rgba(62,36,8,.03); }
+
 .source-btn {
   display:flex; flex-direction:column; align-items:center; gap:8px;
   min-height:118px;

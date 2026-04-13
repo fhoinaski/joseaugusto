@@ -1,7 +1,8 @@
 'use client'
 
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useGeoAccess } from '@/components/GeoAccessProvider'
+import { useUpload } from '@/components/UploadProvider'
 
 function isActive(pathname: string, href: string): boolean {
   if (href === '/') return pathname === '/'
@@ -9,9 +10,9 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 export default function GlobalInstagramNav() {
-  const router = useRouter()
   const pathname = usePathname()
   const { canWrite } = useGeoAccess()
+  const { openUpload } = useUpload()
 
   return (
     <nav className="ig-shell-nav" aria-label="Navegacao principal">
@@ -29,15 +30,10 @@ export default function GlobalInstagramNav() {
 
       <button
         className="ig-shell-item ig-shell-post"
-        onClick={() => {
-          if (pathname === '/') {
-            window.dispatchEvent(new CustomEvent('cha:open-upload'))
-          } else {
-            router.push('/?upload=1')
-          }
-        }}
+        onClick={openUpload}
         disabled={!canWrite}
         aria-label="Postar foto ou video"
+        title={canWrite ? 'Postar foto ou vídeo' : 'Acesso necessário para postar'}
       >
         <span>➕</span>
         <small>Postar</small>
