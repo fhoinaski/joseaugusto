@@ -6,6 +6,11 @@ export interface FeedMediaItem {
   id: string
   thumbUrl: string
   fullUrl: string
+  imageSources?: {
+    w320?: string
+    w640?: string
+    w1080?: string
+  }
   author: string
   caption?: string
   type: 'image' | 'video' | 'audio'
@@ -49,6 +54,7 @@ export default function FeedItem({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [videoMuted, setVideoMuted] = useState(true)
   const [isDesktop, setIsDesktop] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
   const lastTapRef = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -83,6 +89,10 @@ export default function FeedItem({
     mq.addEventListener('change', sync)
     return () => mq.removeEventListener('change', sync)
   }, [])
+
+  useEffect(() => {
+    setImgLoaded(false)
+  }, [item.id])
 
   useEffect(() => {
     if (item.type !== 'video' || !videoRef.current || !rootRef.current) return
@@ -183,15 +193,36 @@ export default function FeedItem({
               </div>
             </div>
           ) : (
-            <img
-              src={item.fullUrl}
-              srcSet={`${item.thumbUrl} 720w, ${item.fullUrl} 1600w`}
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 75vw, 980px"
-              alt={item.author}
-              loading="lazy"
-              decoding="async"
-              style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#0f0d0b' }}
-            />
+            <>
+              {!imgLoaded && (
+                <img
+                  src={item.thumbUrl || item.fullUrl}
+                  alt=""
+                  aria-hidden="true"
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(18px)', transform: 'scale(1.08)', opacity: 0.85 }}
+                />
+              )}
+              <img
+                src={item.imageSources?.w640 || item.thumbUrl || item.fullUrl}
+                srcSet={[
+                  `${item.imageSources?.w320 || item.fullUrl} 320w`,
+                  `${item.imageSources?.w640 || item.fullUrl} 640w`,
+                  `${item.imageSources?.w1080 || item.fullUrl} 1080w`,
+                ].join(', ')}
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 75vw, 980px"
+                alt={item.author}
+                loading="lazy"
+                decoding="async"
+                onLoad={() => setImgLoaded(true)}
+                onError={(e) => {
+                  const img = e.currentTarget
+                  img.srcset = ''
+                  img.src = item.fullUrl
+                  setImgLoaded(true)
+                }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#0f0d0b', opacity: imgLoaded ? 1 : 0.35, transition: 'opacity .22s ease' }}
+              />
+            </>
           )}
 
           {showHeart && (

@@ -91,6 +91,59 @@ interface MediaRow {
   emoji: string | null; count: number | null
 }
 
+interface MediaIdRow {
+  id: string
+  created_at: string
+}
+
+function collapseMediaRows(rows: MediaRow[]): Array<Omit<MediaItem, 'thumbUrl' | 'fullUrl'>> {
+  const map = new Map<string, Omit<MediaItem, 'thumbUrl' | 'fullUrl'>>()
+  for (const row of rows) {
+    if (!map.has(row.id)) {
+      map.set(row.id, {
+        id: row.id,
+        author: row.author,
+        status: row.status,
+        type: row.type,
+        caption: row.caption ?? '',
+        createdAt: row.created_at,
+        reactions: {},
+      })
+    }
+    if (row.emoji && row.count != null) {
+      map.get(row.id)!.reactions[row.emoji] = row.count
+    }
+  }
+  return Array.from(map.values())
+}
+
+async function dbGetMediaRowsByIds(ids: string[]): Promise<MediaRow[]> {
+  if (ids.length === 0) return []
+  const placeholders = ids.map(() => '?').join(',')
+  try {
+    return await d1Query<MediaRow>(
+      `SELECT m.id, m.author, m.status, m.type, m.caption, m.created_at, r.emoji, r.count
+         FROM media m
+         LEFT JOIN reactions r ON r.media_id = m.id
+        WHERE m.id IN (${placeholders})
+        ORDER BY m.created_at DESC, m.id DESC`,
+      ids,
+    )
+  } catch (err) {
+    if (!isMissingCaptionColumnError(err)) throw err
+    type LegacyMediaRow = Omit<MediaRow, 'caption'>
+    const legacyRows = await d1Query<LegacyMediaRow>(
+      `SELECT m.id, m.author, m.status, m.type, m.created_at, r.emoji, r.count
+         FROM media m
+         LEFT JOIN reactions r ON r.media_id = m.id
+        WHERE m.id IN (${placeholders})
+        ORDER BY m.created_at DESC, m.id DESC`,
+      ids,
+    )
+    return legacyRows.map(row => ({ ...row, caption: '' }))
+  }
+}
+
 /** Returns media rows with reactions collapsed into a map. */
 export async function dbGetMedia(status: string): Promise<Array<Omit<MediaItem, 'thumbUrl' | 'fullUrl'>>> {
   let rows: MediaRow[] = []
@@ -117,19 +170,63 @@ export async function dbGetMedia(status: string): Promise<Array<Omit<MediaItem, 
     rows = legacyRows.map(row => ({ ...row, caption: '' }))
   }
 
-  const map = new Map<string, Omit<MediaItem, 'thumbUrl' | 'fullUrl'>>()
-  for (const row of rows) {
-    if (!map.has(row.id)) {
-      map.set(row.id, {
-        id: row.id, author: row.author, status: row.status,
-        type: row.type, caption: row.caption ?? '', createdAt: row.created_at, reactions: {},
-      })
+  return collapseMediaRows(rows)
+}
+
+export async function dbGetMediaPage(
+  status: string,
+  limit: number,
+  cursorId?: string,
+): Promise<{ items: Array<Omit<MediaItem, 'thumbUrl' | 'fullUrl'>>; nextCursor: string | null }> {
+  const safeLimit = Math.max(1, Math.min(50, limit))
+  let idRows: MediaIdRow[]
+
+  if (cursorId) {
+    const cursorRows = await d1Query<{ created_at: string }>(
+      `SELECT created_at FROM media WHERE id = ? LIMIT 1`,
+      [cursorId],
+    )
+    const cursorCreatedAt = cursorRows[0]?.created_at
+
+    if (cursorCreatedAt) {
+      idRows = await d1Query<MediaIdRow>(
+        `SELECT id, created_at
+           FROM media
+          WHERE status = ?
+            AND (created_at < ? OR (created_at = ? AND id < ?))
+          ORDER BY created_at DESC, id DESC
+          LIMIT ?`,
+        [status, cursorCreatedAt, cursorCreatedAt, cursorId, safeLimit + 1],
+      )
+    } else {
+      idRows = await d1Query<MediaIdRow>(
+        `SELECT id, created_at
+           FROM media
+          WHERE status = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT ?`,
+        [status, safeLimit + 1],
+      )
     }
-    if (row.emoji && row.count != null) {
-      map.get(row.id)!.reactions[row.emoji] = row.count
-    }
+  } else {
+    idRows = await d1Query<MediaIdRow>(
+      `SELECT id, created_at
+         FROM media
+        WHERE status = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?`,
+      [status, safeLimit + 1],
+    )
   }
-  return Array.from(map.values())
+
+  const hasMore = idRows.length > safeLimit
+  const pageIds = idRows.slice(0, safeLimit).map(r => r.id)
+  const rows = await dbGetMediaRowsByIds(pageIds)
+
+  return {
+    items: collapseMediaRows(rows),
+    nextCursor: hasMore && pageIds.length > 0 ? pageIds[pageIds.length - 1] : null,
+  }
 }
 
 export async function dbInsertMedia(

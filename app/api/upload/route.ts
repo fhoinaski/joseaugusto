@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
-import { uploadBuffer, objectUrl, pingRealtimeR2 } from '@/lib/r2'
+import { uploadBuffer, objectUrl, pingRealtimeR2, imageVariantKey, imageThumb400Key } from '@/lib/r2'
 import { dbInsertMedia } from '@/lib/db'
 import { isD1AuthError } from '@/lib/db'
 
@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
     const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
     let body:        Buffer
+    let imageVariants: Array<{ key: string; body: Buffer; contentType: string }> = []
     let contentType: string
     let ext:         string
     let mediaType:   'image' | 'video' | 'audio'
@@ -118,13 +119,26 @@ export async function POST(req: NextRequest) {
       mediaType   = 'video'
     } else {
       // Convert image to WebP 80 quality + run AI moderation in parallel
-      const webpBuf = await sharp(Buffer.from(arrayBuffer)).webp({ quality: 80 }).toBuffer()
+      const sourceBuffer = Buffer.from(arrayBuffer)
+      const webpBuf = await sharp(sourceBuffer).webp({ quality: 80 }).toBuffer()
       const [modStatus] = await Promise.all([moderateImage(webpBuf)])
       body        = webpBuf
       contentType = 'image/webp'
       ext         = 'webp'
       mediaType   = 'image'
       status      = modStatus
+
+      imageVariants = await Promise.all([
+        sharp(sourceBuffer).resize({ width: 320, withoutEnlargement: true }).webp({ quality: 72 }).toBuffer(),
+        sharp(sourceBuffer).resize({ width: 640, withoutEnlargement: true }).webp({ quality: 76 }).toBuffer(),
+        sharp(sourceBuffer).resize({ width: 1080, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer(),
+        sharp(sourceBuffer).resize(400, 400, { fit: 'cover', position: 'attention' }).webp({ quality: 74 }).toBuffer(),
+      ]).then(([w320, w640, w1080, thumb400]) => ([
+        { key: imageVariantKey(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`, 320), body: w320, contentType: 'image/webp' },
+        { key: imageVariantKey(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`, 640), body: w640, contentType: 'image/webp' },
+        { key: imageVariantKey(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`, 1080), body: w1080, contentType: 'image/webp' },
+        { key: imageThumb400Key(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`), body: thumb400, contentType: 'image/webp' },
+      ]))
     }
 
     const folder = isAudio ? 'audio' : isVideo ? 'videos' : 'fotos'
@@ -132,6 +146,13 @@ export async function POST(req: NextRequest) {
 
     // 1. Upload file to R2
     await uploadBuffer(key, body, contentType, { author: author || 'Convidado', status })
+    if (mediaType === 'image' && imageVariants.length > 0) {
+      await Promise.all(
+        imageVariants.map((variant) =>
+          uploadBuffer(variant.key, variant.body, variant.contentType, { author: author || 'Convidado', status, variant: '1' }),
+        ),
+      )
+    }
 
     // 2. Record metadata in D1 (degrade gracefully if token is invalid)
     let degraded = false

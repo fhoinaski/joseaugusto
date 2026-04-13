@@ -27,6 +27,20 @@ export function objectUrl(key: string): string {
   return `${PUBLIC_URL}/${key}`
 }
 
+export function imageVariantKey(key: string, width: number): string {
+  const dot = key.lastIndexOf('.')
+  if (dot <= 0) return `${key}_w${width}`
+  const base = key.slice(0, dot)
+  return `${base}_w${width}.webp`
+}
+
+export function imageThumb400Key(key: string): string {
+  const dot = key.lastIndexOf('.')
+  if (dot <= 0) return `${key}_thumb400`
+  const base = key.slice(0, dot)
+  return `${base}_thumb400.webp`
+}
+
 // ── File operations ───────────────────────────────────────────────────────────
 
 export async function uploadBuffer(

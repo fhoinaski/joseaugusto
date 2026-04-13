@@ -36,10 +36,15 @@ function markReacted(id: string, emoji: string) {
 export default function FeedPage() {
   const [media, setMedia] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [manualKey, setManualKey] = useState('')
   const [keyError, setKeyError] = useState('')
   const [headerHeight, setHeaderHeight] = useState(132)
   const headerRef = useRef<HTMLElement | null>(null)
+  const mainRef = useRef<HTMLElement | null>(null)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const loadingMoreRef = useRef(false)
   const { canWrite, geoStatus, unlockWithKey } = useGeoAccess()
   const bottomNavInset = 'max(96px, calc(84px + env(safe-area-inset-bottom)))'
 
@@ -66,10 +71,37 @@ export default function FeedPage() {
     }
   }, [])
 
-  const fetchMedia = useCallback(async () => {
-    const data = await fetchJsonSafe<{ media?: MediaItem[] }>('/api/photos', {})
-    setMedia(Array.isArray(data.media) ? data.media : [])
-    setLoading(false)
+  const fetchMedia = useCallback(async (cursor?: string) => {
+    if (cursor) {
+      if (loadingMoreRef.current) return
+      loadingMoreRef.current = true
+      setLoadingMore(true)
+    }
+
+    const url = cursor
+      ? `/api/photos?cursor=${encodeURIComponent(cursor)}&limit=20`
+      : '/api/photos?limit=20'
+
+    const data = await fetchJsonSafe<{ media?: MediaItem[]; nextCursor?: string | null }>(url, {})
+    const incoming = Array.isArray(data.media) ? data.media : []
+
+    if (cursor) {
+      setMedia(prev => {
+        const map = new Map(prev.map(item => [item.id, item]))
+        for (const item of incoming) map.set(item.id, item)
+        return Array.from(map.values())
+      })
+    } else {
+      setMedia(incoming)
+      setLoading(false)
+    }
+
+    setNextCursor(typeof data.nextCursor === 'string' ? data.nextCursor : null)
+
+    if (cursor) {
+      setLoadingMore(false)
+      loadingMoreRef.current = false
+    }
   }, [])
 
   useEffect(() => {
@@ -125,6 +157,24 @@ export default function FeedPage() {
       if (fallback) clearInterval(fallback)
     }
   }, [fetchMedia])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    const root = mainRef.current
+    if (!sentinel || !root || !nextCursor) return
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchMedia(nextCursor)
+        }
+      },
+      { root, rootMargin: '300px 0px', threshold: 0.01 },
+    )
+
+    obs.observe(sentinel)
+    return () => obs.disconnect()
+  }, [fetchMedia, nextCursor])
 
   const storiesItems = useMemo(() => media.slice(0, 30), [media])
 
@@ -187,6 +237,7 @@ export default function FeedPage() {
 
         return (
           <main
+            ref={mainRef}
             className="feed-scroll-shell"
             style={{
               height: '100dvh',
@@ -221,6 +272,12 @@ export default function FeedPage() {
             {media.map(item => (
               <FeedItem key={item.id} item={item} onLike={like} canWrite={canWrite} viewportHeight={feedViewportHeight} />
             ))}
+            <div ref={sentinelRef} style={{ height: 12 }} />
+            {loadingMore && (
+              <p style={{ textAlign: 'center', color: 'rgba(255,255,255,.72)', fontSize: 12, padding: '10px 0 14px' }}>
+                Carregando mais fotos...
+              </p>
+            )}
           </main>
         )
       })()}
