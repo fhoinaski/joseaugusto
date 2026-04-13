@@ -374,21 +374,6 @@ export default function Home() {
     setSavedAuthor(localStorage.getItem('cha_author')?? '')
   },[])
 
-  // Refresh gallery when a upload completes anywhere in the app
-  useEffect(() => {
-    const onUploadSuccess = (e: Event) => {
-      const { author, thumb } = (e as CustomEvent<{ author: string; thumb: string }>).detail ?? {}
-      if (author && author !== 'Convidado') setSavedAuthor(author)
-      const id = Math.random().toString(36).slice(2)
-      const text = author && author !== 'Convidado' ? `${author} enviou uma foto! 🌸` : 'Nova foto no álbum! 🌸'
-      setToasts(prev => [...prev.slice(-2), { id, text, thumb }])
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500)
-      setTimeout(() => fetchMedia(), 2000)
-    }
-    window.addEventListener('cha:upload-success', onUploadSuccess)
-    return () => window.removeEventListener('cha:upload-success', onUploadSuccess)
-  }, [fetchMedia])
-
   useEffect(()=>{ mediaRef.current = media },[media])
   useEffect(()=>{ authorRef.current = savedAuthor },[savedAuthor])
 
@@ -408,6 +393,21 @@ export default function Home() {
   },[])
 
   useEffect(()=>{fetchMedia()},[fetchMedia])
+
+  // Refresh gallery when an upload completes anywhere in the app
+  useEffect(() => {
+    const onUploadSuccess = (e: Event) => {
+      const { author, thumb } = (e as CustomEvent<{ author: string; thumb: string }>).detail ?? {}
+      if (author && author !== 'Convidado') setSavedAuthor(author)
+      const id = Math.random().toString(36).slice(2)
+      const text = author && author !== 'Convidado' ? `${author} enviou uma foto! 🌸` : 'Nova foto no álbum! 🌸'
+      setToasts(prev => [...prev.slice(-2), { id, text, thumb }])
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500)
+      setTimeout(() => fetchMedia(), 2000)
+    }
+    window.addEventListener('cha:upload-success', onUploadSuccess)
+    return () => window.removeEventListener('cha:upload-success', onUploadSuccess)
+  }, [fetchMedia])
 
   const fetchRecentComments = useCallback(async () => {
     const ids = media.slice(0, 6).map(m => m.id)
