@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { isHeicFile, prepareImageBlob, renameWithExt, validateShortVideo } from '@/lib/media-processor'
 import { GeoStatus, useGeoAccess } from '@/components/GeoAccessProvider'
+import Stories, { StoryMediaItem } from '@/components/Stories'
 
 interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
@@ -76,6 +78,36 @@ async function fetchJsonSafe<T>(url: string, fallback: T): Promise<T> {
 }
 
 // ── Corner Menu ───────────────────────────────────────────────────────────
+function CornerMenu() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="corner-menu">
+      <button className="corner-menu-btn" onClick={()=>setOpen(p=>!p)} aria-label="Menu">
+        {open ? '✕' : '···'}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="corner-menu-backdrop" onClick={()=>setOpen(false)}/>
+            <motion.div
+              className="corner-menu-dropdown"
+              initial={{opacity:0, scale:0.92, y:-8}}
+              animate={{opacity:1, scale:1, y:0}}
+              exit={{opacity:0, scale:0.92, y:-8}}
+              transition={{duration:0.15, ease:'easeOut'}}
+            >
+              <a href="/feed"  className="corner-menu-item" onClick={()=>setOpen(false)}>📱 <span>Feed</span></a>
+              <a href="/tv"    className="corner-menu-item" onClick={()=>setOpen(false)}>📺 <span>Modo TV</span></a>
+              <div className="corner-menu-divider"/>
+              <a href="/admin" className="corner-menu-item corner-menu-admin" onClick={()=>setOpen(false)}>⚙ <span>Admin</span></a>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 // ── Onboarding ────────────────────────────────────────────────────────────
 function Onboarding({ onDone }: { onDone:()=>void }) {
   const [hiding, setHiding] = useState(false)
@@ -229,7 +261,8 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
   const [askName,setAskName] = useState(!authorDefault.trim())
   const [authorError,setAuthorError] = useState('')
   const [mediaError,setMediaError] = useState('')
-  const [caption,setCaption] = useState('')
+  const [caption,setCaption]         = useState('')
+  const [suggestingCaption,setSuggestingCaption] = useState(false)
   const [step,setStep]       = useState<'source'|'loading'|'queue'>('source')
   const [queue,setQueue]     = useState<QItem[]>([])
   const [uploading,setUploading]= useState(false)
@@ -396,7 +429,29 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                   <span>Postando como <strong>{author}</strong></span>
                   <button className="btn-secondary" style={{padding:'6px 14px',fontSize:'.82rem'}} onClick={()=>setAskName(true)}>Editar nome</button>
                 </p>
-                <input className="name-input" placeholder="Legenda opcional" value={caption} onChange={e=>setCaption(e.target.value)} maxLength={180}/>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <input className="name-input" style={{flex:1,margin:0}} placeholder="Legenda opcional" value={caption} onChange={e=>setCaption(e.target.value)} maxLength={180}/>
+                  <button
+                    className="btn-secondary"
+                    style={{padding:'8px 12px',fontSize:'.82rem',whiteSpace:'nowrap',flexShrink:0}}
+                    disabled={suggestingCaption||queue.length===0||queue[0]?.type!=='image'}
+                    title={queue.length===0||queue[0]?.type!=='image'?'Selecione uma imagem primeiro':'Sugerir legenda com IA'}
+                    onClick={async()=>{
+                      const img=queue[0]
+                      if(!img||img.type!=='image')return
+                      setSuggestingCaption(true)
+                      try{
+                        const fd=new FormData()
+                        fd.append('image',img.file,img.name)
+                        const res=await fetch('/api/suggest-caption',{method:'POST',body:fd})
+                        const{caption:suggested}=await res.json()
+                        if(suggested)setCaption(suggested)
+                      }catch{}finally{setSuggestingCaption(false)}
+                    }}
+                  >
+                    {suggestingCaption?'⏳':'✨'}
+                  </button>
+                </div>
                 {!!mediaError&&<p style={{margin:'0 2px 10px',fontSize:'.82rem',color:'#c0392b',fontStyle:'italic'}}>{mediaError}</p>}
               </>
             )}
@@ -414,24 +469,32 @@ function UploadModal({ onClose, onSuccess, authorDefault }:{ onClose:()=>void; o
                 </button>
               ))}
             </div>
-            <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
-            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{display:'none'}} onChange={e=>handleImgFiles(e.target.files)}/>
-            <input ref={vidRef} type="file" accept="video/*" capture="environment" style={{display:'none'}} onChange={e=>{
-              if(!persistAuthor()){ return }
-              const f=e.target.files?.[0]
-              if(!f)return
-              validateShortVideo(f).then(check=>{
-                if(!check.ok){
-                  setMediaError(check.error ?? 'Vídeo inválido para envio.')
-                  setQueue([{file:f,name:f.name,preview:URL.createObjectURL(f),status:'error' as const,progress:0,type:'video' as const,error:check.error,retries:0,isOfflineError:false}])
-                }else{
-                  setMediaError('')
-                  setQueue([{file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}])
-                }
-                setStep('queue')
-              })
-            }}/>
-            <input ref={audioRef} type="file" accept="audio/*,.mp3,.webm,.ogg,.m4a,.wav,.aac" style={{display:'none'}} onChange={e=>handleAudioFiles(e.target.files)}/>
+            <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" style={{display:'none'}}
+              onClick={e=>{(e.target as HTMLInputElement).value=''}}
+              onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{display:'none'}}
+              onClick={e=>{(e.target as HTMLInputElement).value=''}}
+              onChange={e=>handleImgFiles(e.target.files)}/>
+            <input ref={vidRef} type="file" accept="video/*" capture="environment" style={{display:'none'}}
+              onClick={e=>{(e.target as HTMLInputElement).value=''}}
+              onChange={e=>{
+                if(!persistAuthor()){ return }
+                const f=e.target.files?.[0]
+                if(!f)return
+                validateShortVideo(f).then(check=>{
+                  if(!check.ok){
+                    setMediaError(check.error ?? 'Vídeo inválido para envio.')
+                    setQueue([{file:f,name:f.name,preview:URL.createObjectURL(f),status:'error' as const,progress:0,type:'video' as const,error:check.error,retries:0,isOfflineError:false}])
+                  }else{
+                    setMediaError('')
+                    setQueue([{file:f,name:f.name,preview:URL.createObjectURL(f),status:'waiting' as const,progress:0,type:'video' as const,retries:0,isOfflineError:false}])
+                  }
+                  setStep('queue')
+                })
+              }}/>
+            <input ref={audioRef} type="file" accept="audio/*,.mp3,.webm,.ogg,.m4a,.wav,.aac" style={{display:'none'}}
+              onClick={e=>{(e.target as HTMLInputElement).value=''}}
+              onChange={e=>handleAudioFiles(e.target.files)}/>
           </>
         )}
         {step==='loading'&&(
@@ -1074,6 +1137,7 @@ export default function Home() {
         <div key={i} className="balloon" style={{left:l,animationDuration:d,animationDelay:delay}}>🎈</div>
       ))}
 
+      <CornerMenu/>
       {showOnboard&&<Onboarding onDone={()=>{localStorage.setItem('cha_visited','1');setShowOnboard(false)}}/>}
       <GeoBanner geoStatus={geoStatus} unlockWithKey={unlockWithKey}/>
 
@@ -1101,6 +1165,11 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* Stories bar */}
+      {media.length > 0 && (
+        <Stories items={media as StoryMediaItem[]} />
+      )}
 
       <div className="leaves">🌿 🌸 🌿 🌸 🌿</div>
 
@@ -1233,7 +1302,14 @@ export default function Home() {
             </div>
             <div className="gallery-grid">
               {media.map((item,i)=>(
-                <div key={item.id} className="gallery-card" style={{animationDelay:`${(i%8)*0.055}s`}} onClick={()=>setLbIdx(i)}>
+                <motion.div
+                  key={item.id}
+                  className="gallery-card"
+                  initial={{opacity:0, scale:0.92, y:16}}
+                  animate={{opacity:1, scale:1, y:0}}
+                  transition={{duration:0.35, delay:Math.min(i,7)*0.05, ease:[0.25,0.46,0.45,0.94]}}
+                  onClick={()=>setLbIdx(i)}
+                >
                   <div style={{position:'relative',aspectRatio:'1',overflow:'hidden'}}>
                     <img src={item.thumbUrl} alt={item.author} loading="lazy"
                       style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
@@ -1253,7 +1329,7 @@ export default function Home() {
                     <a className="gallery-inline-btn" href="/feed">💬 Comentar</a>
                   </div>
                   <ReactionBar item={item} onReact={handleReact}/>
-                </div>
+                </motion.div>
               ))}
             </div>
             <div ref={sentinelRef} style={{height:40}}/>
