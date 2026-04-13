@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGeoAccess } from '@/components/GeoAccessProvider'
+import { emitToast, vibrateSoft } from '@/lib/ui-feedback'
 
 interface MediaItem {
   id: string
@@ -103,9 +104,10 @@ function ReelItem({
   const handleTap = () => {
     const now = Date.now()
     if (now - lastTap.current < 280) {
+      vibrateSoft([10, 20, 10])
       triggerLike('❤️')
       setShowHeart(true)
-      setTimeout(() => setShowHeart(false), 700)
+      setTimeout(() => setShowHeart(false), 820)
     }
     lastTap.current = now
   }
@@ -113,9 +115,11 @@ function ReelItem({
   const triggerLike = (emoji: string) => {
     if (getReacted(item.id).includes(emoji)) return
     markReacted(item.id, emoji)
+    vibrateSoft(18)
     setReactions(prev => ({ ...prev, [emoji]: (prev[emoji] ?? 0) + 1 }))
     if (emoji === '❤️') setLiked(true)
     onLike(item.id, emoji)
+    emitToast(`Voce reagiu com ${emoji}`)
   }
 
   const submitComment = async () => {
@@ -132,6 +136,8 @@ function ReelItem({
         const data = await res.json() as { comment?: CommentItem }
         if (data.comment) setComments(prev => [...prev, data.comment!])
         setCommentText('')
+        vibrateSoft(20)
+        emitToast('Comentario publicado')
       }
     } finally {
       setSubmitting(false)
@@ -497,10 +503,10 @@ function ReelItem({
       {/* ── Keyframes (scoped per item) ──────────────── */}
       <style>{`
         @keyframes reelHeart {
-          0%   { transform: scale(.3); opacity: 0; }
-          40%  { transform: scale(1.15); opacity: 1; }
-          75%  { transform: scale(1); opacity: .9; }
-          100% { transform: scale(1.25); opacity: 0; }
+          0%   { transform: scale(.28) translateY(8px); opacity: 0; filter: blur(1px); }
+          35%  { transform: scale(1.14) translateY(-2px); opacity: 1; filter: blur(0); }
+          70%  { transform: scale(1.06) translateY(-8px); opacity: .95; }
+          100% { transform: scale(1.25) translateY(-20px); opacity: 0; }
         }
         @keyframes reelSpin {
           from { transform: rotate(0deg); }

@@ -4,6 +4,7 @@ const STATIC    = ['/', '/manifest.json']
 const SYNC_TAG  = 'upload-sync'
 const IDB_DB    = 'cha-pending'
 const IDB_STORE = 'uploads'
+const FEED_SNAPSHOT_KEY = '/__offline/feed-last20'
 
 // ── Install ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
@@ -29,6 +30,10 @@ self.addEventListener('activate', e => {
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return
+  if (e.request.url.includes('/api/photos')) {
+    e.respondWith(handleFeedRequest(e.request))
+    return
+  }
   if (e.request.url.includes('/api/')) return
 
   // Google Fonts + R2 media — cache-first
@@ -64,6 +69,50 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(e.request))
   )
 })
+
+async function handleFeedRequest(request) {
+  const cache = await caches.open(CACHE)
+  const snapshotRequest = new Request(FEED_SNAPSHOT_KEY)
+  const url = new URL(request.url)
+  const isFirstPage = !url.searchParams.has('cursor')
+
+  try {
+    const net = await fetch(request)
+    if (net.ok && isFirstPage) {
+      try {
+        const payload = await net.clone().json()
+        const trimmedMedia = Array.isArray(payload?.media) ? payload.media.slice(0, 20) : []
+        const snapshotBody = JSON.stringify({
+          ...payload,
+          media: trimmedMedia,
+          nextCursor: null,
+          offlineSnapshot: true,
+          cachedAt: Date.now(),
+        })
+        await cache.put(snapshotRequest, new Response(snapshotBody, {
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+          },
+        }))
+      } catch {
+        // If JSON parsing fails, keep network response untouched.
+      }
+    }
+    return net
+  } catch {
+    const snapshot = await cache.match(snapshotRequest)
+    if (snapshot) return snapshot
+
+    return new Response(JSON.stringify({ media: [], offline: true }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      },
+    })
+  }
+}
 
 // ── Background Sync ───────────────────────────────────────────────────────────
 self.addEventListener('sync', e => {
