@@ -43,6 +43,11 @@ export function isD1AuthError(err: unknown): boolean {
   return msg.includes('D1 HTTP 401') || msg.includes('"code":10000') || /authentication error/i.test(msg)
 }
 
+function isMissingStoriesSeenTableError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /no such table:\s*stories_seen/i.test(msg)
+}
+
 function isMissingCaptionColumnError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return /no such column:\s*(m\.)?caption/i.test(msg) || /has no column named\s+caption/i.test(msg)
@@ -453,20 +458,30 @@ export async function dbGetCommentCount(mediaId: string): Promise<number> {
 // ── Stories Seen ──────────────────────────────────────────────────────────────
 
 export async function dbGetSeenStoryIds(userId: string): Promise<string[]> {
-  const rows = await d1Query<{ media_id: string }>(
-    `SELECT media_id FROM stories_seen WHERE user_id = ? ORDER BY seen_at DESC`,
-    [userId],
-  )
-  return rows.map(r => r.media_id)
+  try {
+    const rows = await d1Query<{ media_id: string }>(
+      `SELECT media_id FROM stories_seen WHERE user_id = ? ORDER BY seen_at DESC`,
+      [userId],
+    )
+    return rows.map(r => r.media_id)
+  } catch (err) {
+    if (isMissingStoriesSeenTableError(err)) return []
+    throw err
+  }
 }
 
 export async function dbMarkStorySeen(userId: string, mediaId: string): Promise<void> {
-  await d1Exec(
-    `INSERT INTO stories_seen (user_id, media_id, seen_at)
-       VALUES (?, ?, datetime('now'))
-       ON CONFLICT(user_id, media_id) DO UPDATE SET seen_at = excluded.seen_at`,
-    [userId, mediaId],
-  )
+  try {
+    await d1Exec(
+      `INSERT INTO stories_seen (user_id, media_id, seen_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(user_id, media_id) DO UPDATE SET seen_at = excluded.seen_at`,
+      [userId, mediaId],
+    )
+  } catch (err) {
+    if (isMissingStoriesSeenTableError(err)) return
+    throw err
+  }
 }
 
 // ── Access Keys ───────────────────────────────────────────────────────────────

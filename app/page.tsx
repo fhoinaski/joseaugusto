@@ -594,7 +594,7 @@ export default function Home() {
           <p className="section-label">✦ Uma mensagem de amor ✦</p>
           <div className="parents-card">
             <p className="parents-quote">{parentsMsg}</p>
-            <p className="parents-sig">— papai e mamãe</p>
+            <p className="parents-sig">— papai e mamãe e maninha</p>
           </div>
         </div>
       )}
@@ -710,7 +710,7 @@ export default function Home() {
         <span className="footer-bear">🧸</span>
         <p className="footer-text">Bem-vindo ao mundo, José Augusto</p>
         <div style={{width:80,height:1.5,background:'linear-gradient(to right,transparent,var(--accent),transparent)',margin:'16px auto'}}/>
-        <p className="footer-sub">com muito amor · papai e mamãe</p>
+        <p className="footer-sub">com muito amor · papai e mamãe e maninha</p>
       </footer>
 
       {lbIdx!==null&&(

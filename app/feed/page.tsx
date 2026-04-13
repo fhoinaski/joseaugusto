@@ -41,6 +41,7 @@ export default function FeedPage() {
   const [manualKey, setManualKey] = useState('')
   const [keyError, setKeyError] = useState('')
   const [headerHeight, setHeaderHeight] = useState(132)
+  const [isDesktop, setIsDesktop] = useState(false)
   const headerRef = useRef<HTMLElement | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
@@ -69,6 +70,14 @@ export default function FeedPage() {
       window.removeEventListener('resize', sync)
       window.removeEventListener('orientationchange', sync)
     }
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const sync = () => setIsDesktop(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
   }, [])
 
   const fetchMedia = useCallback(async (cursor?: string) => {
@@ -233,7 +242,9 @@ export default function FeedPage() {
 
       {(() => {
         const feedTopPadding = headerHeight + 14
-        const feedViewportHeight = `calc(100dvh - ${feedTopPadding}px - ${bottomNavInset})`
+        const feedViewportHeight = isDesktop
+          ? 'min(74dvh, 760px)'
+          : `calc(100dvh - ${feedTopPadding}px - ${bottomNavInset})`
 
         return (
           <main
@@ -242,7 +253,7 @@ export default function FeedPage() {
             style={{
               height: '100dvh',
               overflowY: 'auto',
-              scrollSnapType: 'y mandatory',
+              scrollSnapType: isDesktop ? 'none' : 'y mandatory',
               scrollPaddingTop: feedTopPadding,
               WebkitOverflowScrolling: 'touch',
               paddingTop: feedTopPadding,

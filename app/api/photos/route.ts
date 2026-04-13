@@ -4,7 +4,6 @@ import { dbGetTopAuthors } from '@/lib/db'
 import { dbGetConfig } from '@/lib/db'
 import { isD1AuthError } from '@/lib/db'
 import { objectUrl } from '@/lib/r2'
-import { imageVariantKey, imageThumb400Key } from '@/lib/r2'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,26 +14,12 @@ export async function GET(req: NextRequest) {
     const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, rawLimit)) : 50
     const { items, nextCursor } = await dbGetMediaPage('approved', limit, cursor)
 
-    const media = items.map(row => {
-      if (row.type !== 'image') {
-        return {
-          ...row,
-          thumbUrl: objectUrl(row.id),
-          fullUrl: objectUrl(row.id),
-        }
-      }
-
-      const src320 = objectUrl(imageVariantKey(row.id, 320))
-      const src640 = objectUrl(imageVariantKey(row.id, 640))
-      const src1080 = objectUrl(imageVariantKey(row.id, 1080))
-
-      return {
-        ...row,
-        thumbUrl: objectUrl(imageThumb400Key(row.id)),
-        fullUrl: objectUrl(row.id),
-        imageSources: { w320: src320, w640: src640, w1080: src1080 },
-      }
-    })
+    const media = items.map(row => ({
+      ...row,
+      // Keep base URL as default to avoid 404 on legacy uploads without generated variants.
+      thumbUrl: objectUrl(row.id),
+      fullUrl: objectUrl(row.id),
+    }))
 
     if (cursor) {
       return NextResponse.json({ media, nextCursor })

@@ -169,6 +169,10 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
     setOpen(true)
   }
 
+  const togglePause = () => {
+    setPaused(prev => !prev)
+  }
+
   // ── Touch handlers for swipe navigation ─────────────────────────────────
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX
@@ -505,6 +509,15 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
                     border: 0, background: 'transparent', cursor: 'pointer',
                   }}
                   aria-label="Story anterior"
+                />
+                <button
+                  onClick={togglePause}
+                  style={{
+                    position: 'absolute', left: '30%', top: 0,
+                    width: '40%', height: '100%',
+                    border: 0, background: 'transparent', cursor: 'pointer',
+                  }}
+                  aria-label={paused ? 'Retomar story' : 'Pausar story'}
                 />
                 <button
                   onClick={nextStory}
