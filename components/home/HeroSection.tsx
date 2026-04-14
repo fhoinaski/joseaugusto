@@ -7,16 +7,12 @@ interface HeroPreviewItem {
 
 function ShareEventBtn() {
   const share = () => {
-    const data = {
+    if (typeof navigator === 'undefined' || !('share' in navigator)) return
+    navigator.share({
       title: 'Chá do José Augusto 🧸',
       text: 'Venha ver o álbum do nosso chá de bebê!',
       url: window.location.href,
-    }
-    if (typeof navigator !== 'undefined' && 'share' in navigator) {
-      navigator.share(data).catch(() => {})
-    } else {
-      try { navigator.clipboard.writeText(window.location.href) } catch {}
-    }
+    }).catch(() => {})
   }
   return (
     <button className="btn-secondary" onClick={share} style={{ fontSize: '.9rem' }}>
