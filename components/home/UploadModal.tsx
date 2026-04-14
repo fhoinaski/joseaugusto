@@ -432,59 +432,87 @@ export default function UploadModal({
                 {!!mediaError && <p style={{ margin: '0 2px 10px', fontSize: '.82rem', color: '#c0392b', fontStyle: 'italic' }}>{mediaError}</p>}
               </>
             )}
-            {/* ── Primary actions: Camera + Gallery ── */}
+            {/* ── Primary actions: Camera + Gallery ──
+                IMPORTANT: uses <label htmlFor> instead of button+.click()
+                so the browser treats it as a native gesture — required for
+                Android WebView, Samsung Internet, iOS Safari PWA mode, etc.
+                Programmatic input.click() is silently blocked on many mobile
+                browsers when the input is display:none.                    */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-              <button
+              <label
+                htmlFor="cha-input-cam"
                 className="upload-primary-btn"
-                onClick={() => camRef.current?.click()}
-                disabled={askName}
+                style={{ cursor: askName ? 'not-allowed' : 'pointer', opacity: askName ? .55 : 1, userSelect: 'none', pointerEvents: askName ? 'none' : undefined }}
               >
                 <span style={{ fontSize: 28 }}>📷</span>
                 <div style={{ textAlign: 'left' }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Tirar foto agora</p>
                   <p style={{ margin: 0, fontSize: '.8rem', opacity: .7 }}>Abre a câmera do celular</p>
                 </div>
-              </button>
-              <button
+              </label>
+              <label
+                htmlFor="cha-input-gallery"
                 className="upload-primary-btn upload-primary-btn--secondary"
-                onClick={() => fileRef.current?.click()}
-                disabled={askName}
+                style={{ cursor: askName ? 'not-allowed' : 'pointer', opacity: askName ? .55 : 1, userSelect: 'none', pointerEvents: askName ? 'none' : undefined }}
               >
                 <span style={{ fontSize: 28 }}>🖼️</span>
                 <div style={{ textAlign: 'left' }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Escolher da galeria</p>
                   <p style={{ margin: 0, fontSize: '.8rem', opacity: .7 }}>Foto ou imagem salva</p>
                 </div>
-              </button>
+              </label>
             </div>
 
             {/* ── Secondary actions: Video + Audio ── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {[
-                { icon: '🎥', label: 'Vídeo', sub: 'Gravar ou enviar', action: () => vidRef.current?.click() },
-                { icon: '🎙️', label: 'Áudio', sub: 'Mensagem de voz', action: () => audioRef.current?.click() },
-              ].map(({ icon, label, sub, action }) => (
-                <button key={label} className="source-btn" onClick={action} disabled={askName}
-                  style={askName ? { opacity: .55, cursor: 'not-allowed' } : undefined}>
+              {([
+                { icon: '🎥', label: 'Vídeo', sub: 'Gravar ou enviar', id: 'cha-input-video' },
+                { icon: '🎙️', label: 'Áudio', sub: 'Mensagem de voz', id: 'cha-input-audio' },
+              ] as const).map(({ icon, label, sub, id }) => (
+                <label
+                  key={label}
+                  htmlFor={id}
+                  className="source-btn"
+                  style={{ cursor: askName ? 'not-allowed' : 'pointer', opacity: askName ? .55 : 1, userSelect: 'none', pointerEvents: askName ? 'none' : undefined }}
+                >
                   <span className="source-btn-icon">{icon}</span>
                   <span className="source-btn-label">{label}</span>
                   <span className="source-btn-sub">{sub}</span>
-                </button>
+                </label>
               ))}
             </div>
-            <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" multiple style={{ display: 'none' }} onClick={e => { (e.target as HTMLInputElement).value = '' }} onChange={e => handleImgFiles(e.target.files)}/>
-            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple style={{ display: 'none' }} onClick={e => { (e.target as HTMLInputElement).value = '' }} onChange={e => handleImgFiles(e.target.files)}/>
+
+            {/* Hidden file inputs — positioned off-screen (not display:none) so
+                label-click works on every browser, including restrictive WebViews */}
             <input
+              id="cha-input-cam"
+              ref={camRef}
+              type="file"
+              accept="image/*,.heic,.heif"
+              capture="environment"
+              style={{ position: 'absolute', opacity: 0, width: 1, height: 1, overflow: 'hidden', pointerEvents: 'none' }}
+              onChange={e => { handleImgFiles(e.target.files); e.target.value = '' }}
+            />
+            <input
+              id="cha-input-gallery"
+              ref={fileRef}
+              type="file"
+              accept="image/*,.heic,.heif"
+              multiple
+              style={{ position: 'absolute', opacity: 0, width: 1, height: 1, overflow: 'hidden', pointerEvents: 'none' }}
+              onChange={e => { handleImgFiles(e.target.files); e.target.value = '' }}
+            />
+            <input
+              id="cha-input-video"
               ref={vidRef}
               type="file"
-              accept="video/*"
-              capture="environment"
-              style={{ display: 'none' }}
-              onClick={e => { (e.target as HTMLInputElement).value = '' }}
+              accept="video/*,video/mp4,video/quicktime,video/webm"
+              style={{ position: 'absolute', opacity: 0, width: 1, height: 1, overflow: 'hidden', pointerEvents: 'none' }}
               onChange={e => {
-                if (!persistAuthor()) return
                 const f = e.target.files?.[0]
+                e.target.value = ''
                 if (!f) return
+                if (!persistAuthor()) return
                 validateShortVideo(f).then(check => {
                   if (!check.ok) {
                     setMediaError(check.error ?? 'Video invalido para envio.')
@@ -497,7 +525,14 @@ export default function UploadModal({
                 })
               }}
             />
-            <input ref={audioRef} type="file" accept="audio/*,.mp3,.webm,.ogg,.m4a,.wav,.aac" style={{ display: 'none' }} onClick={e => { (e.target as HTMLInputElement).value = '' }} onChange={e => handleAudioFiles(e.target.files)}/>
+            <input
+              id="cha-input-audio"
+              ref={audioRef}
+              type="file"
+              accept="audio/*,.mp3,.webm,.ogg,.m4a,.wav,.aac"
+              style={{ position: 'absolute', opacity: 0, width: 1, height: 1, overflow: 'hidden', pointerEvents: 'none' }}
+              onChange={e => { handleAudioFiles(e.target.files); e.target.value = '' }}
+            />
           </>
         )}
         {step === 'loading' && (
