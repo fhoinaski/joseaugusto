@@ -38,6 +38,15 @@ export default function CountdownBanner() {
       .catch(() => {})
   }, [])
 
+  // Fire confetti once when baby arrival is shown
+  useEffect(() => {
+    if (!settings?.babyBorn) return
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event('cha:confetti'))
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [settings?.babyBorn])
+
   useEffect(() => {
     if (!settings || settings.babyBorn || !settings.babyDueDate) return
 

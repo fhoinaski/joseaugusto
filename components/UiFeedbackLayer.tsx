@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 
-const NotificationBell = dynamic(() => import('@/components/NotificationBell'), { ssr: false })
-const PWAInstallPrompt = dynamic(() => import('@/components/PWAInstallPrompt'), { ssr: false })
-const ReactionStorm    = dynamic(() => import('@/components/ReactionStorm'),    { ssr: false })
+const NotificationBell    = dynamic(() => import('@/components/NotificationBell'),    { ssr: false })
+const PWAInstallPrompt    = dynamic(() => import('@/components/PWAInstallPrompt'),    { ssr: false })
+const ReactionStorm       = dynamic(() => import('@/components/ReactionStorm'),       { ssr: false })
+const ConfettiCelebration = dynamic(() => import('@/components/ConfettiCelebration'), { ssr: false })
 
 type ToastItem = {
   id: string
@@ -135,6 +136,7 @@ export default function UiFeedbackLayer() {
 
       <PWAInstallPrompt />
       <ReactionStorm />
+      <ConfettiCelebration />
 
       <div className="toast-container">
         {toasts.map(t => (

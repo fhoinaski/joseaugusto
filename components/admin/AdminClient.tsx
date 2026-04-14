@@ -36,7 +36,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -70,6 +70,12 @@ function AdminPanel() {
   const [savingStore, setSavingStore] = useState(false)
   const [pushMsg, setPushMsg] = useState({ title: '', body: '' })
   const [sendingPush, setSendingPush] = useState(false)
+  const [babyBorn, setBabyBorn] = useState(false)
+  const [babyDueDate, setBabyDueDate] = useState('')
+  const [babyWeightKg, setBabyWeightKg] = useState('')
+  const [babyHora, setBabyHora] = useState('')
+  const [babyCabelo, setBabyCabelo] = useState('')
+  const [savingBaby, setSavingBaby] = useState(false)
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
@@ -111,6 +117,15 @@ function AdminPanel() {
       .then(r => r.json()).then(d => {
         setGeoGateEnabled(d.geoGateEnabled ?? false)
         setAccessKeys(d.keys ?? [])
+      })
+    // Load baby status from public settings endpoint
+    fetch('/api/settings')
+      .then(r => r.json()).then((d: { babyBorn?: boolean; babyDueDate?: string | null; babyBornWeight?: number | null; babyBornHora?: string | null; babyBornCabelo?: string | null }) => {
+        setBabyBorn(d.babyBorn ?? false)
+        setBabyDueDate(d.babyDueDate ?? '')
+        setBabyWeightKg(d.babyBornWeight ? (d.babyBornWeight / 1000).toFixed(2) : '')
+        setBabyHora(d.babyBornHora ?? '')
+        setBabyCabelo(d.babyBornCabelo ?? '')
       })
   }, [fetchPending, fetchApproved])
 
@@ -271,6 +286,28 @@ function AdminPanel() {
     }
   }
 
+  const saveBabyStatus = async () => {
+    setSavingBaby(true)
+    try {
+      const weightG = babyWeightKg ? Math.round(parseFloat(babyWeightKg.replace(',', '.')) * 1000) : null
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'baby_status',
+          babyBorn,
+          babyDueDate: babyDueDate.trim(),
+          babyBornWeightG: weightG,
+          babyBornHora: babyHora.trim(),
+          babyBornCabelo: babyCabelo.trim(),
+        }),
+      })
+      showToast(babyBorn ? '🍼 Status do bebê atualizado!' : '📅 Data prevista salva!')
+    } finally {
+      setSavingBaby(false)
+    }
+  }
+
   const logout = async () => { await fetch('/api/admin/logout', { method: 'POST' }); window.location.reload() }
   const exportMediaZip = () => { window.location.href = '/api/admin/export/media' }
   const exportTexts = () => { window.location.href = '/api/admin/export/texts' }
@@ -375,6 +412,7 @@ function AdminPanel() {
           { key: 'message', label: 'Mensagem', count: 0 },
           { key: 'capsule', label: '💌 Cápsula', count: 0 },
           { key: 'store', label: '🎁 Loja', count: 0 },
+          { key: 'baby', label: '👶 Bebê', count: 0 },
           { key: 'settings', label: '⚙ Configurações', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
@@ -525,6 +563,97 @@ function AdminPanel() {
                 )
             }
           </div>
+        </div>
+      )}
+
+      {tab === 'baby' && (
+        <div style={S.card}>
+          <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 20, fontWeight: 600 }}>
+            👶 Status do Bebê
+          </p>
+
+          {/* Baby arrived toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, padding: '16px 18px', background: babyBorn ? 'rgba(40,120,40,.08)' : 'rgba(0,0,0,.03)', border: `1px solid ${babyBorn ? 'rgba(40,120,40,.25)' : 'var(--beige)'}`, borderRadius: 14 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 600, color: 'var(--bd)', marginBottom: 2 }}>José Augusto chegou?</p>
+              <p style={{ fontSize: '.82rem', color: 'var(--bl)', fontStyle: 'italic' }}>Ativa o anúncio de chegada em todo o app</p>
+            </div>
+            <button
+              onClick={() => setBabyBorn(v => !v)}
+              style={{ padding: '8px 20px', borderRadius: 50, border: 'none', background: babyBorn ? '#3a7d3a' : 'var(--beige)', color: babyBorn ? '#fff' : 'var(--bd)', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', cursor: 'pointer', fontWeight: 600 }}
+            >
+              {babyBorn ? '✓ Sim!' : 'Não ainda'}
+            </button>
+          </div>
+
+          {/* Due date */}
+          <label style={{ display: 'block', marginBottom: 16 }}>
+            <span style={{ fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase' as const, color: 'var(--bl)', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              📅 Data prevista do nascimento
+            </span>
+            <input
+              type="date"
+              value={babyDueDate}
+              onChange={e => setBabyDueDate(e.target.value)}
+              style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', width: '100%' }}
+            />
+            <p style={{ fontSize: '.76rem', color: 'var(--bl)', marginTop: 4, fontStyle: 'italic' }}>Exibe o countdown regressivo na home e palpites</p>
+          </label>
+
+          {/* Weight */}
+          <label style={{ display: 'block', marginBottom: 16 }}>
+            <span style={{ fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase' as const, color: 'var(--bl)', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              ⚖️ Peso ao nascer (kg)
+            </span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={babyWeightKg}
+              onChange={e => setBabyWeightKg(e.target.value)}
+              placeholder="ex: 3.45"
+              style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', width: '100%' }}
+            />
+          </label>
+
+          {/* Hora */}
+          <label style={{ display: 'block', marginBottom: 16 }}>
+            <span style={{ fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase' as const, color: 'var(--bl)', fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              🕐 Hora do nascimento
+            </span>
+            <input
+              type="time"
+              value={babyHora}
+              onChange={e => setBabyHora(e.target.value)}
+              style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', width: '100%' }}
+            />
+          </label>
+
+          {/* Cabelo */}
+          <div style={{ marginBottom: 22 }}>
+            <span style={{ fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase' as const, color: 'var(--bl)', fontWeight: 600, display: 'block', marginBottom: 8 }}>
+              Cabelo ao nascer
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['Sim', 'Pouco', 'Não'] as const).map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setBabyCabelo(prev => prev === opt ? '' : opt)}
+                  style={{ flex: 1, padding: '10px 8px', borderRadius: 12, border: babyCabelo === opt ? '2px solid var(--b)' : '1px solid var(--sand)', background: babyCabelo === opt ? 'var(--beige)' : 'transparent', color: 'var(--bd)', cursor: 'pointer', fontFamily: "'Cormorant Garamond',serif", fontSize: '.9rem', fontWeight: babyCabelo === opt ? 700 : 400 }}
+                >
+                  {opt === 'Sim' ? '👶' : opt === 'Pouco' ? '🍃' : '🥚'} {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={saveBabyStatus}
+            disabled={savingBaby}
+            style={{ width: '100%', padding: '13px 20px', background: savingBaby ? 'var(--beige)' : 'linear-gradient(135deg,var(--bd),var(--b))', color: savingBaby ? 'var(--bl)' : '#fff', border: 'none', borderRadius: 12, cursor: savingBaby ? 'not-allowed' : 'pointer', fontFamily: "'Playfair Display',serif", fontSize: '1rem', fontWeight: 600 }}
+          >
+            {savingBaby ? 'Salvando…' : '💾 Salvar status do bebê'}
+          </button>
         </div>
       )}
 

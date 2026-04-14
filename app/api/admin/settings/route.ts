@@ -38,5 +38,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  if (body.action === 'baby_status') {
+    const { babyBorn, babyDueDate, babyBornWeightG, babyBornHora, babyBornCabelo } = body
+    if (typeof babyBorn === 'boolean') {
+      await dbSetConfig('baby_born', babyBorn ? '1' : '0')
+    }
+    if (typeof babyDueDate === 'string') {
+      await dbSetConfig('baby_due_date', babyDueDate.trim())
+    }
+    if (babyBornWeightG !== undefined) {
+      await dbSetConfig('baby_born_weight_g', babyBornWeightG ? String(Math.round(Number(babyBornWeightG))) : '')
+    }
+    if (typeof babyBornHora === 'string') {
+      await dbSetConfig('baby_born_hora', babyBornHora.trim())
+    }
+    if (typeof babyBornCabelo === 'string') {
+      await dbSetConfig('baby_born_cabelo', babyBornCabelo.trim())
+    }
+    return NextResponse.json({ ok: true })
+  }
+
   return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
 }

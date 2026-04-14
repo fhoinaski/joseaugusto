@@ -34,6 +34,13 @@ const FILTERS = [
   { id: 'vivo',    label: 'Vivo',     css: 'saturate(1.6) contrast(1.08)' },
 ]
 
+const FRAMES = [
+  { id: 'none',    label: 'Sem moldura' },
+  { id: 'polaroid', label: 'Polaroid' },
+  { id: 'gold',    label: 'Dourada' },
+  { id: 'cha',     label: 'Chá JA' },
+]
+
 async function saveToLS(item: QItem) {
   if (item.file.size > MAX_LS_SIZE) return
   try {
@@ -91,9 +98,10 @@ export default function UploadModal({
   const [mediaError, setMediaError] = useState('')
   const [caption, setCaption] = useState('')
   const [suggestingCaption, setSuggestingCaption] = useState(false)
-  const [step, setStep] = useState<'source' | 'loading' | 'filter' | 'queue'>('source')
+  const [step, setStep] = useState<'source' | 'loading' | 'filter' | 'frames' | 'queue'>('source')
   const [queue, setQueue] = useState<QItem[]>([])
   const [selectedFilter, setSelectedFilter] = useState<string>('none')
+  const [selectedFrame, setSelectedFrame] = useState('none')
   const [uploading, setUploading] = useState(false)
   const [compPct, setCompPct] = useState(0)
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -196,6 +204,7 @@ export default function UploadModal({
       setRawPreview('')
       setQueue(processed)
       setSelectedFilter('none')
+      setSelectedFrame('none')
       setTimeout(() => setStep('filter'), 120)
     } catch {
       clearInterval(pct)
@@ -312,6 +321,67 @@ export default function UploadModal({
     if (lastThumb) onSuccess(safeAuthor, lastThumb)
   }
   uploadAllRef.current = uploadAll
+
+  const applyFrameToCanvas = (sourceCanvas: HTMLCanvasElement, frameId: string): HTMLCanvasElement => {
+    if (frameId === 'none') return sourceCanvas
+
+    const out = document.createElement('canvas')
+    const ctx = out.getContext('2d')!
+
+    if (frameId === 'polaroid') {
+      // Polaroid: white border, more bottom space, subtle shadow
+      const pad = Math.floor(sourceCanvas.width * 0.06)
+      const bottomPad = Math.floor(sourceCanvas.width * 0.18)
+      out.width  = sourceCanvas.width + pad * 2
+      out.height = sourceCanvas.height + pad + bottomPad
+      ctx.fillStyle = '#faf6ef'
+      ctx.fillRect(0, 0, out.width, out.height)
+      ctx.drawImage(sourceCanvas, pad, pad)
+      // Dancing Script-style text placeholder
+      ctx.font = `${Math.floor(out.width * 0.055)}px serif`
+      ctx.fillStyle = '#8a6040'
+      ctx.textAlign = 'center'
+      ctx.fillText('José Augusto 🧸', out.width / 2, out.height - Math.floor(bottomPad * 0.28))
+    } else if (frameId === 'gold') {
+      // Gold gradient border
+      out.width  = sourceCanvas.width
+      out.height = sourceCanvas.height
+      ctx.drawImage(sourceCanvas, 0, 0)
+      const bw = Math.floor(sourceCanvas.width * 0.025)
+      const grad = ctx.createLinearGradient(0, 0, out.width, out.height)
+      grad.addColorStop(0, 'rgba(212,160,86,.9)')
+      grad.addColorStop(0.5, 'rgba(245,218,182,.7)')
+      grad.addColorStop(1, 'rgba(162,110,36,.9)')
+      ctx.strokeStyle = grad
+      ctx.lineWidth = bw * 2
+      ctx.strokeRect(bw, bw, out.width - bw * 2, out.height - bw * 2)
+      // Inner thin border
+      ctx.strokeStyle = 'rgba(245,218,182,.4)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(bw * 2.5, bw * 2.5, out.width - bw * 5, out.height - bw * 5)
+    } else if (frameId === 'cha') {
+      // Chá JA branded: dark overlay at bottom with event info
+      out.width  = sourceCanvas.width
+      out.height = sourceCanvas.height
+      ctx.drawImage(sourceCanvas, 0, 0)
+      const barH = Math.floor(out.height * 0.15)
+      const grd = ctx.createLinearGradient(0, out.height - barH, 0, out.height)
+      grd.addColorStop(0, 'rgba(15,6,0,0)')
+      grd.addColorStop(1, 'rgba(15,6,0,0.85)')
+      ctx.fillStyle = grd
+      ctx.fillRect(0, out.height - barH, out.width, barH)
+      const fontSize = Math.floor(out.width * 0.045)
+      ctx.font = `${fontSize}px serif`
+      ctx.fillStyle = '#f5dab6'
+      ctx.textAlign = 'center'
+      ctx.fillText('Chá · José Augusto', out.width / 2, out.height - Math.floor(barH * 0.3))
+      ctx.font = `${Math.floor(fontSize * 0.75)}px serif`
+      ctx.fillStyle = 'rgba(245,218,182,.6)'
+      ctx.fillText('25 de Abril · 2025', out.width / 2, out.height - Math.floor(fontSize * 0.7))
+    }
+
+    return out
+  }
 
   return (
     <div className="modal-overlay" onClick={step === 'source' ? onClose : undefined}>
@@ -505,15 +575,132 @@ export default function UploadModal({
                 }))
                 setQueue(newQueue)
               }
-              setStep('queue')
+              setStep('frames')
             }}>
               Continuar →
             </button>
-            <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setStep('queue')}>
+            <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setStep('frames')}>
               Pular
             </button>
           </>
         )}
+        {step === 'frames' && queue.length > 0 && (() => {
+          const currentItem = queue[0]
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f0d0b' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+                <button onClick={() => setStep('filter')} style={{ background: 'none', border: 'none', color: '#f5dab6', fontSize: '1rem', cursor: 'pointer', padding: '4px 8px' }}>‹ Filtros</button>
+                <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1rem', color: '#f5dab6', fontWeight: 600 }}>Moldura</p>
+                <div style={{ width: 70 }} />
+              </div>
+
+              {/* Preview */}
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflow: 'hidden' }}>
+                <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '55vh' }}>
+                  <img
+                    src={currentItem.preview}
+                    alt="preview"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '55vh',
+                      objectFit: 'contain',
+                      display: 'block',
+                      borderRadius: selectedFrame === 'polaroid' ? 4 : 8,
+                      background: selectedFrame === 'polaroid' ? '#faf6ef' : 'transparent',
+                      padding: selectedFrame === 'polaroid' ? '8px 8px 28px' : 0,
+                      boxShadow: selectedFrame === 'polaroid' ? '0 8px 28px rgba(0,0,0,.5)' : selectedFrame !== 'none' ? '0 4px 20px rgba(212,160,86,.3)' : 'none',
+                      outline: selectedFrame === 'gold' ? '3px solid #d4a056' : selectedFrame === 'cha' ? '2px solid rgba(245,218,182,.3)' : 'none',
+                    }}
+                  />
+                  {selectedFrame === 'polaroid' && (
+                    <p style={{ position: 'absolute', bottom: 6, left: 0, right: 0, textAlign: 'center', fontFamily: 'serif', fontSize: '.7rem', color: '#8a6040' }}>
+                      José Augusto 🧸
+                    </p>
+                  )}
+                  {selectedFrame === 'cha' && (
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(15,6,0,.85))', borderRadius: '0 0 8px 8px', padding: '20px 12px 10px', textAlign: 'center' }}>
+                      <p style={{ color: '#f5dab6', fontFamily: 'serif', fontSize: '.75rem', marginBottom: 2 }}>Chá · José Augusto</p>
+                      <p style={{ color: 'rgba(245,218,182,.6)', fontFamily: 'serif', fontSize: '.65rem' }}>25 de Abril · 2025</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Frame thumbnails */}
+              <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none' }}>
+                {FRAMES.map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setSelectedFrame(f.id)}
+                    style={{
+                      flexShrink: 0,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    }}
+                  >
+                    <div style={{
+                      width: 64, height: 64,
+                      borderRadius: 10,
+                      border: selectedFrame === f.id ? '2.5px solid #d59056' : '2px solid rgba(255,255,255,.15)',
+                      background: f.id === 'polaroid' ? '#faf6ef' : f.id === 'gold' ? 'linear-gradient(135deg,#3a2800,#7a5800)' : f.id === 'cha' ? '#0f0d0b' : 'rgba(255,255,255,.06)',
+                      display: 'grid', placeItems: 'center',
+                      fontSize: f.id === 'none' ? '1.5rem' : '1.2rem',
+                      overflow: 'hidden',
+                      position: 'relative',
+                    }}>
+                      {f.id === 'none' && '🚫'}
+                      {f.id === 'polaroid' && <span style={{ fontSize: '.65rem', color: '#8a6040', fontFamily: 'serif', padding: 4, textAlign: 'center' }}>📸<br/>Polaroid</span>}
+                      {f.id === 'gold' && <span style={{ fontSize: '.65rem', color: '#d59056', fontFamily: 'serif' }}>✦ Gold ✦</span>}
+                      {f.id === 'cha' && <span style={{ fontSize: '.6rem', color: '#f5dab6', fontFamily: 'serif', textAlign: 'center', padding: 4 }}>Chá<br/>JA</span>}
+                    </div>
+                    <span style={{ fontSize: '.68rem', color: selectedFrame === f.id ? '#d59056' : 'rgba(255,255,255,.5)', fontFamily: "'Cormorant Garamond',serif" }}>
+                      {f.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Continuar */}
+              <div style={{ padding: '12px 16px 20px' }}>
+                <button
+                  onClick={async () => {
+                    // Apply frame via canvas to all queue items
+                    if (selectedFrame !== 'none') {
+                      const newQueue = await Promise.all(queue.map(async (qi) => {
+                        if (qi.type !== 'image') return qi
+                        try {
+                          const img = new Image()
+                          img.src = qi.preview
+                          await new Promise((res, rej) => { img.onload = res; img.onerror = rej })
+                          const canvas = document.createElement('canvas')
+                          canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+                          const ctx = canvas.getContext('2d')!
+                          ctx.drawImage(img, 0, 0)
+                          const framedCanvas = applyFrameToCanvas(canvas, selectedFrame)
+                          const blob = await new Promise<Blob>((res, rej) => framedCanvas.toBlob(b => b ? res(b) : rej(), 'image/webp', 0.88))
+                          const preview = URL.createObjectURL(blob)
+                          return { ...qi, file: blob, preview }
+                        } catch { return qi }
+                      }))
+                      setQueue(newQueue)
+                    }
+                    setStep('queue')
+                  }}
+                  style={{
+                    width: '100%', padding: '14px 20px',
+                    background: 'linear-gradient(135deg,#c9920a,#7a5c00)',
+                    color: '#f5dab6', border: 'none', borderRadius: 14,
+                    cursor: 'pointer', fontFamily: "'Playfair Display',serif",
+                    fontSize: '1rem', fontWeight: 600, letterSpacing: '.03em',
+                  }}
+                >
+                  Continuar →
+                </button>
+              </div>
+            </div>
+          )
+        })()}
         {step === 'queue' && (
           <>
             <p className="modal-label">✦ {allDone ? 'Concluido' : 'Enviando'} ✦</p>
