@@ -55,20 +55,19 @@ function IconPlus() {
   )
 }
 
-function IconMural({ active }: { active: boolean }) {
+function IconRanking({ active }: { active: boolean }) {
   return (
     <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      {/* Polaroid frame */}
-      <rect x="3" y="3" width="18" height="18" rx="2" fill={active ? 'currentColor' : 'none'} />
-      {/* Photo area */}
-      <rect x="5.5" y="5.5" width="13" height="10" rx="1"
-        fill={active ? 'rgba(250,243,234,0.9)' : 'none'}
-        stroke={active ? 'rgba(250,243,234,0.6)' : 'currentColor'}
-        strokeWidth="1.2" />
-      {/* Caption line */}
-      <line x1="8" y1="18" x2="16" y2="18"
-        stroke={active ? 'rgba(250,243,234,0.7)' : 'currentColor'}
-        strokeWidth="1.4" />
+      {/* Cup body */}
+      <path d="M8 3h8l-1.5 8H9.5L8 3z" fill={active ? 'currentColor' : 'none'} />
+      {/* Cup handles */}
+      <path d="M8 5H5a2 2 0 0 0 0 4h2M16 5h3a2 2 0 0 1 0 4h-2" />
+      {/* Stem */}
+      <line x1="12" y1="11" x2="12" y2="15" />
+      {/* Base */}
+      <rect x="8" y="15" width="8" height="2" rx="1" fill={active ? 'currentColor' : 'none'} />
+      {/* Platform */}
+      <line x1="6" y1="20" x2="18" y2="20" />
     </svg>
   )
 }
@@ -101,9 +100,9 @@ export default function GlobalInstagramNav() {
       icon: (active: boolean) => <IconReels active={active} />,
     },
     {
-      href: '/mural',
-      label: 'Mural',
-      icon: (active: boolean) => <IconMural active={active} />,
+      href: '/ranking',
+      label: 'Ranking',
+      icon: (active: boolean) => <IconRanking active={active} />,
     },
   ]
 

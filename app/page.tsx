@@ -652,12 +652,11 @@ export default function Home() {
         <p className="section-label" style={{ textAlign: 'center', marginBottom: 14, padding: '0 16px' }}>✦ Explorar o Evento ✦</p>
         <div className="explore-grid">
           {[
-            { href: '/mural',    emoji: '🖼️', label: 'Mural',          desc: 'Polaroids dos convidados' },
-            { href: '/carta',    emoji: '💌', label: 'Carta ao Bebê',   desc: 'Mensagens para o José' },
-            { href: '/palpites', emoji: '🎲', label: 'Palpites',        desc: 'Quem acerta o peso?' },
-            { href: '/livro',    emoji: '📖', label: 'Livro de Visitas',desc: 'Mensagens do chá' },
-            { href: '/store',    emoji: '🎁', label: 'Lista de Presentes', desc: 'Veja o que dar ao José' },
-            { href: '/ranking',  emoji: '🏆', label: 'Ranking',         desc: 'Convidados mais ativos' },
+            { href: '/mural',    emoji: '🖼️', label: 'Mural',           desc: 'Polaroids dos convidados' },
+            { href: '/carta',    emoji: '💌', label: 'Carta ao Bebê',    desc: 'Mensagens para o José' },
+            { href: '/palpites', emoji: '🎲', label: 'Palpites',         desc: 'Quem acerta o peso?' },
+            { href: '/livro',    emoji: '📖', label: 'Livro de Visitas', desc: 'Mensagens do chá' },
+            { href: '/ranking',  emoji: '🏆', label: 'Ranking',          desc: 'Convidados mais ativos' },
           ].map(({ href, emoji, label, desc }) => (
             <a key={href} href={href} className="explore-card">
               <span className="explore-card-icon">{emoji}</span>

@@ -1814,3 +1814,20 @@ footer { text-align:center; padding:56px 24px 72px; }
   font-style: italic;
   line-height: 1.4;
 }
+
+/* Last explore card spans full width when odd count */
+.explore-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  text-align: left;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.explore-card:last-child:nth-child(odd) .explore-card-icon {
+  font-size: 1.6rem;
+}
+
+.explore-card:last-child:nth-child(odd) .explore-card-sub {
+  margin-top: 2px;
+}
