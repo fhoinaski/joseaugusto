@@ -3,6 +3,7 @@ import sharp from 'sharp'
 import { uploadBuffer, objectUrl, pingRealtimeR2, imageVariantKey, imageThumb400Key } from '@/lib/r2'
 import { dbInsertMedia } from '@/lib/db'
 import { isD1AuthError } from '@/lib/db'
+import { sendPushToAll } from '@/lib/push'
 
 const MAX_IMAGE = 20 * 1024 * 1024  // 20 MB
 const MAX_VIDEO = 100 * 1024 * 1024 // 100 MB
@@ -171,9 +172,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Ping SSE stream (skip for rejected items)
+    // 3. Ping SSE stream + push notification (skip for rejected items)
     if (status === 'approved') {
       await pingRealtimeR2(author || 'Convidado', objectUrl(key)).catch(() => {})
+      // Fire-and-forget push — don't block the upload response
+      if (mediaType === 'image' || mediaType === 'video') {
+        sendPushToAll({
+          title: '📸 Nova foto no álbum!',
+          body: `${author || 'Alguém'} acabou de compartilhar ${mediaType === 'video' ? 'um vídeo' : 'uma foto'}.`,
+          icon: '/icon-192.png',
+          url: '/feed',
+        }).catch(() => {})
+      }
     }
 
     return NextResponse.json({

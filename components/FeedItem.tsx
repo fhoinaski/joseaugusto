@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { emitToast, vibrateSoft } from '@/lib/ui-feedback'
+import { REACTION_EMOJIS } from '@/lib/config'
 
 export interface FeedMediaItem {
   id: string
@@ -32,7 +33,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d`
 }
 
-const REACTION_OPTIONS = ['👍', '♥', '😍', '🎉', '👶', '😂']
+const REACTION_OPTIONS = REACTION_EMOJIS
 
 export default function FeedItem({
   item,
@@ -66,7 +67,10 @@ export default function FeedItem({
       const data = await res.json() as { comments?: CommentItem[] }
       setComments(Array.isArray(data.comments) ? data.comments : [])
       setCommentsLoaded(true)
-    } catch {}
+    } catch {
+      // Non-critical — keep whatever comments are already loaded
+      console.warn('[FeedItem] Could not load comments for', item.id)
+    }
   }
 
   useEffect(() => { loadComments() }, [item.id])
@@ -113,7 +117,18 @@ export default function FeedItem({
     if (item.type !== 'video' || !videoRef.current || !rootRef.current) return
     const el = videoRef.current
     const observer = new IntersectionObserver(
-      ([entry]) => { entry.isIntersecting ? el.play().catch(() => {}) : el.pause() },
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.play().catch(err => {
+            // Autoplay blocked before user gesture — expected on mobile, silent
+            if ((err as Error).name !== 'NotAllowedError') {
+              console.warn('[FeedItem] Video play failed:', (err as Error).message)
+            }
+          })
+        } else {
+          el.pause()
+        }
+      },
       { threshold: 0.65 },
     )
     observer.observe(rootRef.current)

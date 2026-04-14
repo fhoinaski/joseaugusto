@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { emitToast } from '@/lib/ui-feedback'
 
 export type GeoStatus = 'idle' | 'checking' | 'allowed' | 'observer' | 'key'
 
@@ -70,8 +71,10 @@ export function GeoAccessProvider({ children }: { children: React.ReactNode }) {
             } catch {}
           },
           () => {
+            // Geo denied or unavailable — switch to access-key mode and inform the user
             setGeoStatus('key')
             setCanWrite(false)
+            emitToast('Localização negada. Use sua chave de acesso para postar.')
           },
           { timeout: 8000, maximumAge: 60000 },
         )

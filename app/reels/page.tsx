@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGeoAccess } from '@/components/GeoAccessProvider'
 import { emitToast, vibrateSoft } from '@/lib/ui-feedback'
+import { REACTION_EMOJIS } from '@/lib/config'
 
 interface MediaItem {
   id: string
@@ -22,7 +23,7 @@ interface CommentItem {
   createdAt: string
 }
 
-const EMOJIS = ['❤️', '😍', '🎉', '👶', '😂', '👏']
+const EMOJIS = REACTION_EMOJIS
 
 function getReacted(id: string): string[] {
   try { return JSON.parse(localStorage.getItem(`cha_reacted_${id}`) ?? '[]') } catch { return [] }
@@ -79,7 +80,13 @@ function ReelItem({
     if (!video) return
     if (isActive) {
       video.currentTime = 0
-      video.play().catch(() => {})
+      video.play().catch(err => {
+        // Autoplay blocked (common on iOS/Android before user interaction)
+        // This is expected and silent — the muted play button handles unmuting
+        if ((err as Error).name !== 'NotAllowedError') {
+          console.warn('[Reels] Video play failed:', (err as Error).message)
+        }
+      })
     } else {
       video.pause()
     }
@@ -91,7 +98,9 @@ function ReelItem({
     fetch(`/api/comments?media_id=${encodeURIComponent(item.id)}`)
       .then(r => r.json())
       .then(data => { if (Array.isArray((data as { comments?: CommentItem[] }).comments)) setComments((data as { comments: CommentItem[] }).comments) })
-      .catch(() => {})
+      .catch(() => {
+        emitToast('Nao foi possivel carregar comentarios.')
+      })
   }, [showComments, item.id])
 
   // Focus comment input when panel opens

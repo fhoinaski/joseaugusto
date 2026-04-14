@@ -518,3 +518,201 @@ export async function dbVerifyAccessKey(key: string): Promise<boolean> {
   )
   return rows.length > 0
 }
+
+// ── Gamification / Leaderboard ────────────────────────────────────────────────
+
+export interface LeaderboardEntry {
+  author: string
+  total_points: number
+  uploads: number
+  reactions_received: number
+  comments_made: number
+  badge: string
+}
+
+function scoreToBadge(pts: number): string {
+  if (pts >= 200) return '🏆'
+  if (pts >= 80)  return '⭐'
+  if (pts >= 20)  return '🌸'
+  return '🌱'
+}
+
+export async function dbGetLeaderboard(limit = 20): Promise<LeaderboardEntry[]> {
+  // Scoring: 10 pts/upload · 2 pts/reaction received · 3 pts/comment made
+  const rows = await d1Query<{
+    author: string
+    total_points: number
+    uploads: number
+    reactions_received: number
+    comments_made: number
+  }>(
+    `SELECT
+       u.author,
+       (COALESCE(m_agg.upload_pts, 0) + COALESCE(r_agg.reaction_pts, 0) + COALESCE(c_agg.comment_pts, 0)) AS total_points,
+       COALESCE(m_agg.uploads, 0) AS uploads,
+       COALESCE(r_agg.reactions_received, 0) AS reactions_received,
+       COALESCE(c_agg.comments_made, 0) AS comments_made
+     FROM (
+       SELECT author FROM media WHERE status = 'approved'
+       UNION
+       SELECT author FROM comments
+     ) u
+     LEFT JOIN (
+       SELECT author, COUNT(*) * 10 AS upload_pts, COUNT(*) AS uploads
+       FROM media WHERE status = 'approved'
+       GROUP BY author
+     ) m_agg ON m_agg.author = u.author
+     LEFT JOIN (
+       SELECT m.author, SUM(r.count) * 2 AS reaction_pts, SUM(r.count) AS reactions_received
+       FROM media m
+       JOIN reactions r ON r.media_id = m.id
+       WHERE m.status = 'approved'
+       GROUP BY m.author
+     ) r_agg ON r_agg.author = u.author
+     LEFT JOIN (
+       SELECT author, COUNT(*) * 3 AS comment_pts, COUNT(*) AS comments_made
+       FROM comments
+       GROUP BY author
+     ) c_agg ON c_agg.author = u.author
+     ORDER BY total_points DESC, u.author ASC
+     LIMIT ?`,
+    [limit],
+  )
+  return rows.map(r => ({ ...r, badge: scoreToBadge(r.total_points) }))
+}
+
+// ── Store / Gift Registry ──────────────────────────────────────────────────────
+
+export interface StoreItem {
+  id: number
+  name: string
+  description: string
+  image_url: string
+  link: string
+  price_brl: number | null
+  claimed_by: string | null
+  claimed_at: string | null
+  sort_order: number
+  created_at: string
+}
+
+function isMissingTableError(err: unknown, table: string): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return new RegExp(`no such table:\\s*${table}`, 'i').test(msg)
+}
+
+export async function dbEnsureStoreTables(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS store_items (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    image_url   TEXT NOT NULL DEFAULT '',
+    link        TEXT NOT NULL DEFAULT '',
+    price_brl   INTEGER,
+    claimed_by  TEXT,
+    claimed_at  TEXT,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbGetStoreItems(): Promise<StoreItem[]> {
+  try {
+    return await d1Query<StoreItem>(
+      `SELECT id, name, description, image_url, link, price_brl, claimed_by, claimed_at, sort_order, created_at
+         FROM store_items ORDER BY sort_order ASC, id ASC`,
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'store_items')) {
+      await dbEnsureStoreTables()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbInsertStoreItem(
+  name: string, description: string, imageUrl: string, link: string, priceBrl: number | null, sortOrder = 0,
+): Promise<void> {
+  await dbEnsureStoreTables()
+  await d1Exec(
+    `INSERT INTO store_items (name, description, image_url, link, price_brl, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    [name, description, imageUrl, link, priceBrl, sortOrder],
+  )
+}
+
+export async function dbUpdateStoreItem(
+  id: number, fields: Partial<{ name: string; description: string; image_url: string; link: string; price_brl: number | null; sort_order: number }>,
+): Promise<void> {
+  const sets = Object.keys(fields).map(k => `${k} = ?`).join(', ')
+  const vals = [...Object.values(fields), id]
+  if (!sets) return
+  await d1Exec(`UPDATE store_items SET ${sets} WHERE id = ?`, vals)
+}
+
+export async function dbDeleteStoreItem(id: number): Promise<void> {
+  await d1Exec(`DELETE FROM store_items WHERE id = ?`, [id])
+}
+
+export async function dbClaimStoreItem(id: number, claimedBy: string): Promise<boolean> {
+  // Only claim if not already claimed
+  const rows = await d1Query<{ claimed_by: string | null }>(`SELECT claimed_by FROM store_items WHERE id = ?`, [id])
+  if (!rows[0] || rows[0].claimed_by) return false
+  await d1Exec(
+    `UPDATE store_items SET claimed_by = ?, claimed_at = datetime('now') WHERE id = ? AND claimed_by IS NULL`,
+    [claimedBy, id],
+  )
+  return true
+}
+
+export async function dbUnclaimStoreItem(id: number): Promise<void> {
+  await d1Exec(`UPDATE store_items SET claimed_by = NULL, claimed_at = NULL WHERE id = ?`, [id])
+}
+
+// ── Push Subscriptions ────────────────────────────────────────────────────────
+
+export interface PushSubscriptionRow {
+  endpoint: string
+  auth: string
+  p256dh: string
+}
+
+export async function dbEnsurePushTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint  TEXT PRIMARY KEY,
+    auth      TEXT NOT NULL,
+    p256dh    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbSavePushSubscription(endpoint: string, auth: string, p256dh: string): Promise<void> {
+  await dbEnsurePushTable()
+  await d1Exec(
+    `INSERT INTO push_subscriptions (endpoint, auth, p256dh)
+       VALUES (?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET auth = excluded.auth, p256dh = excluded.p256dh`,
+    [endpoint, auth, p256dh],
+  )
+}
+
+export async function dbDeletePushSubscription(endpoint: string): Promise<void> {
+  try {
+    await d1Exec(`DELETE FROM push_subscriptions WHERE endpoint = ?`, [endpoint])
+  } catch (err) {
+    if (isMissingTableError(err, 'push_subscriptions')) return
+    throw err
+  }
+}
+
+export async function dbGetPushSubscriptions(): Promise<PushSubscriptionRow[]> {
+  try {
+    return await d1Query<PushSubscriptionRow>(
+      `SELECT endpoint, auth, p256dh FROM push_subscriptions`,
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'push_subscriptions')) return []
+    throw err
+  }
+}

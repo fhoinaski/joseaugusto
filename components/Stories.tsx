@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { emitToast } from '@/lib/ui-feedback'
 
 export interface StoryMediaItem {
   id: string
@@ -86,7 +87,10 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
         const raw = Array.isArray((data as { seen?: unknown[] }).seen) ? (data as { seen: unknown[] }).seen : []
         setSeen(new Set(raw.map((v: unknown) => String(v))))
       })
-      .catch(() => {})
+      .catch(() => {
+        // Non-critical — stories still play, just without seen state
+        console.warn('[Stories] Could not load seen state')
+      })
   }, [])
 
   useEffect(() => {
@@ -102,7 +106,9 @@ export default function Stories({ items }: { items: StoryMediaItem[] }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId, media_id: activeStory.id }),
-    }).catch(() => {})
+    }).catch(() => {
+      // Non-critical — seen mark will just not persist server-side this session
+    })
 
     setSeen(prev => new Set([...Array.from(prev), activeStory.id]))
     setProgress(0)
