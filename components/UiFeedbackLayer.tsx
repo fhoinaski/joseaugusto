@@ -1,6 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const NotificationBell = dynamic(() => import('@/components/NotificationBell'), { ssr: false })
+const PWAInstallPrompt = dynamic(() => import('@/components/PWAInstallPrompt'), { ssr: false })
 
 type ToastItem = {
   id: string
@@ -92,29 +96,43 @@ export default function UiFeedbackLayer() {
 
   return (
     <>
-      <div
-        className={`connection-pill ${isOnline ? 'online' : 'offline'}`}
-        role="status"
-        aria-live="polite"
-        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-      >
-        <span className="connection-pill-dot" />
-        <span>{isOnline ? 'Online' : 'Offline'}</span>
-        {pendingUploads > 0 && (
-          <span
-            title={`${pendingUploads} upload${pendingUploads > 1 ? 's' : ''} na fila offline`}
-            style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 18, height: 18, borderRadius: 99,
-              background: isOnline ? '#e8a44a' : '#c0392b',
-              color: '#fff', fontSize: 11, fontWeight: 700,
-              padding: '0 5px', lineHeight: 1,
-            }}
-          >
-            {pendingUploads}
-          </span>
-        )}
+      {/* Top-right cluster: connection pill + notification bell */}
+      <div style={{
+        position: 'fixed',
+        top: 'max(10px, calc(8px + env(safe-area-inset-top)))',
+        right: 12,
+        zIndex: 2100,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      }}>
+        <NotificationBell />
+        <div
+          className={`connection-pill ${isOnline ? 'online' : 'offline'}`}
+          role="status"
+          aria-live="polite"
+          style={{ position: 'static', display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <span className="connection-pill-dot" />
+          <span>{isOnline ? 'Online' : 'Offline'}</span>
+          {pendingUploads > 0 && (
+            <span
+              title={`${pendingUploads} upload${pendingUploads > 1 ? 's' : ''} na fila offline`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                minWidth: 18, height: 18, borderRadius: 99,
+                background: isOnline ? '#e8a44a' : '#c0392b',
+                color: '#fff', fontSize: 11, fontWeight: 700,
+                padding: '0 5px', lineHeight: 1,
+              }}
+            >
+              {pendingUploads}
+            </span>
+          )}
+        </div>
       </div>
+
+      <PWAInstallPrompt />
 
       <div className="toast-container">
         {toasts.map(t => (

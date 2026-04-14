@@ -359,6 +359,7 @@ export default function Home() {
   const [pinnedPost,  setPinnedPost]   = useState<MediaItem | null>(null)
   const [pinnedText,  setPinnedText]   = useState('')
   const [savedAuthor, setSavedAuthor]  = useState('')
+  const [eventStats,  setEventStats]   = useState<{photos:number; reactions:number; comments:number; authors:number} | null>(null)
   const { geoStatus, canWrite, unlockWithKey } = useGeoAccess()
   const lastRtTs  = useRef<number>(0)
   const mediaRef = useRef<MediaItem[]>([])
@@ -441,6 +442,9 @@ export default function Home() {
 
   useEffect(()=>{
     fetchJsonSafe<{ message?: string }>('/api/admin/message', {}).then(d=>setParentsMsg(d.message??''))
+    fetchJsonSafe<{ photos?:number; reactions?:number; comments?:number; authors?:number }>('/api/stats', {}).then(d=>{
+      if(d.photos !== undefined) setEventStats({ photos: d.photos??0, reactions: d.reactions??0, comments: d.comments??0, authors: d.authors??0 })
+    })
   },[])
 
   useEffect(()=>{
@@ -566,6 +570,24 @@ export default function Home() {
 
       <div className="leaves">🌿 🌸 🌿 🌸 🌿</div>
 
+      {/* Party stats bar */}
+      {eventStats && (
+        <div className="event-stats-bar reveal">
+          {[
+            { num: eventStats.photos,    lbl: 'fotos',       icon: '📷' },
+            { num: eventStats.reactions, lbl: 'reações',     icon: '❤' },
+            { num: eventStats.comments,  lbl: 'comentários', icon: '💬' },
+            { num: eventStats.authors,   lbl: 'convidados',  icon: '👥' },
+          ].map(({ num, lbl, icon }) => (
+            <div key={lbl} className="event-stat">
+              <span className="event-stat-icon">{icon}</span>
+              <span className="event-stat-num">{num}</span>
+              <span className="event-stat-lbl">{lbl}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {parentsMsg&&(
         <div className="parents-section reveal">
           <p className="section-label">✦ Uma mensagem de amor ✦</p>
@@ -615,20 +637,6 @@ export default function Home() {
             </article>
           )}
         </section>
-      )}
-
-      {topAuthors.length>0&&(
-        <div className="parents-section reveal" style={{marginTop:20}}>
-          <p className="section-label">✦ Ranking de Popularidade ✦</p>
-          <div className="parents-card" style={{padding:'18px 22px'}}>
-            {topAuthors.map((a,idx)=>(
-              <p key={`${a.author}-${idx}`} style={{margin:'8px 0',display:'flex',justifyContent:'space-between',fontWeight:600,color:'var(--bd)'}}>
-                <span>{idx===0?'🥇':idx===1?'🥈':'🥉'} {a.author}</span>
-                <span>{a.score} curtidas</span>
-              </p>
-            ))}
-          </div>
-        </div>
       )}
 
       <div className="leaves" style={{opacity:.3,marginTop:8}}>· · · ✦ · · ·</div>
