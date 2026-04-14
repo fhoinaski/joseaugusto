@@ -36,6 +36,7 @@ function FeedPageInner() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [manualKey, setManualKey] = useState('')
   const [keyError, setKeyError] = useState('')
   const [headerHeight, setHeaderHeight] = useState(132)
@@ -149,9 +150,17 @@ function FeedPageInner() {
     return () => obs.disconnect()
   }, [fetchMedia, nextCursor])
 
-  const filteredMedia = useMemo(() =>
-    authorFilter ? media.filter(m => m.author === authorFilter) : media
-  , [media, authorFilter])
+  const filteredMedia = useMemo(() => {
+    let result = authorFilter ? media.filter(m => m.author === authorFilter) : media
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      result = result.filter(m =>
+        m.author.toLowerCase().includes(q) ||
+        (m.caption ?? '').toLowerCase().includes(q)
+      )
+    }
+    return result
+  }, [media, authorFilter, searchQuery])
   const storiesItems = useMemo(() => media.slice(0, 30), [media])
 
   const unlock = async () => {
@@ -269,6 +278,45 @@ function FeedPageInner() {
             )}
           </div>
         )}
+
+        {/* Search bar */}
+        <div style={{ padding: '8px 12px 4px' }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{ position: 'absolute', left: 14, fontSize: '1rem', pointerEvents: 'none', color: 'rgba(255,255,255,.4)' }}>🔍</span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nome ou legenda…"
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,.07)',
+                border: '1px solid rgba(255,255,255,.12)',
+                borderRadius: 999,
+                padding: '10px 16px 10px 40px',
+                color: '#f5dab6',
+                fontFamily: "'Cormorant Garamond',serif",
+                fontSize: '1rem',
+                outline: 'none',
+                caretColor: '#d59056',
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{ position: 'absolute', right: 12, background: 'none', border: 'none', color: 'rgba(255,255,255,.5)', fontSize: '1.1rem', cursor: 'pointer', lineHeight: 1, padding: 4 }}
+                aria-label="Limpar busca"
+              >×</button>
+            )}
+          </div>
+          {searchQuery.trim() && (
+            <p style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.35)', margin: '6px 4px 0', fontStyle: 'italic' }}>
+              {filteredMedia.length === 0
+                ? 'Nenhuma foto encontrada'
+                : `${filteredMedia.length} foto${filteredMedia.length !== 1 ? 's' : ''} encontrada${filteredMedia.length !== 1 ? 's' : ''}`}
+            </p>
+          )}
+        </div>
 
         {!canWrite && (
           <section style={{ margin: '10px 12px', padding: 12, borderRadius: 12, border: '1px solid rgba(245,199,143,.45)', background: 'rgba(18,15,12,.75)', color: '#f5dab6' }}>
