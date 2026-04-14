@@ -176,6 +176,31 @@ function Lightbox({ items, index, onClose, onNav, onReact, simpleMode }:{ items:
               )
             })}
           </div>
+
+          {/* Download + Share */}
+          {item.type!=='audio'&&(
+            <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap' as const}}>
+              <a
+                href={`/api/download?url=${encodeURIComponent(item.fullUrl)}`}
+                download
+                onClick={e=>e.stopPropagation()}
+                style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.12)',border:'1.5px solid rgba(255,255,255,.22)',borderRadius:50,color:'#fff',padding:'8px 18px',fontSize:'.84rem',fontWeight:600,textDecoration:'none',letterSpacing:'.02em'}}
+              >
+                ⬇ Baixar
+              </a>
+              {typeof navigator!=='undefined'&&'share' in navigator&&(
+                <button
+                  onClick={e=>{
+                    e.stopPropagation()
+                    navigator.share({title:`Foto de ${item.author} — Chá do José Augusto`,url:item.fullUrl}).catch(()=>{})
+                  }}
+                  style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.12)',border:'1.5px solid rgba(255,255,255,.22)',borderRadius:50,color:'#fff',padding:'8px 18px',fontSize:'.84rem',fontWeight:600,cursor:'pointer',letterSpacing:'.02em'}}
+                >
+                  🔗 Compartilhar
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

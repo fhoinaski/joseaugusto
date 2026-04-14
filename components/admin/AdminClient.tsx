@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface MediaItem   { id: string; thumbUrl: string; fullUrl: string; author: string; type: 'image' | 'video' | 'audio'; createdAt: string }
 interface CapsuleItem { id: string; author: string; message: string; createdAt: string; imageUrl: string }
@@ -76,6 +76,7 @@ function AdminPanel() {
   const [babyHora, setBabyHora] = useState('')
   const [babyCabelo, setBabyCabelo] = useState('')
   const [savingBaby, setSavingBaby] = useState(false)
+  const qrRef = useRef<HTMLCanvasElement>(null)
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
@@ -326,6 +327,17 @@ function AdminPanel() {
     if (tab === 'settings') refreshCdnStats()
     if (tab === 'store') fetchStore()
   }, [tab, fetchStore])
+
+  useEffect(() => {
+    if (tab !== 'settings') return
+    const url = typeof window !== 'undefined' ? window.location.origin : ''
+    if (!url) return
+    import('qrcode').then(QRCode => {
+      if (qrRef.current) {
+        QRCode.toCanvas(qrRef.current, url, { width: 220, margin: 2, color: { dark: '#3e2408', light: '#fdf6ee' } }, () => {})
+      }
+    }).catch(() => {})
+  }, [tab])
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 20px',
@@ -659,6 +671,50 @@ function AdminPanel() {
 
       {tab === 'settings' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* QR Code do Evento */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📲 QR Code do Evento</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>
+              Imprima e cole na entrada do salão. Os convidados escaneiam e entram direto no álbum.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 16 }}>
+              <canvas
+                ref={qrRef}
+                style={{ borderRadius: 12, border: '1px solid var(--beige)', padding: 8, background: '#fdf6ee' }}
+              />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  className="btn-secondary"
+                  style={{ fontSize: '.88rem' }}
+                  onClick={() => {
+                    const canvas = qrRef.current
+                    if (!canvas) return
+                    const link = document.createElement('a')
+                    link.download = 'qr-cha-jose-augusto.png'
+                    link.href = canvas.toDataURL()
+                    link.click()
+                  }}
+                >
+                  ⬇ Baixar PNG
+                </button>
+                <button
+                  className="btn-secondary"
+                  style={{ fontSize: '.88rem' }}
+                  onClick={() => {
+                    try { navigator.clipboard.writeText(window.location.origin) } catch {}
+                    showToast('Link copiado!')
+                  }}
+                >
+                  📋 Copiar link
+                </button>
+              </div>
+              <p style={{ fontSize: '.78rem', color: 'var(--text-lo)', fontFamily: 'monospace' }}>
+                {typeof window !== 'undefined' ? window.location.origin : ''}
+              </p>
+            </div>
+          </div>
+
           <div style={S.card}>
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📍 Restrição por Localização</h2>
             <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Controle quem pode enviar fotos ao álbum.</p>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
 import { dbGetConfig, dbSetConfig, dbGetAccessKeys, dbInsertAccessKey, dbDeleteAccessKey } from '@/lib/db'
+import { sendPushToAll } from '@/lib/push'
 
 export async function GET() {
   if (!isAuthenticated()) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
 
   if (body.action === 'baby_status') {
     const { babyBorn, babyDueDate, babyBornWeightG, babyBornHora, babyBornCabelo } = body
+    const wasAlreadyBorn = (await dbGetConfig('baby_born', '0')) === '1'
     if (typeof babyBorn === 'boolean') {
       await dbSetConfig('baby_born', babyBorn ? '1' : '0')
     }
@@ -54,6 +56,20 @@ export async function POST(req: NextRequest) {
     }
     if (typeof babyBornCabelo === 'string') {
       await dbSetConfig('baby_born_cabelo', babyBornCabelo.trim())
+    }
+    // Dispara push "bebê nasceu" apenas na primeira vez que é marcado como nascido
+    if (babyBorn === true && !wasAlreadyBorn) {
+      try {
+        const weightG = babyBornWeightG ? Number(babyBornWeightG) : null
+        const weightStr = weightG ? ` · ${(weightG / 1000).toFixed(2).replace('.', ',')} kg` : ''
+        const horaStr = babyBornHora ? ` · ${babyBornHora}` : ''
+        await sendPushToAll({
+          title: '🍼 José Augusto chegou!',
+          body: `Bem-vindo ao mundo, pequenino!${weightStr}${horaStr}`,
+          icon: '/icon-192.png',
+          url: '/',
+        })
+      } catch { /* push falhou — não bloqueia a resposta */ }
     }
     return NextResponse.json({ ok: true })
   }
