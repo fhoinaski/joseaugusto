@@ -1,5 +1,8 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import dynamic from 'next/dynamic'
+
+const EnqueteCard = dynamic(() => import('../EnqueteCard'), { ssr: false })
 
 interface MediaItem {
   id: string
@@ -194,6 +197,17 @@ export default function TVClient() {
             <span className="tv-qr-label">Acesse o álbum</span>
           </div>
         )}
+
+        {/* Live poll overlay */}
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'absolute', bottom: 80, left: 24, zIndex: 100,
+            width: 'min(340px, calc(100vw - 48px))',
+          }}
+        >
+          <EnqueteCard tv pollMs={8000} />
+        </div>
 
         {photos.length > 0 && (
           <div className="tv-counter">
