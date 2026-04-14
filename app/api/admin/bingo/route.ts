@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
 import { dbGetBingoItems, dbInsertBingoItem, dbCallBingoItem, dbDeleteBingoItem, dbResetBingo } from '@/lib/db'
