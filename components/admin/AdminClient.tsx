@@ -33,8 +33,10 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
   )
 }
 
+interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
+
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -62,6 +64,12 @@ function AdminPanel() {
   const [pinnedMediaId, setPinnedMediaId] = useState('')
   const [cdnStats, setCdnStats] = useState<{ cacheHitRate: number | null; generatedAt?: string; firstRequest?: { cfCacheStatus?: string }; secondRequest?: { cfCacheStatus?: string } } | null>(null)
   const [loadingCdn, setLoadingCdn] = useState(false)
+  const [storeItems, setStoreItems] = useState<StoreItemAdmin[]>([])
+  const [loadingStore, setLoadingStore] = useState(false)
+  const [storeForm, setStoreForm] = useState({ name: '', description: '', image_url: '', link: '', price_brl: '', sort_order: '0' })
+  const [savingStore, setSavingStore] = useState(false)
+  const [pushMsg, setPushMsg] = useState({ title: '', body: '' })
+  const [sendingPush, setSendingPush] = useState(false)
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
@@ -184,6 +192,85 @@ function AdminPanel() {
     setSavingPinnedText(false); showToast('📌 Texto fixado atualizado!')
   }
 
+  const fetchStore = useCallback(async () => {
+    setLoadingStore(true)
+    try {
+      const res = await fetch('/api/admin/store')
+      const data = await res.json()
+      setStoreItems((data as { items?: StoreItemAdmin[] }).items ?? [])
+    } finally {
+      setLoadingStore(false)
+    }
+  }, [])
+
+  const addStoreItem = async () => {
+    if (!storeForm.name.trim()) return
+    setSavingStore(true)
+    try {
+      const res = await fetch('/api/admin/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add',
+          name: storeForm.name.trim(),
+          description: storeForm.description.trim(),
+          image_url: storeForm.image_url.trim(),
+          link: storeForm.link.trim(),
+          price_brl: storeForm.price_brl ? Math.round(parseFloat(storeForm.price_brl) * 100) : null,
+          sort_order: parseInt(storeForm.sort_order) || 0,
+        }),
+      })
+      if (res.ok) {
+        setStoreForm({ name: '', description: '', image_url: '', link: '', price_brl: '', sort_order: '0' })
+        await fetchStore()
+        showToast('🎁 Item adicionado!')
+      }
+    } finally {
+      setSavingStore(false)
+    }
+  }
+
+  const deleteStoreItem = async (id: number, name: string) => {
+    if (!confirm(`Excluir "${name}"?`)) return
+    await fetch('/api/admin/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id }),
+    })
+    setStoreItems(prev => prev.filter(s => s.id !== id))
+    showToast('🗑 Item removido.')
+  }
+
+  const unclaimStoreItem = async (id: number) => {
+    await fetch('/api/admin/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'unclaim', id }),
+    })
+    setStoreItems(prev => prev.map(s => s.id === id ? { ...s, claimed_by: null, claimed_at: null } : s))
+    showToast('↩ Reserva cancelada.')
+  }
+
+  const sendPush = async () => {
+    if (!pushMsg.title.trim()) return
+    setSendingPush(true)
+    try {
+      const res = await fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: pushMsg.title.trim(), body: pushMsg.body.trim() }),
+      })
+      if (res.ok) {
+        setPushMsg({ title: '', body: '' })
+        showToast('🔔 Notificação enviada!')
+      } else {
+        showToast('Erro ao enviar notificação.')
+      }
+    } finally {
+      setSendingPush(false)
+    }
+  }
+
   const logout = async () => { await fetch('/api/admin/logout', { method: 'POST' }); window.location.reload() }
   const exportMediaZip = () => { window.location.href = '/api/admin/export/media' }
   const exportTexts = () => { window.location.href = '/api/admin/export/texts' }
@@ -200,7 +287,8 @@ function AdminPanel() {
 
   useEffect(() => {
     if (tab === 'settings') refreshCdnStats()
-  }, [tab])
+    if (tab === 'store') fetchStore()
+  }, [tab, fetchStore])
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 20px',
@@ -286,6 +374,7 @@ function AdminPanel() {
           { key: 'approved', label: 'Aprovadas', count: 0 },
           { key: 'message', label: 'Mensagem', count: 0 },
           { key: 'capsule', label: '💌 Cápsula', count: 0 },
+          { key: 'store', label: '🎁 Loja', count: 0 },
           { key: 'settings', label: '⚙ Configurações', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
@@ -375,6 +464,70 @@ function AdminPanel() {
         </div>
       )}
 
+      {tab === 'store' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>Adicionar item</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Itens aparecem na página /store para os convidados.</p>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Nome do produto *" value={storeForm.name} onChange={e => setStoreForm(f => ({ ...f, name: e.target.value }))} />
+              <textarea style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none', resize: 'vertical', minHeight: 70 }} placeholder="Descrição (opcional)" value={storeForm.description} onChange={e => setStoreForm(f => ({ ...f, description: e.target.value }))} />
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="URL da imagem (opcional)" value={storeForm.image_url} onChange={e => setStoreForm(f => ({ ...f, image_url: e.target.value }))} />
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Link externo (opcional — ex: Amazon)" value={storeForm.link} onChange={e => setStoreForm(f => ({ ...f, link: e.target.value }))} />
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
+                <input style={{ flex: 1, minWidth: 100, border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Preço (R$, opcional)" type="number" min="0" step="0.01" value={storeForm.price_brl} onChange={e => setStoreForm(f => ({ ...f, price_brl: e.target.value }))} />
+                <input style={{ flex: 1, minWidth: 80, border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Ordem (0=primeiro)" type="number" min="0" value={storeForm.sort_order} onChange={e => setStoreForm(f => ({ ...f, sort_order: e.target.value }))} />
+              </div>
+              <button style={{ ...S.btnApprove, padding: '11px 24px', fontSize: '.95rem' }} onClick={addStoreItem} disabled={savingStore || !storeForm.name.trim()}>
+                {savingStore ? 'Adicionando…' : '+ Adicionar item'}
+              </button>
+            </div>
+          </div>
+
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>Itens da loja</h2>
+            {loadingStore
+              ? <p style={S.empty}>Carregando…</p>
+              : storeItems.length === 0
+                ? <p style={S.empty}>Nenhum item cadastrado ainda.</p>
+                : (
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+                    {storeItems.map(item => (
+                      <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 16px', border: `1px solid ${item.claimed_by ? 'rgba(90,158,58,.4)' : 'var(--beige)'}`, borderRadius: 14, background: item.claimed_by ? 'rgba(90,158,58,.06)' : 'var(--cream)' }}>
+                        {item.image_url && (
+                          <img src={item.image_url} alt={item.name} style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
+                            <p style={{ fontWeight: 600, fontSize: '.95rem', color: 'var(--bd)' }}>{item.name}</p>
+                            {item.price_brl != null && (
+                              <span style={{ fontSize: '.75rem', background: 'var(--beige)', color: 'var(--bd)', padding: '2px 8px', borderRadius: 99 }}>
+                                R$ {(item.price_brl / 100).toFixed(2)}
+                              </span>
+                            )}
+                            {item.claimed_by
+                              ? <span style={{ fontSize: '.75rem', background: '#e8f5e0', color: '#3a6d10', padding: '2px 8px', borderRadius: 99 }}>✓ Reservado por {item.claimed_by}</span>
+                              : <span style={{ fontSize: '.75rem', background: 'var(--warm)', color: 'var(--bl)', padding: '2px 8px', borderRadius: 99 }}>Disponível</span>
+                            }
+                          </div>
+                          {item.description && <p style={{ fontSize: '.82rem', color: 'var(--bl)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.description}</p>}
+                          {item.link && <a href={item.link} target="_blank" rel="noreferrer" style={{ fontSize: '.78rem', color: 'var(--bd)', textDecoration: 'underline' }}>🔗 {item.link.slice(0, 40)}{item.link.length > 40 ? '…' : ''}</a>}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6, flexShrink: 0 }}>
+                          {item.claimed_by && (
+                            <button style={{ ...S.btnApprove, padding: '5px 10px', fontSize: '.78rem' }} onClick={() => unclaimStoreItem(item.id)}>↩ Liberar</button>
+                          )}
+                          <button style={{ ...S.btnDelete, padding: '5px 10px', fontSize: '.78rem' }} onClick={() => deleteStoreItem(item.id, item.name)}>🗑</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+            }
+          </div>
+        </div>
+      )}
+
       {tab === 'settings' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={S.card}>
@@ -437,6 +590,18 @@ function AdminPanel() {
               <button style={S.btnApprove} onClick={changePw} disabled={savingPw || newPw.length < 6}>{savingPw ? 'Salvando…' : '✓ Trocar senha'}</button>
             </div>
             {pwError && <p style={{ fontSize: '.82rem', color: '#a33', marginTop: 8 }}>{pwError}</p>}
+          </div>
+
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🔔 Notificações Push</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Envie uma notificação manual para todos os inscritos.</p>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Título da notificação *" value={pushMsg.title} onChange={e => setPushMsg(m => ({ ...m, title: e.target.value }))} />
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Mensagem (opcional)" value={pushMsg.body} onChange={e => setPushMsg(m => ({ ...m, body: e.target.value }))} />
+              <button style={{ ...S.btnApprove, padding: '10px 20px', fontSize: '.92rem', alignSelf: 'flex-start' }} onClick={sendPush} disabled={sendingPush || !pushMsg.title.trim()}>
+                {sendingPush ? 'Enviando…' : '🔔 Enviar para todos'}
+              </button>
+            </div>
           </div>
 
           <div style={S.card}>

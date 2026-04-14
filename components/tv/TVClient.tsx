@@ -33,7 +33,9 @@ export default function TVClient() {
           return prev
         })
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[TV] Fetch photos failed:', err)
+    }
   }, [])
 
   useEffect(() => {

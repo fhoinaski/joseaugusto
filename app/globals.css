@@ -54,8 +54,8 @@ html, body, * {
   bottom: max(8px, env(safe-area-inset-bottom));
   z-index: 1800;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
   padding: 8px;
   border-radius: 16px;
   border: 1px solid rgba(122, 78, 40, .25);

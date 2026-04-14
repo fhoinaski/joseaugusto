@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { REACTION_EMOJIS } from '@/lib/config'
 
 interface MediaItem {
   id: string
@@ -17,7 +18,7 @@ interface MediaItem {
   reactions: Record<string, number>
 }
 
-const REACTION_EMOJIS = ['♥', '😍', '🎉', '👶']
+// REACTION_EMOJIS imported from @/lib/config
 
 function ReactionBar({ item, onReact }: { item: MediaItem; onReact: (id: string, emoji: string) => void }) {
   const hasAny = REACTION_EMOJIS.some(e => (item.reactions[e] ?? 0) > 0)

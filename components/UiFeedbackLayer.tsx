@@ -14,9 +14,40 @@ type ToastPayload = {
   duration?: number
 }
 
+const LS_KEY = 'cha_upload_queue'
+
+function getPendingCount(): number {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LS_KEY) ?? '[]')
+    return Array.isArray(stored) ? stored.length : 0
+  } catch {
+    return 0
+  }
+}
+
 export default function UiFeedbackLayer() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const [pendingUploads, setPendingUploads] = useState(0)
+
+  // Read pending count on mount and after each upload-related event
+  useEffect(() => {
+    const refresh = () => setPendingUploads(getPendingCount())
+    refresh()
+
+    window.addEventListener('cha:upload-success', refresh)
+    window.addEventListener('online', refresh)
+    window.addEventListener('offline', refresh)
+    // Re-check every 30 s in case SW processes the queue in background
+    const interval = window.setInterval(refresh, 30_000)
+
+    return () => {
+      window.removeEventListener('cha:upload-success', refresh)
+      window.removeEventListener('online', refresh)
+      window.removeEventListener('offline', refresh)
+      window.clearInterval(interval)
+    }
+  }, [])
 
   useEffect(() => {
     const onOnline = () => {
@@ -61,9 +92,28 @@ export default function UiFeedbackLayer() {
 
   return (
     <>
-      <div className={`connection-pill ${isOnline ? 'online' : 'offline'}`} role="status" aria-live="polite">
+      <div
+        className={`connection-pill ${isOnline ? 'online' : 'offline'}`}
+        role="status"
+        aria-live="polite"
+        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+      >
         <span className="connection-pill-dot" />
         <span>{isOnline ? 'Online' : 'Offline'}</span>
+        {pendingUploads > 0 && (
+          <span
+            title={`${pendingUploads} upload${pendingUploads > 1 ? 's' : ''} na fila offline`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              minWidth: 18, height: 18, borderRadius: 99,
+              background: isOnline ? '#e8a44a' : '#c0392b',
+              color: '#fff', fontSize: 11, fontWeight: 700,
+              padding: '0 5px', lineHeight: 1,
+            }}
+          >
+            {pendingUploads}
+          </span>
+        )}
       </div>
 
       <div className="toast-container">

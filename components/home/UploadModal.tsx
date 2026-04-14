@@ -87,6 +87,8 @@ export default function UploadModal({
   const [uploading, setUploading] = useState(false)
   const [compPct, setCompPct] = useState(0)
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
+  // Immediate local preview shown in the loading step before processing completes
+  const [rawPreview, setRawPreview] = useState<string>('')
   const fileRef = useRef<HTMLInputElement>(null)
   const camRef = useRef<HTMLInputElement>(null)
   const vidRef = useRef<HTMLInputElement>(null)
@@ -162,6 +164,10 @@ export default function UploadModal({
     }
     setMediaError('')
 
+    // Show the raw file immediately so the user sees their photo right away
+    // (no black screen while prepareImageBlob runs — can take 2-4 s on mobile)
+    const immediateUrl = URL.createObjectURL(f0)
+    setRawPreview(immediateUrl)
     setStep('loading')
     setCompPct(10)
     const pct = setInterval(() => setCompPct(p => Math.min(p + 16, 88)), 180)
@@ -169,11 +175,15 @@ export default function UploadModal({
       const { blob, previewUrl } = await prepareImageBlob(f0, 2000)
       clearInterval(pct)
       setCompPct(100)
+      URL.revokeObjectURL(immediateUrl)
+      setRawPreview('')
       setQueue([{ file: blob, name: renameWithExt(f0.name, 'webp'), preview: previewUrl, status: 'waiting', progress: 0, type: 'image', retries: 0, isOfflineError: false }])
       setTimeout(() => setStep('queue'), 120)
     } catch {
       clearInterval(pct)
-      setQueue([{ file: f0, name: f0.name, preview: URL.createObjectURL(f0), status: 'waiting', progress: 0, type: 'image', retries: 0, isOfflineError: false }])
+      // Processing failed — use raw file as fallback (browser handles EXIF display)
+      setRawPreview('')
+      setQueue([{ file: f0, name: f0.name, preview: immediateUrl, status: 'waiting', progress: 0, type: 'image', retries: 0, isOfflineError: false }])
       setTimeout(() => setStep('queue'), 120)
     }
   }
@@ -405,7 +415,19 @@ export default function UploadModal({
         )}
         {step === 'loading' && (
           <div className="preview-loading">
-            <div className="preview-spinner"/>
+            {rawPreview && (
+              <div style={{ position: 'relative', width: '100%', maxWidth: 260, margin: '0 auto 12px', borderRadius: 12, overflow: 'hidden', aspectRatio: '1', background: '#f5ede0' }}>
+                <img
+                  src={rawPreview}
+                  alt="Preview"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="preview-spinner" style={{ margin: 0 }}/>
+                </div>
+              </div>
+            )}
+            {!rawPreview && <div className="preview-spinner"/>}
             <div className="compress-bar-wrap">
               <div className="compress-bar-inner"><div className="compress-bar-fill" style={{ width: `${compPct}%` }}/></div>
               <p className="compress-label">{compPct < 100 ? `Otimizando... ${compPct}%` : 'Pronto!'}</p>

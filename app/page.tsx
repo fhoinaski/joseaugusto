@@ -5,14 +5,13 @@ import Stories, { StoryMediaItem } from '@/components/Stories'
 import HeroSection from '@/components/home/HeroSection'
 import MediaGallery from '@/components/home/MediaGallery'
 import { vibrateSoft } from '@/lib/ui-feedback'
+import { REACTION_EMOJIS } from '@/lib/config'
 
 interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
 interface TopAuthor { author:string; score:number }
 interface EventComment { mediaId:string; author:string; text:string; createdAt:string }
 interface PinnedPayload { pinnedPost?: MediaItem | null; pinnedMediaId?: string; pinnedText?: string }
-
-const REACTION_EMOJIS = ['♥','😍','🎉','👶']
 
 function getReacted(id:string):string[] { try{ return JSON.parse(localStorage.getItem(`cha_reacted_${id}`)??'[]') }catch{return[]} }
 function markReacted(id:string,emoji:string){ const r=getReacted(id); if(!r.includes(emoji))localStorage.setItem(`cha_reacted_${id}`,JSON.stringify([...r,emoji])) }

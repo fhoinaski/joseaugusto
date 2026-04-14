@@ -38,27 +38,28 @@ export async function prepareImageBlob(
       URL.revokeObjectURL(url)
 
       let { width, height } = img
-      if (width <= maxPx && height <= maxPx) {
-        resolve(sourceBlob)
-        return
-      }
 
-      const ratio = Math.min(maxPx / width, maxPx / height)
-      width = Math.round(width * ratio)
-      height = Math.round(height * ratio)
+      // Always run through canvas — even for images within maxPx — so that:
+      // 1. Wide-gamut (P3/HDR) ICC profiles are tone-mapped to sRGB
+      // 2. Transparent/partial-alpha pixels are composited over white
+      // 3. EXIF orientation is baked in (browsers apply it to <img> but not
+      //    always to canvas.drawImage on older Android WebViews)
+      const ratio = (width > maxPx || height > maxPx)
+        ? Math.min(maxPx / width, maxPx / height)
+        : 1
+      const dw = Math.round(width * ratio)
+      const dh = Math.round(height * ratio)
 
       try {
         const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext('2d')
+        canvas.width = dw
+        canvas.height = dh
+        // Use explicit sRGB colorSpace so wide-gamut images are normalised
+        const ctx = canvas.getContext('2d', { colorSpace: 'srgb' } as CanvasRenderingContext2DSettings) ?? canvas.getContext('2d')
         if (ctx) {
-          // Fill white background before drawing to prevent alpha-compositing
-          // against black (canvas default is transparent) on any image with
-          // transparency or partial alpha from HEIC/HDR conversions.
           ctx.fillStyle = '#ffffff'
-          ctx.fillRect(0, 0, width, height)
-          ctx.drawImage(img, 0, 0, width, height)
+          ctx.fillRect(0, 0, dw, dh)
+          ctx.drawImage(img, 0, 0, dw, dh)
         }
         canvas.toBlob(b => resolve(b ?? sourceBlob), 'image/webp', quality)
       } catch {

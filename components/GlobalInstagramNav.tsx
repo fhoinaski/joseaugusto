@@ -44,9 +44,14 @@ export default function GlobalInstagramNav() {
         <small>Reels</small>
       </a>
 
-      <a className={`ig-shell-item ${isActive(pathname, '/tv') ? 'active' : ''}`} href="/tv">
-        <span>📺</span>
-        <small>TV</small>
+      <a className={`ig-shell-item ${isActive(pathname, '/ranking') ? 'active' : ''}`} href="/ranking">
+        <span>🏆</span>
+        <small>Ranking</small>
+      </a>
+
+      <a className={`ig-shell-item ${isActive(pathname, '/store') ? 'active' : ''}`} href="/store">
+        <span>🎁</span>
+        <small>Presentes</small>
       </a>
     </nav>
   )
