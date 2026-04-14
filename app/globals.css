@@ -181,13 +181,6 @@ body.stories-open .ig-shell-nav {
   cursor: not-allowed;
 }
 
-/* ── Reels page: hide nav while viewing ── */
-body.reels-fullscreen .ig-shell-nav {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(16px);
-}
-
 /* ── Stories strip: smooth scroll ── */
 .stories-strip {
   scroll-behavior: smooth;

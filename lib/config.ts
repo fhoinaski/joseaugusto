@@ -1,7 +1,7 @@
 // ── App-wide shared constants ─────────────────────────────────────────────────
 // Single source of truth for values used in multiple components / routes.
 
-/** Reaction emojis shown in Feed, Reels, and Gallery */
+/** Reaction emojis shown in Feed and Gallery */
 export const REACTION_EMOJIS = ['♥', '😍', '🎉', '👶', '😂', '👏'] as const
 export type ReactionEmoji = typeof REACTION_EMOJIS[number]
 
