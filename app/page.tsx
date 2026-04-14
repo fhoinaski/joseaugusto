@@ -7,6 +7,8 @@ import MediaGallery from '@/components/home/MediaGallery'
 import CountdownBanner from '@/components/home/CountdownBanner'
 import { vibrateSoft } from '@/lib/ui-feedback'
 import { REACTION_EMOJIS } from '@/lib/config'
+import AvaliacaoCard from '@/components/AvaliacaoCard'
+import EnqueteCard from '@/components/EnqueteCard'
 
 interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
@@ -738,6 +740,16 @@ export default function Home() {
             <p className="info-val" style={{fontSize:'.92rem'}}>Salão Alto dos Ingleses<br/><small style={{fontSize:'.8rem',color:'var(--text-lo)',fontWeight:500}}>Rod. João Gualberto, 1836 · Floripa</small></p>
           </div>
         </div>
+      </div>
+
+      {/* ── Enquete ao Vivo ── */}
+      <div className="reveal" style={{ padding: '0 16px', marginBottom: 8, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+        <EnqueteCard />
+      </div>
+
+      {/* ── Avaliação do Evento ── */}
+      <div className="reveal" style={{ padding: '0 16px', marginBottom: 8 }}>
+        <AvaliacaoCard />
       </div>
 
       <CapsuleSection defaultAuthor={savedAuthor}/>

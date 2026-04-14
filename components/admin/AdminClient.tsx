@@ -36,7 +36,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -77,6 +77,19 @@ function AdminPanel() {
   const [babyCabelo, setBabyCabelo] = useState('')
   const [savingBaby, setSavingBaby] = useState(false)
   const qrRef = useRef<HTMLCanvasElement>(null)
+
+  // ── Avaliação ────────────────────────────────────────────────────────────────
+  const [avalStats,   setAvalStats]   = useState<{ avg: number; total: number; distribution: Record<number,number> } | null>(null)
+  const [avalRatings, setAvalRatings] = useState<Array<{ id: number; author: string; stars: number; comment: string | null; createdAt: string }>>([])
+  const [loadingAval, setLoadingAval] = useState(false)
+
+  // ── Enquete ──────────────────────────────────────────────────────────────────
+  const [enquete,       setEnquete]       = useState<{ id: number; question: string; options: string[]; active: boolean } | null>(null)
+  const [enqueteResults, setEnqueteResults] = useState<Array<{ option: string; votes: number }>>([])
+  const [enqueteQ,      setEnqueteQ]      = useState('')
+  const [enqueteOpts,   setEnqueteOpts]   = useState(['', ''])
+  const [savingEnquete, setSavingEnquete] = useState(false)
+  const [loadingEnquete, setLoadingEnquete] = useState(false)
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
@@ -323,10 +336,67 @@ function AdminPanel() {
     }
   }
 
+  const fetchAvaliacao = useCallback(async () => {
+    setLoadingAval(true)
+    try {
+      const res  = await fetch('/api/avaliacao')
+      const data = await res.json()
+      setAvalStats(data.stats ?? null)
+      setAvalRatings(data.ratings ?? [])
+    } finally {
+      setLoadingAval(false)
+    }
+  }, [])
+
+  const fetchEnquete = useCallback(async () => {
+    setLoadingEnquete(true)
+    try {
+      const res  = await fetch('/api/admin/enquete')
+      const data = await res.json()
+      setEnquete(data.enquete ?? null)
+      setEnqueteResults(data.results ?? [])
+    } finally {
+      setLoadingEnquete(false)
+    }
+  }, [])
+
+  const createEnquete = async () => {
+    const opts = enqueteOpts.map(o => o.trim()).filter(Boolean)
+    if (!enqueteQ.trim() || opts.length < 2) { showToast('Preencha a pergunta e ao menos 2 opções.'); return }
+    setSavingEnquete(true)
+    try {
+      const res = await fetch('/api/admin/enquete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', question: enqueteQ.trim(), options: opts }),
+      })
+      if (res.ok) {
+        setEnqueteQ(''); setEnqueteOpts(['', ''])
+        await fetchEnquete()
+        showToast('🗳 Enquete criada!')
+      }
+    } finally {
+      setSavingEnquete(false)
+    }
+  }
+
+  const closeEnquete = async (id: number) => {
+    if (!confirm('Encerrar esta enquete?')) return
+    await fetch('/api/admin/enquete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'close', id }),
+    })
+    await fetchEnquete()
+    showToast('Enquete encerrada.')
+  }
+
   useEffect(() => {
     if (tab === 'settings') refreshCdnStats()
     if (tab === 'store') fetchStore()
-  }, [tab, fetchStore])
+    if (tab === 'avaliacao') fetchAvaliacao()
+    if (tab === 'enquete') fetchEnquete()
+  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete])
 
   useEffect(() => {
     if (tab !== 'settings') return
@@ -425,6 +495,8 @@ function AdminPanel() {
           { key: 'capsule', label: '💌 Cápsula', count: 0 },
           { key: 'store', label: '🎁 Loja', count: 0 },
           { key: 'baby', label: '👶 Bebê', count: 0 },
+          { key: 'avaliacao', label: '⭐ Avaliações', count: 0 },
+          { key: 'enquete', label: '🗳 Enquete', count: 0 },
           { key: 'settings', label: '⚙ Configurações', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
@@ -666,6 +738,137 @@ function AdminPanel() {
           >
             {savingBaby ? 'Salvando…' : '💾 Salvar status do bebê'}
           </button>
+        </div>
+      )}
+
+      {tab === 'avaliacao' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>⭐ Avaliações do Evento</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Notas e comentários deixados pelos convidados.</p>
+            {loadingAval ? (
+              <p style={S.empty}>Carregando…</p>
+            ) : avalStats && avalStats.total > 0 ? (
+              <>
+                {/* Summary */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '18px 20px', background: 'var(--cream)', borderRadius: 16, marginBottom: 20, flexWrap: 'wrap' as const }}>
+                  <div style={{ textAlign: 'center' as const }}>
+                    <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '3rem', color: 'var(--bd)', lineHeight: 1 }}>{avalStats.avg.toFixed(1)}</p>
+                    <p style={{ color: '#f4a623', fontSize: '1.2rem' }}>{'★'.repeat(Math.round(avalStats.avg))}{'☆'.repeat(5 - Math.round(avalStats.avg))}</p>
+                    <p style={{ fontSize: '.8rem', color: 'var(--bl)', marginTop: 4 }}>{avalStats.total} avaliações</p>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    {[5, 4, 3, 2, 1].map(s => {
+                      const count = avalStats.distribution[s] ?? 0
+                      const pct = avalStats.total > 0 ? Math.round((count / avalStats.total) * 100) : 0
+                      return (
+                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: '.75rem', color: 'var(--bl)', width: 8 }}>{s}</span>
+                          <span style={{ color: '#f4a623', fontSize: '.75rem' }}>★</span>
+                          <div style={{ flex: 1, height: 8, background: 'var(--beige)', borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: '#f4a623', borderRadius: 99 }} />
+                          </div>
+                          <span style={{ fontSize: '.72rem', color: 'var(--bl)', width: 26, textAlign: 'right' as const }}>{count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {/* Comments list */}
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                  {avalRatings.map(r => (
+                    <div key={r.id} style={{ padding: '12px 16px', border: '1px solid var(--beige)', borderRadius: 14, background: 'var(--cream)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: r.comment ? 6 : 0 }}>
+                        <span style={{ color: '#f4a623' }}>{'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)}</span>
+                        <p style={{ fontSize: '.9rem', fontWeight: 600, color: 'var(--bd)' }}>{r.author}</p>
+                        <p style={{ fontSize: '.72rem', color: 'var(--bl)', fontStyle: 'italic', marginLeft: 'auto' }}>{new Date(r.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                      {r.comment && <p style={{ fontSize: '.88rem', color: 'var(--bd)', fontStyle: 'italic' }}>"{r.comment}"</p>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p style={S.empty}>Nenhuma avaliação ainda. ⭐</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'enquete' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Create new poll */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🗳 Nova Enquete</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Crie uma enquete ao vivo que aparece para todos os convidados. Ao criar, a anterior é encerrada automaticamente.</p>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+              <input
+                style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '11px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none' }}
+                placeholder="Pergunta da enquete *"
+                value={enqueteQ}
+                onChange={e => setEnqueteQ(e.target.value)}
+                maxLength={200}
+              />
+              {enqueteOpts.map((opt, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    style={{ flex: 1, border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none' }}
+                    placeholder={`Opção ${i + 1} *`}
+                    value={opt}
+                    onChange={e => setEnqueteOpts(prev => prev.map((o, j) => j === i ? e.target.value : o))}
+                    maxLength={100}
+                  />
+                  {enqueteOpts.length > 2 && (
+                    <button style={{ ...S.btnDelete, minWidth: 36, padding: '0 10px' }} onClick={() => setEnqueteOpts(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                  )}
+                </div>
+              ))}
+              {enqueteOpts.length < 6 && (
+                <button style={{ ...S.btnApprove, alignSelf: 'flex-start', padding: '7px 16px', fontSize: '.88rem' }} onClick={() => setEnqueteOpts(prev => [...prev, ''])}>+ Opção</button>
+              )}
+              <button className="btn-primary" onClick={createEnquete} disabled={savingEnquete || !enqueteQ.trim() || enqueteOpts.filter(o => o.trim()).length < 2} style={{ fontSize: '.95rem', justifyContent: 'center' }}>
+                {savingEnquete ? 'Criando…' : '🗳 Publicar enquete'}
+              </button>
+            </div>
+          </div>
+
+          {/* Active poll + results */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>Enquete Ativa</h2>
+            {loadingEnquete ? (
+              <p style={S.empty}>Carregando…</p>
+            ) : !enquete ? (
+              <p style={S.empty}>Nenhuma enquete ativa no momento.</p>
+            ) : (
+              <div>
+                <p style={{ fontWeight: 600, color: 'var(--bd)', fontSize: '1rem', marginBottom: 16 }}>{enquete.question}</p>
+                {(() => {
+                  const total = enqueteResults.reduce((s, r) => s + r.votes, 0)
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10, marginBottom: 18 }}>
+                      {enqueteResults.map((r, i) => {
+                        const pct = total > 0 ? Math.round((r.votes / total) * 100) : 0
+                        return (
+                          <div key={i} style={{ position: 'relative' as const, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--beige)', background: 'var(--cream)', overflow: 'hidden' }}>
+                            <div style={{ position: 'absolute' as const, inset: 0, width: `${pct}%`, background: 'rgba(139,98,66,.08)', borderRadius: 10, transition: 'width .6s ease' }} />
+                            <div style={{ position: 'relative' as const, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '.93rem', color: 'var(--bd)' }}>{r.option}</span>
+                              <span style={{ fontSize: '.82rem', color: 'var(--bl)', fontWeight: 600 }}>{pct}% · {r.votes} votos</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      <p style={{ fontSize: '.78rem', color: 'var(--bl)', textAlign: 'right' as const }}>{total} votos no total</p>
+                    </div>
+                  )
+                })()}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button style={{ ...S.btnApprove, flex: 1 }} onClick={fetchEnquete}>↻ Atualizar</button>
+                  <button style={{ ...S.btnDelete, flex: 1 }} onClick={() => closeEnquete(enquete.id)}>⏹ Encerrar enquete</button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

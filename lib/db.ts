@@ -1031,6 +1031,217 @@ export async function dbDeletePushSubscription(endpoint: string): Promise<void> 
   }
 }
 
+// ── Avaliação do Evento ───────────────────────────────────────────────────────
+
+export interface AvaliacaoItem {
+  id: number
+  author: string
+  stars: number
+  comment: string | null
+  createdAt: string
+}
+
+export interface AvaliacaoStats {
+  avg: number
+  total: number
+  distribution: Record<number, number> // 1..5 → count
+}
+
+export async function dbEnsureAvaliacaoTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS avaliacao (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    author     TEXT NOT NULL,
+    stars      INTEGER NOT NULL,
+    comment    TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbInsertAvaliacao(author: string, stars: number, comment?: string | null): Promise<void> {
+  try {
+    await d1Exec(
+      `INSERT INTO avaliacao (author, stars, comment, created_at) VALUES (?, ?, ?, datetime('now'))`,
+      [author, stars, comment ?? null],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'avaliacao')) {
+      await dbEnsureAvaliacaoTable()
+      await d1Exec(
+        `INSERT INTO avaliacao (author, stars, comment, created_at) VALUES (?, ?, ?, datetime('now'))`,
+        [author, stars, comment ?? null],
+      )
+    } else {
+      throw err
+    }
+  }
+}
+
+export async function dbGetAvaliacaoStats(): Promise<AvaliacaoStats> {
+  try {
+    const [aggRows, distRows] = await Promise.all([
+      d1Query<{ avg: number | null; total: number }>(
+        `SELECT AVG(stars) AS avg, COUNT(*) AS total FROM avaliacao`,
+      ),
+      d1Query<{ stars: number; n: number }>(
+        `SELECT stars, COUNT(*) AS n FROM avaliacao GROUP BY stars`,
+      ),
+    ])
+    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+    for (const r of distRows) distribution[r.stars] = r.n
+    return {
+      avg:   Math.round((aggRows[0]?.avg ?? 0) * 10) / 10,
+      total: aggRows[0]?.total ?? 0,
+      distribution,
+    }
+  } catch (err) {
+    if (isMissingTableError(err, 'avaliacao')) {
+      await dbEnsureAvaliacaoTable()
+      return { avg: 0, total: 0, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } }
+    }
+    throw err
+  }
+}
+
+export async function dbGetAvaliacoes(limit = 100): Promise<AvaliacaoItem[]> {
+  try {
+    const rows = await d1Query<{ id: number; author: string; stars: number; comment: string | null; created_at: string }>(
+      `SELECT id, author, stars, comment, created_at FROM avaliacao ORDER BY created_at DESC LIMIT ?`,
+      [limit],
+    )
+    return rows.map(r => ({ id: r.id, author: r.author, stars: r.stars, comment: r.comment, createdAt: r.created_at }))
+  } catch (err) {
+    if (isMissingTableError(err, 'avaliacao')) {
+      await dbEnsureAvaliacaoTable()
+      return []
+    }
+    throw err
+  }
+}
+
+// ── Enquete ao Vivo ───────────────────────────────────────────────────────────
+
+export interface EnqueteItem {
+  id: number
+  question: string
+  options: string[]
+  active: boolean
+  createdAt: string
+}
+
+export interface EnqueteResult {
+  option: string
+  votes: number
+}
+
+export async function dbEnsureEnqueteTables(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS enquetes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    question   TEXT NOT NULL,
+    options    TEXT NOT NULL,
+    active     INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+  await d1Exec(`CREATE TABLE IF NOT EXISTS enquete_votes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    enquete_id INTEGER NOT NULL,
+    option_idx INTEGER NOT NULL,
+    voter_id   TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbCreateEnquete(question: string, options: string[]): Promise<number> {
+  try {
+    // Close all previous
+    await d1Exec(`UPDATE enquetes SET active = 0`)
+    await d1Exec(
+      `INSERT INTO enquetes (question, options, active, created_at) VALUES (?, ?, 1, datetime('now'))`,
+      [question, JSON.stringify(options)],
+    )
+    const rows = await d1Query<{ id: number }>(
+      `SELECT id FROM enquetes ORDER BY id DESC LIMIT 1`,
+    )
+    return rows[0]?.id ?? 0
+  } catch (err) {
+    if (isMissingTableError(err, 'enquetes')) {
+      await dbEnsureEnqueteTables()
+      await d1Exec(
+        `INSERT INTO enquetes (question, options, active, created_at) VALUES (?, ?, 1, datetime('now'))`,
+        [question, JSON.stringify(options)],
+      )
+      const rows = await d1Query<{ id: number }>(`SELECT id FROM enquetes ORDER BY id DESC LIMIT 1`)
+      return rows[0]?.id ?? 0
+    }
+    throw err
+  }
+}
+
+export async function dbGetActiveEnquete(): Promise<EnqueteItem | null> {
+  try {
+    const rows = await d1Query<{ id: number; question: string; options: string; active: number; created_at: string }>(
+      `SELECT id, question, options, active, created_at FROM enquetes WHERE active = 1 ORDER BY id DESC LIMIT 1`,
+    )
+    if (!rows[0]) return null
+    return {
+      id:        rows[0].id,
+      question:  rows[0].question,
+      options:   JSON.parse(rows[0].options) as string[],
+      active:    rows[0].active === 1,
+      createdAt: rows[0].created_at,
+    }
+  } catch (err) {
+    if (isMissingTableError(err, 'enquetes')) {
+      await dbEnsureEnqueteTables()
+      return null
+    }
+    throw err
+  }
+}
+
+export async function dbVoteEnquete(enqueteId: number, optionIdx: number, voterId: string): Promise<void> {
+  try {
+    // Allow one vote per voter per enquete (upsert-style: delete old + insert)
+    await d1Exec(`DELETE FROM enquete_votes WHERE enquete_id = ? AND voter_id = ?`, [enqueteId, voterId])
+    await d1Exec(
+      `INSERT INTO enquete_votes (enquete_id, option_idx, voter_id, created_at) VALUES (?, ?, ?, datetime('now'))`,
+      [enqueteId, optionIdx, voterId],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'enquete_votes')) {
+      await dbEnsureEnqueteTables()
+      await d1Exec(
+        `INSERT INTO enquete_votes (enquete_id, option_idx, voter_id, created_at) VALUES (?, ?, ?, datetime('now'))`,
+        [enqueteId, optionIdx, voterId],
+      )
+    } else {
+      throw err
+    }
+  }
+}
+
+export async function dbGetEnqueteResults(enqueteId: number, options: string[]): Promise<EnqueteResult[]> {
+  try {
+    const rows = await d1Query<{ option_idx: number; n: number }>(
+      `SELECT option_idx, COUNT(*) AS n FROM enquete_votes WHERE enquete_id = ? GROUP BY option_idx`,
+      [enqueteId],
+    )
+    const map = new Map(rows.map(r => [r.option_idx, r.n]))
+    return options.map((opt, i) => ({ option: opt, votes: map.get(i) ?? 0 }))
+  } catch (err) {
+    if (isMissingTableError(err, 'enquete_votes')) return options.map(opt => ({ option: opt, votes: 0 }))
+    throw err
+  }
+}
+
+export async function dbCloseEnquete(id: number): Promise<void> {
+  try {
+    await d1Exec(`UPDATE enquetes SET active = 0 WHERE id = ?`, [id])
+  } catch (err) {
+    if (isMissingTableError(err, 'enquetes')) return
+    throw err
+  }
+}
+
 export async function dbGetPushSubscriptions(): Promise<PushSubscriptionRow[]> {
   try {
     return await d1Query<PushSubscriptionRow>(
