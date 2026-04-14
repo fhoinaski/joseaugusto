@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
-import { dbGetMedia, dbUpdateStatus, dbDeleteMedia, dbGetConfig, dbSetConfig } from '@/lib/db'
+import { dbGetMedia, dbUpdateStatus, dbDeleteMedia, dbGetConfig, dbSetConfig, dbApproveAllPending } from '@/lib/db'
 import { objectUrl, deleteObject } from '@/lib/r2'
 
 export async function GET(req: NextRequest) {
@@ -65,6 +65,11 @@ export async function POST(req: NextRequest) {
     // Then delete the R2 object
     await deleteObject(body.id).catch(() => {})
     return NextResponse.json({ ok: true })
+  }
+
+  if (body.action === 'approve_all') {
+    const count = await dbApproveAllPending()
+    return NextResponse.json({ ok: true, count })
   }
 
   return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })

@@ -123,7 +123,22 @@ export async function POST(req: NextRequest) {
       // .rotate() auto-applies EXIF orientation before processing and strips
       // the tag from the output, preventing dark/rotated images on mobile uploads.
       const sourceBuffer = Buffer.from(arrayBuffer)
-      const webpBuf = await sharp(sourceBuffer).rotate().webp({ quality: 80 }).toBuffer()
+      const rotated = await sharp(sourceBuffer).rotate().toBuffer()
+      // ── Watermark ───────────────────────────────────────────────────────────
+      const meta = await sharp(rotated).metadata()
+      const w = meta.width ?? 1080
+      const h = meta.height ?? 1080
+      const fSize = Math.max(14, Math.round(Math.min(w, h) * 0.025))
+      const pad   = Math.round(fSize * 1.0)
+      const wmSvg = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
+        `<text x="${w - pad}" y="${h - pad}" font-family="Arial,sans-serif" font-size="${fSize}" ` +
+        `font-weight="600" fill="rgba(255,255,255,0.60)" text-anchor="end" ` +
+        `filter="drop-shadow(0 1px 2px rgba(0,0,0,0.45))">` +
+        `Chá José Augusto · 25.04.2026</text></svg>`
+      )
+      const watermarked = await sharp(rotated).composite([{ input: wmSvg, blend: 'over' }]).toBuffer()
+      const webpBuf = await sharp(watermarked).webp({ quality: 80 }).toBuffer()
       const [modStatus] = await Promise.all([moderateImage(webpBuf)])
       body        = webpBuf
       contentType = 'image/webp'
@@ -132,10 +147,10 @@ export async function POST(req: NextRequest) {
       status      = modStatus
 
       imageVariants = await Promise.all([
-        sharp(sourceBuffer).rotate().resize({ width: 320, withoutEnlargement: true }).webp({ quality: 72 }).toBuffer(),
-        sharp(sourceBuffer).rotate().resize({ width: 640, withoutEnlargement: true }).webp({ quality: 76 }).toBuffer(),
-        sharp(sourceBuffer).rotate().resize({ width: 1080, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer(),
-        sharp(sourceBuffer).rotate().resize(400, 400, { fit: 'cover', position: 'attention' }).webp({ quality: 74 }).toBuffer(),
+        sharp(watermarked).resize({ width: 320, withoutEnlargement: true }).webp({ quality: 72 }).toBuffer(),
+        sharp(watermarked).resize({ width: 640, withoutEnlargement: true }).webp({ quality: 76 }).toBuffer(),
+        sharp(watermarked).resize({ width: 1080, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer(),
+        sharp(watermarked).resize(400, 400, { fit: 'cover', position: 'attention' }).webp({ quality: 74 }).toBuffer(),
       ]).then(([w320, w640, w1080, thumb400]) => ([
         { key: imageVariantKey(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`, 320), body: w320, contentType: 'image/webp' },
         { key: imageVariantKey(`cha-jose-augusto/fotos/foto_${suffix}.${ext}`, 640), body: w640, contentType: 'image/webp' },
