@@ -1,6 +1,28 @@
+'use client'
+
 interface HeroPreviewItem {
   thumbUrl: string
   author: string
+}
+
+function ShareEventBtn() {
+  const share = () => {
+    const data = {
+      title: 'Chá do José Augusto 🧸',
+      text: 'Venha ver o álbum do nosso chá de bebê!',
+      url: window.location.href,
+    }
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      navigator.share(data).catch(() => {})
+    } else {
+      try { navigator.clipboard.writeText(window.location.href) } catch {}
+    }
+  }
+  return (
+    <button className="btn-secondary" onClick={share} style={{ fontSize: '.9rem' }}>
+      📲 Compartilhar
+    </button>
+  )
 }
 
 export default function HeroSection({ media }: { media: HeroPreviewItem[] }) {
@@ -14,6 +36,7 @@ export default function HeroSection({ media }: { media: HeroPreviewItem[] }) {
       <p className="hero-sub">Sábado, às 17 horas</p>
       <div className="hero-cta">
         <a href="#galeria" className="btn-primary">📷 Ver o álbum</a>
+        <ShareEventBtn />
       </div>
       {media[0]?.thumbUrl && (
         <div className="hero-preview-card">
