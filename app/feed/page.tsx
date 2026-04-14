@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useRouter } from 'next/navigation'
 import FeedItem, { FeedMediaItem } from '@/components/FeedItem'
@@ -28,7 +28,7 @@ function markReacted(id: string, emoji: string) {
   if (!reacted.includes(emoji)) localStorage.setItem(`cha_reacted_${id}`, JSON.stringify([...reacted, emoji]))
 }
 
-export default function FeedPage() {
+function FeedPageInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const authorFilter = searchParams.get('author') ?? ''
@@ -305,5 +305,20 @@ export default function FeedPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function FeedPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100dvh', background: '#0f0d0b', color: '#e8d9c4', display: 'grid', placeItems: 'center', fontFamily: "'Cormorant Garamond', serif" }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 42, marginBottom: 12 }}>📷</div>
+          <p>Carregando feed...</p>
+        </div>
+      </div>
+    }>
+      <FeedPageInner />
+    </Suspense>
   )
 }
