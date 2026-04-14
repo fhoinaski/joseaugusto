@@ -670,6 +670,269 @@ export async function dbUnclaimStoreItem(id: number): Promise<void> {
   await d1Exec(`UPDATE store_items SET claimed_by = NULL, claimed_at = NULL WHERE id = ?`, [id])
 }
 
+// ── Livro de Mensagens ────────────────────────────────────────────────────────
+
+export interface LivroMessage {
+  id: number
+  author: string
+  message: string
+  createdAt: string
+}
+
+export async function dbEnsureLivroTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS livro (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    author     TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbGetLivroMessages(limit = 100): Promise<LivroMessage[]> {
+  try {
+    const rows = await d1Query<{ id: number; author: string; message: string; created_at: string }>(
+      `SELECT id, author, message, created_at FROM livro ORDER BY created_at DESC LIMIT ?`,
+      [limit],
+    )
+    return rows.map(r => ({ id: r.id, author: r.author, message: r.message, createdAt: r.created_at }))
+  } catch (err) {
+    if (isMissingTableError(err, 'livro')) {
+      await dbEnsureLivroTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbInsertLivroMessage(author: string, message: string): Promise<LivroMessage> {
+  try {
+    await d1Exec(
+      `INSERT INTO livro (author, message, created_at) VALUES (?, ?, datetime('now'))`,
+      [author, message],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'livro')) {
+      await dbEnsureLivroTable()
+      await d1Exec(
+        `INSERT INTO livro (author, message, created_at) VALUES (?, ?, datetime('now'))`,
+        [author, message],
+      )
+    } else {
+      throw err
+    }
+  }
+  const rows = await d1Query<{ id: number; created_at: string }>(
+    `SELECT id, created_at FROM livro WHERE author = ? AND message = ? ORDER BY id DESC LIMIT 1`,
+    [author, message],
+  )
+  return { id: rows[0]?.id ?? 0, author, message, createdAt: rows[0]?.created_at ?? new Date().toISOString() }
+}
+
+// ── Palpites do Bebê ──────────────────────────────────────────────────────────
+
+export interface PalpiteItem {
+  id: number
+  author: string
+  peso_g: number | null
+  altura_cm: number | null
+  hora: string | null
+  cabelo: string | null
+  createdAt: string
+}
+
+export async function dbEnsurePalpitesTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS palpites (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    author     TEXT NOT NULL,
+    peso_g     INTEGER,
+    altura_cm  INTEGER,
+    hora       TEXT,
+    cabelo     TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(author)
+  )`)
+}
+
+export async function dbGetPalpites(): Promise<PalpiteItem[]> {
+  try {
+    const rows = await d1Query<{ id: number; author: string; peso_g: number | null; altura_cm: number | null; hora: string | null; cabelo: string | null; created_at: string }>(
+      `SELECT id, author, peso_g, altura_cm, hora, cabelo, created_at FROM palpites ORDER BY created_at DESC`,
+    )
+    return rows.map(r => ({
+      id: r.id, author: r.author, peso_g: r.peso_g, altura_cm: r.altura_cm,
+      hora: r.hora, cabelo: r.cabelo, createdAt: r.created_at,
+    }))
+  } catch (err) {
+    if (isMissingTableError(err, 'palpites')) {
+      await dbEnsurePalpitesTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbUpsertPalpite(
+  author: string,
+  peso_g?: number | null,
+  altura_cm?: number | null,
+  hora?: string | null,
+  cabelo?: string | null,
+): Promise<void> {
+  try {
+    await d1Exec(
+      `INSERT INTO palpites (author, peso_g, altura_cm, hora, cabelo, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(author) DO UPDATE SET
+           peso_g = excluded.peso_g,
+           altura_cm = excluded.altura_cm,
+           hora = excluded.hora,
+           cabelo = excluded.cabelo,
+           created_at = excluded.created_at`,
+      [author, peso_g ?? null, altura_cm ?? null, hora ?? null, cabelo ?? null],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'palpites')) {
+      await dbEnsurePalpitesTable()
+      await d1Exec(
+        `INSERT INTO palpites (author, peso_g, altura_cm, hora, cabelo, created_at)
+           VALUES (?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(author) DO UPDATE SET
+             peso_g = excluded.peso_g,
+             altura_cm = excluded.altura_cm,
+             hora = excluded.hora,
+             cabelo = excluded.cabelo,
+             created_at = excluded.created_at`,
+        [author, peso_g ?? null, altura_cm ?? null, hora ?? null, cabelo ?? null],
+      )
+    } else {
+      throw err
+    }
+  }
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: number
+  recipient: string
+  type: string
+  actor: string
+  media_id: string | null
+  message: string | null
+  read: number
+  createdAt: string
+}
+
+export async function dbEnsureNotificationsTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS notifications (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient  TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    actor      TEXT NOT NULL,
+    media_id   TEXT,
+    message    TEXT,
+    read       INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbCreateNotification(
+  recipient: string,
+  type: string,
+  actor: string,
+  media_id?: string | null,
+  message?: string | null,
+): Promise<void> {
+  if (actor === recipient) return
+  try {
+    await d1Exec(
+      `INSERT INTO notifications (recipient, type, actor, media_id, message, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+      [recipient, type, actor, media_id ?? null, message ?? null],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'notifications')) {
+      await dbEnsureNotificationsTable()
+      await d1Exec(
+        `INSERT INTO notifications (recipient, type, actor, media_id, message, created_at)
+           VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+        [recipient, type, actor, media_id ?? null, message ?? null],
+      )
+    } else {
+      throw err
+    }
+  }
+}
+
+export async function dbGetNotifications(recipient: string, limit = 50): Promise<NotificationItem[]> {
+  try {
+    const rows = await d1Query<{
+      id: number; recipient: string; type: string; actor: string
+      media_id: string | null; message: string | null; read: number; created_at: string
+    }>(
+      `SELECT id, recipient, type, actor, media_id, message, read, created_at
+         FROM notifications WHERE recipient = ? ORDER BY created_at DESC LIMIT ?`,
+      [recipient, limit],
+    )
+    return rows.map(r => ({
+      id: r.id, recipient: r.recipient, type: r.type, actor: r.actor,
+      media_id: r.media_id, message: r.message, read: r.read, createdAt: r.created_at,
+    }))
+  } catch (err) {
+    if (isMissingTableError(err, 'notifications')) {
+      await dbEnsureNotificationsTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbGetUnreadCount(recipient: string): Promise<number> {
+  try {
+    const rows = await d1Query<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM notifications WHERE recipient = ? AND read = 0`,
+      [recipient],
+    )
+    return rows[0]?.n ?? 0
+  } catch (err) {
+    if (isMissingTableError(err, 'notifications')) return 0
+    throw err
+  }
+}
+
+export async function dbMarkAllRead(recipient: string): Promise<void> {
+  try {
+    await d1Exec(`UPDATE notifications SET read = 1 WHERE recipient = ? AND read = 0`, [recipient])
+  } catch (err) {
+    if (isMissingTableError(err, 'notifications')) return
+    throw err
+  }
+}
+
+// ── Event Stats ───────────────────────────────────────────────────────────────
+
+export interface EventStats {
+  photos: number
+  reactions: number
+  comments: number
+  authors: number
+}
+
+export async function dbGetEventStats(): Promise<EventStats> {
+  const [photoRows, reactionRows, commentRows, authorRows] = await Promise.all([
+    d1Query<{ n: number }>(`SELECT COUNT(*) AS n FROM media WHERE status = 'approved'`),
+    d1Query<{ n: number }>(`SELECT COALESCE(SUM(count), 0) AS n FROM reactions`),
+    d1Query<{ n: number }>(`SELECT COUNT(*) AS n FROM comments`),
+    d1Query<{ n: number }>(`SELECT COUNT(DISTINCT author) AS n FROM media WHERE status = 'approved'`),
+  ])
+  return {
+    photos:    photoRows[0]?.n ?? 0,
+    reactions: reactionRows[0]?.n ?? 0,
+    comments:  commentRows[0]?.n ?? 0,
+    authors:   authorRows[0]?.n ?? 0,
+  }
+}
+
 // ── Push Subscriptions ────────────────────────────────────────────────────────
 
 export interface PushSubscriptionRow {

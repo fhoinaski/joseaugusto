@@ -55,6 +55,7 @@ export default function FeedItem({
   const [videoMuted, setVideoMuted] = useState(true)
   const [isDesktop, setIsDesktop] = useState(false)
   const [commentsLoaded, setCommentsLoaded] = useState(false)
+  const [replyTo, setReplyTo] = useState<string | null>(null)
   const lastTapRef = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -157,6 +158,7 @@ export default function FeedItem({
     const optimistic: CommentItem = { id: tempId, author, text, createdAt: new Date().toISOString() }
     setComments(prev => [...prev, optimistic])
     setCommentText('')
+    setReplyTo(null)
     setIsSubmitting(true)
 
     // Scroll to bottom to show new comment
@@ -189,6 +191,45 @@ export default function FeedItem({
       setCommentText(text)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const downloadMedia = async () => {
+    try {
+      emitToast('Baixando...')
+      const res = await fetch(`/api/download?url=${encodeURIComponent(item.fullUrl)}`)
+      if (!res.ok) throw new Error()
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const ext = item.type === 'video' ? 'mp4' : 'jpg'
+      a.download = `cha-jose-${item.author.replace(/\s+/g, '-')}.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      emitToast('Download concluído!')
+    } catch {
+      emitToast('Não foi possível baixar')
+    }
+  }
+
+  const sharePost = async () => {
+    const shareData = {
+      title: `Foto de ${item.author} — Chá do José Augusto`,
+      text: item.caption?.trim() || `Confira esta foto de ${item.author} no chá do José Augusto!`,
+      url: `${window.location.origin}/?foto=${item.id}`,
+    }
+    try {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(shareData.url)
+        emitToast('Link copiado!')
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') emitToast('Não foi possível compartilhar')
     }
   }
 
@@ -272,7 +313,11 @@ export default function FeedItem({
 
         {/* ── Info bar ─────────────────────────── */}
         <div style={{ flexShrink: 0, padding: isDesktop ? '2px 4px 0' : '0 2px', color: '#fff' }}>
-          <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>@{item.author}</p>
+          <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+            <a href={`/u/${encodeURIComponent(item.author)}`} style={{ color: '#f5c78f', fontWeight: 700, fontSize: 17, textDecoration: 'none' }}>
+              @{item.author}
+            </a>
+          </p>
           <p style={{ margin: '6px 0 0', fontSize: 14, opacity: 0.95 }}>{item.caption?.trim() || 'Sem legenda'}</p>
           <p style={{ margin: '4px 0 0', fontSize: 12, opacity: 0.55 }}>{timeAgo(item.createdAt)}</p>
 
@@ -308,6 +353,27 @@ export default function FeedItem({
                 : <span>Comentar</span>
               }
             </button>
+
+            {/* Share */}
+            <button
+              onClick={sharePost}
+              style={{ border: '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: 'rgba(255,255,255,.12)', color: '#fff', padding: '8px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              aria-label="Compartilhar"
+            >
+              ↗ Compartilhar
+            </button>
+
+            {/* Download */}
+            {item.type !== 'audio' && (
+              <button
+                onClick={downloadMedia}
+                style={{ border: '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: 'rgba(255,255,255,.12)', color: '#fff', padding: '8px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+                aria-label="Baixar"
+                title="Baixar foto"
+              >
+                ⬇
+              </button>
+            )}
 
             {showEmojiPicker && (
               <div style={{ width: '100%', marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8, background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.2)', borderRadius: 14, padding: 10 }}>
@@ -352,11 +418,27 @@ export default function FeedItem({
                           marginTop: 6, flexShrink: 0,
                         }}
                       />
-                      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4, opacity: c.id < 0 ? 0.6 : 1, transition: 'opacity .3s' }}>
-                        <strong style={{ color: '#f5c78f' }}>{c.author}</strong>
-                        {' '}
-                        <span style={{ color: 'rgba(255,255,255,.9)' }}>{c.text}</span>
-                      </p>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4, opacity: c.id < 0 ? 0.6 : 1, transition: 'opacity .3s' }}>
+                          <strong style={{ color: '#f5c78f' }}>{c.author}</strong>
+                          {' '}
+                          <span style={{ color: 'rgba(255,255,255,.9)' }}>{c.text}</span>
+                        </p>
+                        {canWrite && c.id >= 0 && (
+                          <button
+                            onClick={() => {
+                              setReplyTo(c.author)
+                              setCommentText(`@${c.author} `)
+                              setTimeout(() => {
+                                commentInputRef.current?.focus()
+                              }, 50)
+                            }}
+                            style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.45)', fontSize: 11, cursor: 'pointer', padding: '2px 0', marginTop: 2 }}
+                          >
+                            Responder
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -365,6 +447,20 @@ export default function FeedItem({
                 <p style={{ margin: '0 0 8px', fontSize: 12, opacity: 0.45, fontStyle: 'italic' }}>
                   Nenhum comentário ainda. Seja o primeiro!
                 </p>
+              )}
+
+              {/* Reply chip */}
+              {replyTo && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, background: 'rgba(255,255,255,.1)', borderRadius: 999, padding: '4px 10px', width: 'fit-content' }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,.7)' }}>Respondendo <strong style={{ color: '#f5c78f' }}>@{replyTo}</strong></span>
+                  <button
+                    onClick={() => { setReplyTo(null); setCommentText('') }}
+                    style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.55)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 2px' }}
+                    aria-label="Cancelar resposta"
+                  >
+                    ×
+                  </button>
+                </div>
               )}
 
               {/* Input row */}

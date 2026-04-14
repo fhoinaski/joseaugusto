@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useSearchParams, useRouter } from 'next/navigation'
 import FeedItem, { FeedMediaItem } from '@/components/FeedItem'
 import Stories from '@/components/Stories'
 import { useGeoAccess } from '@/components/GeoAccessProvider'
@@ -28,6 +29,9 @@ function markReacted(id: string, emoji: string) {
 }
 
 export default function FeedPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const authorFilter = searchParams.get('author') ?? ''
   const [media, setMedia] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -145,6 +149,9 @@ export default function FeedPage() {
     return () => obs.disconnect()
   }, [fetchMedia, nextCursor])
 
+  const filteredMedia = useMemo(() =>
+    authorFilter ? media.filter(m => m.author === authorFilter) : media
+  , [media, authorFilter])
   const storiesItems = useMemo(() => media.slice(0, 30), [media])
 
   const unlock = async () => {
@@ -246,6 +253,23 @@ export default function FeedPage() {
           paddingBottom: bottomNavInset,
         }}
       >
+        {/* Author filter chip */}
+        {authorFilter && (
+          <div style={{ margin: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ background: 'rgba(212,160,86,.25)', border: '1px solid rgba(212,160,86,.5)', borderRadius: 999, padding: '6px 14px', fontSize: 13, color: '#f5c78f', display: 'flex', alignItems: 'center', gap: 8 }}>
+              📷 Fotos de <strong>{authorFilter}</strong>
+              <button
+                onClick={() => router.push('/feed')}
+                style={{ background: 'none', border: 'none', color: '#f5c78f', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 2px' }}
+                aria-label="Limpar filtro"
+              >×</button>
+            </span>
+            {filteredMedia.length === 0 && !loading && (
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', fontStyle: 'italic' }}>Nenhuma foto encontrada</span>
+            )}
+          </div>
+        )}
+
         {!canWrite && (
           <section style={{ margin: '10px 12px', padding: 12, borderRadius: 12, border: '1px solid rgba(245,199,143,.45)', background: 'rgba(18,15,12,.75)', color: '#f5dab6' }}>
             <p style={{ margin: 0, fontSize: 13 }}>
@@ -269,7 +293,7 @@ export default function FeedPage() {
           </section>
         )}
 
-        {media.map(item => (
+        {filteredMedia.map(item => (
           <FeedItem key={item.id} item={item} onLike={like} canWrite={canWrite} viewportHeight={feedViewportHeight} />
         ))}
 

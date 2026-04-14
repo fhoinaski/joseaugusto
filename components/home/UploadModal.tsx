@@ -25,6 +25,15 @@ interface QItem {
 const MAX_LS_SIZE = 5 * 1024 * 1024
 const LS_KEY = 'cha_upload_queue'
 
+const FILTERS = [
+  { id: 'none',    label: 'Original', css: 'none' },
+  { id: 'quente',  label: 'Quente',   css: 'sepia(0.3) saturate(1.3) brightness(1.05)' },
+  { id: 'suave',   label: 'Suave',    css: 'contrast(0.9) brightness(1.08) saturate(0.9)' },
+  { id: 'vintage', label: 'Vintage',  css: 'sepia(0.5) contrast(0.85) brightness(0.95)' },
+  { id: 'pb',      label: 'P&B',      css: 'grayscale(1) contrast(1.05)' },
+  { id: 'vivo',    label: 'Vivo',     css: 'saturate(1.6) contrast(1.08)' },
+]
+
 async function saveToLS(item: QItem) {
   if (item.file.size > MAX_LS_SIZE) return
   try {
@@ -82,8 +91,9 @@ export default function UploadModal({
   const [mediaError, setMediaError] = useState('')
   const [caption, setCaption] = useState('')
   const [suggestingCaption, setSuggestingCaption] = useState(false)
-  const [step, setStep] = useState<'source' | 'loading' | 'queue'>('source')
+  const [step, setStep] = useState<'source' | 'loading' | 'filter' | 'queue'>('source')
   const [queue, setQueue] = useState<QItem[]>([])
+  const [selectedFilter, setSelectedFilter] = useState<string>('none')
   const [uploading, setUploading] = useState(false)
   const [compPct, setCompPct] = useState(0)
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -155,36 +165,43 @@ export default function UploadModal({
 
   const handleImgFiles = async (files: FileList | null) => {
     if (!persistAuthor()) return
-    if (!files || !files[0]) return
-    const f0 = files[0]
-    const isImageLike = f0.type.startsWith('image/') || isHeicFile(f0) || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f0.name)
-    if (!isImageLike) {
-      setMediaError('Selecione uma imagem valida para postar.')
-      return
-    }
+    if (!files || files.length === 0) return
+
+    const imageFiles = Array.from(files).filter(f =>
+      f.type.startsWith('image/') || isHeicFile(f) || /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i.test(f.name)
+    )
+    if (imageFiles.length === 0) { setMediaError('Selecione imagens válidas.'); return }
     setMediaError('')
 
-    // Show the raw file immediately so the user sees their photo right away
-    // (no black screen while prepareImageBlob runs — can take 2-4 s on mobile)
-    const immediateUrl = URL.createObjectURL(f0)
+    // Show immediate preview of first file
+    const immediateUrl = URL.createObjectURL(imageFiles[0])
     setRawPreview(immediateUrl)
     setStep('loading')
     setCompPct(10)
-    const pct = setInterval(() => setCompPct(p => Math.min(p + 16, 88)), 180)
+    const pct = setInterval(() => setCompPct(p => Math.min(p + 12, 88)), 200)
+
     try {
-      const { blob, previewUrl } = await prepareImageBlob(f0, 2000)
+      const processed = await Promise.all(imageFiles.map(async (f) => {
+        try {
+          const { blob, previewUrl } = await prepareImageBlob(f, 2000)
+          return { file: blob, name: renameWithExt(f.name, 'webp'), preview: previewUrl, status: 'waiting' as const, progress: 0, type: 'image' as const, retries: 0, isOfflineError: false }
+        } catch {
+          const url = URL.createObjectURL(f)
+          return { file: f, name: f.name, preview: url, status: 'waiting' as const, progress: 0, type: 'image' as const, retries: 0, isOfflineError: false }
+        }
+      }))
       clearInterval(pct)
       setCompPct(100)
       URL.revokeObjectURL(immediateUrl)
       setRawPreview('')
-      setQueue([{ file: blob, name: renameWithExt(f0.name, 'webp'), preview: previewUrl, status: 'waiting', progress: 0, type: 'image', retries: 0, isOfflineError: false }])
-      setTimeout(() => setStep('queue'), 120)
+      setQueue(processed)
+      setSelectedFilter('none')
+      setTimeout(() => setStep('filter'), 120)
     } catch {
       clearInterval(pct)
-      // Processing failed — use raw file as fallback (browser handles EXIF display)
       setRawPreview('')
-      setQueue([{ file: f0, name: f0.name, preview: immediateUrl, status: 'waiting', progress: 0, type: 'image', retries: 0, isOfflineError: false }])
-      setTimeout(() => setStep('queue'), 120)
+      URL.revokeObjectURL(immediateUrl)
+      setMediaError('Erro ao processar imagens.')
     }
   }
 
@@ -385,8 +402,8 @@ export default function UploadModal({
                 </button>
               ))}
             </div>
-            <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" style={{ display: 'none' }} onClick={e => { (e.target as HTMLInputElement).value = '' }} onChange={e => handleImgFiles(e.target.files)}/>
-            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" style={{ display: 'none' }} onClick={e => { (e.target as HTMLInputElement).value = '' }} onChange={e => handleImgFiles(e.target.files)}/>
+            <input ref={camRef} type="file" accept="image/*,.heic,.heif" capture="environment" multiple style={{ display: 'none' }} onClick={e => { (e.target as HTMLInputElement).value = '' }} onChange={e => handleImgFiles(e.target.files)}/>
+            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple style={{ display: 'none' }} onClick={e => { (e.target as HTMLInputElement).value = '' }} onChange={e => handleImgFiles(e.target.files)}/>
             <input
               ref={vidRef}
               type="file"
@@ -433,6 +450,69 @@ export default function UploadModal({
               <p className="compress-label">{compPct < 100 ? `Otimizando... ${compPct}%` : 'Pronto!'}</p>
             </div>
           </div>
+        )}
+        {step === 'filter' && queue.length > 0 && (
+          <>
+            <p className="modal-label">✦ Escolha um filtro ✦</p>
+            <h2 className="modal-title" style={{ marginBottom: 12 }}>
+              {queue.length > 1 ? `${queue.length} fotos` : '1 foto'}
+            </h2>
+
+            {/* Preview da primeira imagem com filtro */}
+            <div style={{ width: '100%', maxWidth: 280, margin: '0 auto 16px', borderRadius: 14, overflow: 'hidden', aspectRatio: '1', background: '#f5ede0' }}>
+              <img
+                src={queue[0].preview}
+                alt="Preview"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', filter: FILTERS.find(f => f.id === selectedFilter)?.css || 'none', transition: 'filter .3s' }}
+              />
+            </div>
+
+            {/* Strip de filtros */}
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 16, scrollbarWidth: 'none' }}>
+              {FILTERS.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setSelectedFilter(f.id)}
+                  style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  <div style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', border: selectedFilter === f.id ? '2.5px solid var(--bd)' : '2px solid transparent' }}>
+                    <img src={queue[0].preview} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: f.css }} />
+                  </div>
+                  <span style={{ fontSize: '.68rem', fontWeight: selectedFilter === f.id ? 700 : 500, color: selectedFilter === f.id ? 'var(--bd)' : 'var(--bl)', fontFamily: "'Cormorant Garamond',serif" }}>{f.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={async () => {
+              // Apply filter to canvas if not 'none'
+              if (selectedFilter !== 'none') {
+                const filterCss = FILTERS.find(f => f.id === selectedFilter)?.css || 'none'
+                const newQueue = await Promise.all(queue.map(async (qi) => {
+                  if (qi.type !== 'image') return qi
+                  try {
+                    const img = new Image()
+                    img.src = qi.preview
+                    await new Promise((res, rej) => { img.onload = res; img.onerror = rej })
+                    const canvas = document.createElement('canvas')
+                    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+                    const ctx = canvas.getContext('2d')!
+                    ctx.filter = filterCss
+                    ctx.drawImage(img, 0, 0)
+                    const blob = await new Promise<Blob>((res, rej) => canvas.toBlob(b => b ? res(b) : rej(), 'image/webp', 0.88))
+                    const preview = URL.createObjectURL(blob)
+                    return { ...qi, file: blob, preview }
+                  } catch { return qi }
+                }))
+                setQueue(newQueue)
+              }
+              setStep('queue')
+            }}>
+              Continuar →
+            </button>
+            <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setStep('queue')}>
+              Pular
+            </button>
+          </>
         )}
         {step === 'queue' && (
           <>
