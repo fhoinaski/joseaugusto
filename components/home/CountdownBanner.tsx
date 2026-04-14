@@ -67,22 +67,22 @@ export default function CountdownBanner() {
     return (
       <div
         style={{
-          background: 'linear-gradient(135deg, #1a3a1a, #2d5a2d)',
-          border: '1px solid rgba(80,200,80,.3)',
+          background: 'linear-gradient(135deg, #fdf6ee, #f5ede0)',
+          border: '2px solid #c9a87c',
           borderRadius: 20,
           padding: '28px 24px',
           marginBottom: 24,
           textAlign: 'center',
-          animation: 'babyGlow 2s ease-in-out infinite',
+          boxShadow: '0 4px 24px rgba(196,122,58,.15)',
         }}
       >
-        <div style={{ fontSize: '3rem', marginBottom: 12 }}>🍼</div>
+        <div style={{ fontSize: '3rem', marginBottom: 8 }}>🍼</div>
         <h2
           style={{
             fontFamily: "'Playfair Display',serif",
             fontSize: '1.8rem',
-            color: '#f5dab6',
-            marginBottom: 8,
+            color: '#3e2408',
+            marginBottom: 6,
             lineHeight: 1.2,
           }}
         >
@@ -91,26 +91,27 @@ export default function CountdownBanner() {
         <p
           style={{
             fontSize: '.9rem',
-            color: 'rgba(245,218,182,.65)',
+            color: '#7a4e28',
             fontStyle: 'italic',
             marginBottom: 18,
             fontFamily: "'Cormorant Garamond',serif",
           }}
         >
-          Bem-vindo ao mundo, pequenino!
+          Bem-vindo ao mundo, pequenino! 🌟
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
           {settings.babyBornWeight != null && (
             <span
               style={{
-                background: 'rgba(213,144,86,.2)',
-                border: '1px solid rgba(213,144,86,.4)',
+                background: 'rgba(196,122,58,.12)',
+                border: '1px solid #c9a87c',
                 borderRadius: 99,
                 padding: '6px 16px',
                 fontSize: '.9rem',
-                color: '#d59056',
+                color: '#7a4e28',
                 fontFamily: "'Cormorant Garamond',serif",
+                fontWeight: 600,
               }}
             >
               ⚖️ {formatWeight(settings.babyBornWeight)}
@@ -119,13 +120,14 @@ export default function CountdownBanner() {
           {settings.babyBornHora && (
             <span
               style={{
-                background: 'rgba(106,158,122,.2)',
-                border: '1px solid rgba(106,158,122,.4)',
+                background: 'rgba(196,122,58,.12)',
+                border: '1px solid #c9a87c',
                 borderRadius: 99,
                 padding: '6px 16px',
                 fontSize: '.9rem',
-                color: '#9dcfad',
+                color: '#7a4e28',
                 fontFamily: "'Cormorant Garamond',serif",
+                fontWeight: 600,
               }}
             >
               🕐 {settings.babyBornHora}
@@ -134,16 +136,17 @@ export default function CountdownBanner() {
           {settings.babyBornCabelo && (
             <span
               style={{
-                background: 'rgba(255,255,255,.1)',
-                border: '1px solid rgba(255,255,255,.15)',
+                background: 'rgba(196,122,58,.12)',
+                border: '1px solid #c9a87c',
                 borderRadius: 99,
                 padding: '6px 16px',
                 fontSize: '.9rem',
-                color: 'rgba(245,218,182,.8)',
+                color: '#7a4e28',
                 fontFamily: "'Cormorant Garamond',serif",
+                fontWeight: 600,
               }}
             >
-              Cabelo: {settings.babyBornCabelo}
+              👶 Cabelo: {settings.babyBornCabelo}
             </span>
           )}
         </div>
@@ -159,8 +162,8 @@ export default function CountdownBanner() {
     return (
       <div
         style={{
-          background: 'rgba(255,255,255,.06)',
-          border: '1px solid rgba(255,255,255,.1)',
+          background: '#f5ede0',
+          border: '1px solid #e8d4b8',
           borderRadius: 20,
           padding: '24px 20px',
           marginBottom: 24,
@@ -171,7 +174,7 @@ export default function CountdownBanner() {
           style={{
             fontFamily: "'Playfair Display',serif",
             fontSize: '1.2rem',
-            color: '#f5dab6',
+            color: '#3e2408',
           }}
         >
           A chegada está próxima... 🌟
@@ -183,8 +186,8 @@ export default function CountdownBanner() {
   return (
     <div
       style={{
-        background: 'rgba(255,255,255,.06)',
-        border: '1px solid rgba(255,255,255,.1)',
+        background: '#f5ede0',
+        border: '1px solid #e8d4b8',
         borderRadius: 20,
         padding: '24px 20px',
         marginBottom: 24,
@@ -196,7 +199,7 @@ export default function CountdownBanner() {
           fontSize: '.78rem',
           letterSpacing: '.08em',
           textTransform: 'uppercase',
-          color: 'rgba(245,218,182,.5)',
+          color: '#a0713e',
           fontWeight: 600,
           marginBottom: 12,
           fontFamily: "'Cormorant Garamond',serif",
@@ -208,7 +211,7 @@ export default function CountdownBanner() {
         style={{
           fontFamily: "'Playfair Display',serif",
           fontSize: '2rem',
-          color: '#d59056',
+          color: '#7a4e28',
           letterSpacing: '.04em',
           lineHeight: 1.1,
         }}

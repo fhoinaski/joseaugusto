@@ -232,125 +232,6 @@ function ToastManager({ toasts, onRemove }:{ toasts:ToastMsg[]; onRemove:(id:str
   )
 }
 
-// ── Canvas helper ─────────────────────────────────────────────────────────
-async function generateCapsuleCanvas(author:string, message:string): Promise<Blob|null> {
-  try {
-    await Promise.all([
-      document.fonts.load('700 1em "Dancing Script"'),
-      document.fonts.load('400 1em "Cormorant Garamond"'),
-    ])
-    const cv=document.createElement('canvas'); cv.width=900; cv.height=640
-    const ctx=cv.getContext('2d')!
-    ctx.fillStyle='#f5ede0'; ctx.fillRect(0,0,900,640)
-    // Borders
-    ctx.strokeStyle='#c9a87c'; ctx.lineWidth=2.5; ctx.strokeRect(28,28,844,584)
-    ctx.strokeStyle='#e8d4b8'; ctx.lineWidth=1;   ctx.strokeRect(38,38,824,564)
-    // Title
-    ctx.font='40px "Dancing Script"'; ctx.fillStyle='#3e2408'; ctx.textAlign='center'
-    ctx.fillText('Para José Augusto 🐻',450,110)
-    // Divider
-    const g=ctx.createLinearGradient(200,0,700,0)
-    g.addColorStop(0,'transparent'); g.addColorStop(.3,'#c9a87c'); g.addColorStop(.7,'#c9a87c'); g.addColorStop(1,'transparent')
-    ctx.strokeStyle=g; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(200,128); ctx.lineTo(700,128); ctx.stroke()
-    // Message body
-    ctx.font='25px "Cormorant Garamond"'; ctx.fillStyle='#2a1400'; ctx.textAlign='left'
-    const words=message.split(' '); const maxW=800; const sx=58
-    let y=178, line=''
-    for(const w of words){
-      const t=line?line+' '+w:w
-      if(ctx.measureText(t).width>maxW&&line){ ctx.fillText(line,sx,y); line=w; y+=40; if(y>540){ctx.fillText('…',sx,y);break} }
-      else line=t
-    }
-    if(line&&y<=540) ctx.fillText(line,sx,y)
-    // Author + date
-    const date=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})
-    ctx.font='17px "Cormorant Garamond"'; ctx.fillStyle='#8a5e35'; ctx.textAlign='left'; ctx.fillText(date,58,595)
-    ctx.font='26px "Dancing Script"';     ctx.fillStyle='#7a4e28'; ctx.textAlign='right'; ctx.fillText(`— ${author}`,842,595)
-    return await new Promise(r=>cv.toBlob(b=>r(b),'image/png',0.92))
-  } catch { return null }
-}
-
-// ── Capsule Section ───────────────────────────────────────────────────────
-function CapsuleSection({ defaultAuthor }:{ defaultAuthor:string }) {
-  const [count,    setCount]    = useState<number|null>(null)
-  const [openDate, setOpenDate] = useState('18 anos')
-  const [author,   setAuthor]   = useState(defaultAuthor)
-  const [message,  setMessage]  = useState('')
-  const [phase,    setPhase]    = useState<'idle'|'generating'|'sending'|'done'>('idle')
-
-  useEffect(()=>{
-    setAuthor(defaultAuthor)
-  },[defaultAuthor])
-
-  useEffect(()=>{
-    fetchJsonSafe<{ count?: number; openDate?: string }>('/api/capsule', {}).then(d=>{
-      setCount(d.count??0); setOpenDate(d.openDate??'18 anos')
-    })
-  },[])
-
-  const submit=async()=>{
-    if(!author.trim()||!message.trim()||phase!=='idle') return
-    setPhase('generating')
-    const blob=await generateCapsuleCanvas(author.trim(),message.trim())
-    setPhase('sending')
-    try {
-      const fd=new FormData()
-      if(blob) fd.append('image',blob,'capsule.png')
-      fd.append('author',author.trim())
-      fd.append('message',message.trim())
-      const res=await fetch('/api/capsule',{method:'POST',body:fd})
-      if(res.ok){ setPhase('done'); setCount(c=>(c??0)+1) }
-      else setPhase('idle')
-    }catch{ setPhase('idle') }
-  }
-
-  return (
-    <section className="capsule-section reveal">
-      <div className="capsule-inner">
-        <div className="capsule-header">
-          <span className="capsule-envelope">💌</span>
-          <p className="capsule-label">✦ Cápsula do Tempo ✦</p>
-          <h2 className="capsule-title">Uma mensagem para<br/>quando ele crescer</h2>
-          <p className="capsule-subtitle">
-            Escreva algo para o José Augusto ler quando completar <strong>{openDate}</strong>.
-            Esta mensagem ficará guardada com muito carinho.
-          </p>
-          {count!==null&&(
-            <div className="capsule-counter">
-              💌 {count===0?'Seja o primeiro a deixar uma mensagem':count===1?'1 pessoa já deixou uma mensagem':`${count} pessoas já deixaram uma mensagem`}
-            </div>
-          )}
-        </div>
-
-        {phase!=='done'?(
-          <div className="capsule-form">
-            <div className="capsule-lock-badge">🔒 Abre em {openDate}</div>
-            <input className="capsule-input" type="text" placeholder="Seu nome"
-              value={author} onChange={e=>setAuthor(e.target.value)} maxLength={80}/>
-            <div className="capsule-textarea-wrap">
-              <textarea className="capsule-textarea"
-                placeholder={"Escreva sua mensagem para o José Augusto…\n\nEle vai ler quando for grande 💛"}
-                value={message} onChange={e=>setMessage(e.target.value)} maxLength={500}/>
-              <span className="capsule-chars">{message.length}/500</span>
-            </div>
-            <button className="capsule-btn"
-              disabled={!author.trim()||!message.trim()||phase!=='idle'}
-              onClick={submit}>
-              {phase==='generating'?'✨ Preparando…':phase==='sending'?'📮 Enviando…':'🔒 Guardar mensagem'}
-            </button>
-          </div>
-        ):(
-          <div className="capsule-success">
-            <span className="capsule-success-icon">💌</span>
-            <h3 className="capsule-success-title">Mensagem guardada!</h3>
-            <p className="capsule-success-text">O José Augusto vai encontrar seu carinho quando crescer.</p>
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
 // ── PWA Banner ────────────────────────────────────────────────────────────
 function PWABanner() {
   const [show,setShow]=useState(false)
@@ -593,6 +474,103 @@ export default function Home() {
 
       <HeroSection media={media} />
 
+      {/* ── Ações principais ── */}
+      <div style={{ padding: '0 16px 20px', maxWidth: 560, margin: '0 auto', display: 'flex', gap: 10 }}>
+        <button
+          onClick={openUpload}
+          style={{
+            flex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            padding: '16px 20px',
+            background: 'linear-gradient(135deg, #c47a3a, #7a4e28)',
+            border: 'none',
+            borderRadius: 16,
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(196,122,58,.30)',
+            fontFamily: "'Cormorant Garamond',serif",
+            color: '#fff',
+          }}
+        >
+          <span style={{ fontSize: '1.6rem', lineHeight: 1 }}>📷</span>
+          <div style={{ textAlign: 'left' }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Enviar foto</p>
+            <p style={{ margin: 0, fontSize: '.76rem', opacity: .82, marginTop: 1 }}>ou vídeo</p>
+          </div>
+        </button>
+        <a
+          href="#galeria"
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 4,
+            padding: '14px 10px',
+            background: 'var(--cream)',
+            border: '1.5px solid var(--beige)',
+            borderRadius: 16,
+            textDecoration: 'none',
+            color: 'var(--bd)',
+            boxShadow: '0 2px 8px rgba(139,98,66,.08)',
+          }}
+        >
+          <span style={{ fontSize: '1.5rem' }}>🖼️</span>
+          <span style={{ fontSize: '.78rem', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: 'var(--b)' }}>Álbum ao vivo</span>
+        </a>
+      </div>
+
+      {/* ── Explorar o Evento ── */}
+      <section className="reveal" style={{ marginBottom: 16 }}>
+        <p className="section-label" style={{ textAlign: 'center', marginBottom: 12, padding: '0 16px' }}>✦ Explorar o Evento ✦</p>
+
+        {/* Horizontal scroll strip */}
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 8, scrollbarWidth: 'none' }}>
+          <div style={{ display: 'flex', gap: 10, padding: '4px 16px', width: 'max-content' }}>
+            {[
+              { href: '/bingo',    emoji: '🎯', label: 'Bingo' },
+              { href: '/desafios', emoji: '📸', label: 'Desafios' },
+              { href: '/musicas',  emoji: '🎵', label: 'Músicas' },
+              { href: '/palpites', emoji: '🎲', label: 'Palpites' },
+              { href: '/carta',    emoji: '💌', label: 'Carta ao José' },
+              { href: '/mural',    emoji: '🖼️', label: 'Mural' },
+              { href: '/livro',    emoji: '📖', label: 'Livro' },
+              { href: '/diario',   emoji: '🧸', label: 'Diário' },
+              { href: '/mosaico',  emoji: '🎨', label: 'Mosaico' },
+              { href: '/ranking',  emoji: '🏆', label: 'Ranking' },
+              { href: '/timeline', emoji: '⏱',  label: 'Timeline' },
+            ].map(({ href, emoji, label }) => (
+              <a
+                key={href}
+                href={href}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '12px 14px',
+                  background: 'var(--cream)',
+                  border: '1.5px solid var(--beige)',
+                  borderRadius: 14,
+                  textDecoration: 'none',
+                  color: 'var(--bd)',
+                  minWidth: 72,
+                  boxShadow: '0 2px 8px rgba(139,98,66,.06)',
+                  transition: 'border-color .2s, box-shadow .2s',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: '1.5rem' }}>{emoji}</span>
+                <span style={{ fontSize: '.72rem', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: 'var(--b)', textAlign: 'center', lineHeight: 1.2 }}>{label}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Stories bar */}
       {media.length > 0 && (
         <Stories items={media as StoryMediaItem[]} />
@@ -674,84 +652,6 @@ export default function Home() {
         </section>
       )}
 
-      <div className="leaves" style={{opacity:.3,marginTop:8}}>· · · ✦ · · ·</div>
-
-      {/* ── Upload CTA ── */}
-      <div className="reveal" style={{ padding: '0 16px', marginBottom: 20, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
-        <button
-          onClick={openUpload}
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 14,
-            padding: '18px 24px',
-            background: 'linear-gradient(135deg, var(--bd) 0%, var(--b) 100%)',
-            border: 'none',
-            borderRadius: 20,
-            cursor: 'pointer',
-            boxShadow: '0 4px 24px rgba(139,98,66,.30)',
-            fontFamily: "'Cormorant Garamond',serif",
-          }}
-        >
-          <span style={{ fontSize: '2rem', lineHeight: 1 }}>📷</span>
-          <div style={{ textAlign: 'left' }}>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: '1.1rem', color: '#fff', lineHeight: 1.2 }}>Compartilhar foto ou vídeo</p>
-            <p style={{ margin: 0, fontSize: '.84rem', color: 'rgba(255,255,255,.75)', marginTop: 2 }}>Adicione sua memória ao álbum do José</p>
-          </div>
-          <span style={{ marginLeft: 'auto', fontSize: '1.3rem', opacity: .8 }}>→</span>
-        </button>
-      </div>
-
-      {/* ── Explorar o Evento ── */}
-      <section className="reveal" style={{ marginBottom: 8 }}>
-        <p className="section-label" style={{ textAlign: 'center', marginBottom: 14, padding: '0 16px' }}>✦ Explorar o Evento ✦</p>
-        <div className="explore-grid">
-          {[
-            { href: '/mural',       emoji: '🖼️', label: 'Mural',            desc: 'Polaroids dos convidados' },
-            { href: '/carta',       emoji: '💌', label: 'Carta ao Bebê',     desc: 'Mensagens para o José' },
-            { href: '/palpites',    emoji: '🎲', label: 'Palpites',          desc: 'Quem acerta o peso?' },
-            { href: '/livro',       emoji: '📖', label: 'Livro de Visitas',  desc: 'Mensagens do chá' },
-            { href: '/ranking',     emoji: '🏆', label: 'Ranking',           desc: 'Convidados mais ativos' },
-            { href: '/bingo',       emoji: '🎯', label: 'Bingo do Chá',      desc: 'Complete sua cartela!' },
-            { href: '/musicas',     emoji: '🎵', label: 'Músicas',           desc: 'Sugira e vote' },
-            { href: '/desafios',    emoji: '📸', label: 'Desafios',          desc: 'Missões fotográficas' },
-            { href: '/diario',      emoji: '🧸', label: 'Diário do Bebê',    desc: 'Primeiros momentos' },
-            { href: '/mosaico',     emoji: '🎨', label: 'Mosaico',           desc: 'Todas as fotos' },
-            { href: '/timeline',    emoji: '⏱',  label: 'Linha do Tempo',    desc: 'Toda a história' },
-          ].map(({ href, emoji, label, desc }) => (
-            <a key={href} href={href} className="explore-card">
-              <span className="explore-card-icon">{emoji}</span>
-              <p className="explore-card-label">{label}</p>
-              <p className="explore-card-sub">{desc}</p>
-            </a>
-          ))}
-        </div>
-      </section>
-
-      <section id="comentarios-evento" className="parents-section reveal" style={{marginTop:14}}>
-        <p className="section-label">✦ Novidades do Evento ✦</p>
-        <div className="parents-card" style={{padding:'14px 18px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-            <strong style={{color:'var(--bd)'}}>Comentários e interações em tempo real</strong>
-            <a href="/feed" style={{fontSize:'.88rem',color:'var(--bl)'}}>abrir feed ↗</a>
-          </div>
-          {recentComments.length===0 ? (
-            <p style={{margin:0,color:'var(--text-md)',fontStyle:'italic'}}>Ainda sem comentários recentes. Compartilhe e chame a galera para interagir.</p>
-          ) : (
-            <div style={{display:'grid',gap:8}}>
-              {recentComments.map((c, idx) => (
-                <div key={`${c.mediaId}-${idx}`} style={{padding:'8px 10px',borderRadius:10,background:'rgba(245,237,224,.7)',border:'1px solid rgba(201,168,124,.25)'}}>
-                  <p style={{margin:'0 0 2px',fontSize:'.84rem',color:'#7a4e28'}}><strong>{c.author}</strong> comentou</p>
-                  <p style={{margin:0,color:'var(--bd)',fontSize:'.93rem'}}>{c.text}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
       <MediaGallery
         loading={loading}
         media={media}
@@ -761,6 +661,26 @@ export default function Home() {
         handleReact={handleReact}
         sentinelRef={sentinelRef}
       />
+
+      {recentComments.length > 0 && (
+        <section id="comentarios-evento" className="parents-section reveal" style={{marginTop:14}}>
+          <p className="section-label">✦ Últimas interações ✦</p>
+          <div className="parents-card" style={{padding:'14px 18px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+              <strong style={{color:'var(--bd)',fontSize:'.9rem'}}>Comentários em tempo real</strong>
+              <a href="/feed" style={{fontSize:'.84rem',color:'var(--bl)'}}>ver feed ↗</a>
+            </div>
+            <div style={{display:'grid',gap:8}}>
+              {recentComments.map((c, idx) => (
+                <div key={`${c.mediaId}-${idx}`} style={{padding:'8px 10px',borderRadius:10,background:'rgba(245,237,224,.7)',border:'1px solid rgba(201,168,124,.25)'}}>
+                  <p style={{margin:'0 0 2px',fontSize:'.82rem',color:'var(--b)'}}><strong>{c.author}</strong> comentou</p>
+                  <p style={{margin:0,color:'var(--bd)',fontSize:'.9rem'}}>{c.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Info */}
       <div className="info-strip reveal">
@@ -787,8 +707,6 @@ export default function Home() {
       <div className="reveal" style={{ padding: '0 16px', marginBottom: 8 }}>
         <AvaliacaoCard />
       </div>
-
-      <CapsuleSection defaultAuthor={savedAuthor}/>
 
       <footer className="reveal">
         <span className="footer-bear">🧸</span>

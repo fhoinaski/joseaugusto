@@ -92,8 +92,6 @@ export default function NotificationBell() {
     if (!open && unread > 0) markRead()
   }
 
-  if (!author) return null
-
   return (
     <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-flex' }}>
       {/* Bell button */}
@@ -159,17 +157,26 @@ export default function NotificationBell() {
           overflow: 'hidden',
         }}>
           <div style={{ padding: '12px 14px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(122,78,40,.1)' }}>
-            <p style={{ margin: 0, fontFamily: "'Playfair Display',serif", fontSize: '.9rem', fontWeight: 600, color: '#3e2408' }}>Notificações</p>
+            <p style={{ margin: 0, fontFamily: "'Playfair Display',serif", fontSize: '.9rem', fontWeight: 600, color: '#3e2408' }}>
+              {author ? `Oi, ${author.split(' ')[0]} 👋` : 'Notificações'}
+            </p>
             {notifications.length > 0 && (
               <button onClick={markRead} style={{ background: 'none', border: 'none', fontSize: '.72rem', color: 'rgba(62,36,8,.5)', cursor: 'pointer', fontFamily: "'Cormorant Garamond',serif" }}>
-                Marcar todas como lidas
+                Marcar lidas
               </button>
             )}
           </div>
-          <div style={{ maxHeight: 320, overflowY: 'auto' }}>
-            {notifications.length === 0 ? (
-              <p style={{ margin: 0, padding: '24px 14px', textAlign: 'center', fontSize: '.85rem', fontStyle: 'italic', color: 'rgba(62,36,8,.4)' }}>
-                Nenhuma notificação ainda
+          <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+            {!author ? (
+              <div style={{ padding: '18px 14px', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 4px', fontSize: '.88rem', color: '#7a4e28', fontFamily: "'Playfair Display',serif" }}>Bem-vindo! 🌸</p>
+                <p style={{ margin: 0, fontSize: '.8rem', color: 'rgba(62,36,8,.5)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                  Envie uma foto com seu nome para receber notificações quando alguém reagir.
+                </p>
+              </div>
+            ) : notifications.length === 0 ? (
+              <p style={{ margin: 0, padding: '20px 14px', textAlign: 'center', fontSize: '.84rem', fontStyle: 'italic', color: 'rgba(62,36,8,.4)' }}>
+                Nenhuma notificação ainda 🌸
               </p>
             ) : notifications.map(n => (
               <div
@@ -178,12 +185,10 @@ export default function NotificationBell() {
                   padding: '10px 14px',
                   borderBottom: '1px solid rgba(122,78,40,.07)',
                   background: n.read ? 'transparent' : 'rgba(201,144,86,.08)',
-                  display: 'flex',
-                  gap: 10,
-                  alignItems: 'flex-start',
+                  display: 'flex', gap: 10, alignItems: 'flex-start',
                 }}
               >
-                <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#c9902a,#7a4e28)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: '.8rem', fontWeight: 700, flexShrink: 0, fontFamily: "'Cormorant Garamond',serif" }}>
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#c9902a,#7a4e28)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: '.8rem', fontWeight: 700, flexShrink: 0 }}>
                   {n.actor.charAt(0).toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -205,8 +210,103 @@ export default function NotificationBell() {
               </div>
             ))}
           </div>
+          {/* Push subscribe — integrated at the bottom */}
+          <PushSubscribeInline />
         </div>
       )}
     </div>
   )
+}
+
+function PushSubscribeInline() {
+  const [status, setStatus] = useState<'loading' | 'idle' | 'subscribed' | 'denied' | 'unsupported'>('loading')
+  const [vapidKey, setVapidKey] = useState('')
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { setStatus('unsupported'); return }
+    fetch('/api/push/subscribe')
+      .then(r => r.json())
+      .then((d: { publicKey?: string }) => {
+        if (!d.publicKey) { setStatus('unsupported'); return }
+        setVapidKey(d.publicKey)
+        if (Notification.permission === 'denied') { setStatus('denied'); return }
+        navigator.serviceWorker.ready
+          .then(reg => reg.pushManager.getSubscription().then(sub => setStatus(sub ? 'subscribed' : 'idle')))
+          .catch(() => setStatus('idle'))
+      }).catch(() => setStatus('unsupported'))
+  }, [])
+
+  const subscribe = async () => {
+    if (!vapidKey) return
+    setStatus('loading')
+    try {
+      const reg = await navigator.serviceWorker.ready
+      if (await Notification.requestPermission() !== 'granted') { setStatus('denied'); return }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      })
+      const json = sub.toJSON()
+      await fetch('/api/push/subscribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: json.endpoint, keys: { auth: json.keys?.auth, p256dh: json.keys?.p256dh } }),
+      })
+      setStatus('subscribed')
+    } catch { setStatus('idle') }
+  }
+
+  const unsubscribe = async () => {
+    setStatus('loading')
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        await fetch('/api/push/subscribe', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'unsubscribe', endpoint: sub.endpoint }),
+        })
+        await sub.unsubscribe()
+      }
+      setStatus('idle')
+    } catch { setStatus('idle') }
+  }
+
+  if (status === 'unsupported') return null
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(122,78,40,.1)', padding: '10px 14px 14px' }}>
+      {status === 'denied' ? (
+        <p style={{ margin: 0, fontSize: '.74rem', color: 'rgba(62,36,8,.4)', fontStyle: 'italic', textAlign: 'center' }}>
+          🔕 Notificações bloqueadas no navegador
+        </p>
+      ) : (
+        <button
+          onClick={status === 'subscribed' ? unsubscribe : subscribe}
+          disabled={status === 'loading'}
+          style={{
+            width: '100%', padding: '9px 12px', borderRadius: 10,
+            border: status === 'subscribed' ? '1px solid rgba(122,78,40,.25)' : '1px solid #c9a87c',
+            background: status === 'subscribed' ? 'rgba(122,78,40,.06)' : 'linear-gradient(135deg,rgba(196,122,58,.12),rgba(122,78,40,.06))',
+            color: '#3e2408', fontSize: '.82rem', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600,
+            cursor: status === 'loading' ? 'wait' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          }}
+        >
+          {status === 'loading' ? '⏳ Aguarde...'
+            : status === 'subscribed' ? '🔔 Notificações ativas · Desativar'
+            : '🔔 Ativar notificações de novas fotos'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function urlBase64ToUint8Array(b64: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - (b64.length % 4)) % 4)
+  const base64 = (b64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(base64)
+  const buf = new ArrayBuffer(raw.length)
+  const output = new Uint8Array(buf)
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i)
+  return output
 }
