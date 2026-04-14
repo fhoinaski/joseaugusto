@@ -36,7 +36,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -82,6 +82,31 @@ function AdminPanel() {
   const [avalStats,   setAvalStats]   = useState<{ avg: number; total: number; distribution: Record<number,number> } | null>(null)
   const [avalRatings, setAvalRatings] = useState<Array<{ id: number; author: string; stars: number; comment: string | null; createdAt: string }>>([])
   const [loadingAval, setLoadingAval] = useState(false)
+
+  // ── Músicas ───────────────────────────────────────────────────────────────────
+  interface MusicaAdmin { id: number; author: string; title: string; artist: string; spotifyUrl: string | null; votes: number; approved: boolean }
+  const [musicas,       setMusicas]       = useState<MusicaAdmin[]>([])
+  const [loadingMusicas, setLoadingMusicas] = useState(false)
+
+  // ── Desafios ──────────────────────────────────────────────────────────────────
+  interface DesafioAdmin { id: number; emoji: string; title: string; description: string; completions: number; active: boolean }
+  const [desafios,       setDesafios]       = useState<DesafioAdmin[]>([])
+  const [desafioForm,    setDesafioForm]    = useState({ emoji: '📸', title: '', description: '' })
+  const [savingDesafio,  setSavingDesafio]  = useState(false)
+  const [loadingDesafios, setLoadingDesafios] = useState(false)
+
+  // ── Bingo ─────────────────────────────────────────────────────────────────────
+  interface BingoAdmin { id: number; label: string; emoji: string; called: boolean }
+  const [bingoItems,    setBingoItems]    = useState<BingoAdmin[]>([])
+  const [bingoForm,     setBingoForm]     = useState({ label: '', emoji: '🎁' })
+  const [loadingBingo,  setLoadingBingo]  = useState(false)
+
+  // ── Diário ────────────────────────────────────────────────────────────────────
+  interface DiarioAdmin { id: number; title: string; content: string; imageUrl: string | null; milestoneDate: string | null; published: boolean }
+  const [diarioEntries, setDiarioEntries] = useState<DiarioAdmin[]>([])
+  const [diarioForm,    setDiarioForm]    = useState({ title: '', content: '', imageUrl: '', milestoneDate: '' })
+  const [savingDiario,  setSavingDiario]  = useState(false)
+  const [loadingDiario, setLoadingDiario] = useState(false)
 
   // ── Enquete ──────────────────────────────────────────────────────────────────
   const [enquete,       setEnquete]       = useState<{ id: number; question: string; options: string[]; active: boolean } | null>(null)
@@ -391,12 +416,48 @@ function AdminPanel() {
     showToast('Enquete encerrada.')
   }
 
+  const fetchMusicas = useCallback(async () => {
+    setLoadingMusicas(true)
+    try { const d = await fetch('/api/admin/musicas').then(r => r.json()); setMusicas(d.musicas ?? []) }
+    finally { setLoadingMusicas(false) }
+  }, [])
+
+  const fetchDesafios = useCallback(async () => {
+    setLoadingDesafios(true)
+    try { const d = await fetch('/api/admin/desafios').then(r => r.json()); setDesafios(d.desafios ?? []) }
+    finally { setLoadingDesafios(false) }
+  }, [])
+
+  const fetchBingo = useCallback(async () => {
+    setLoadingBingo(true)
+    try { const d = await fetch('/api/admin/bingo').then(r => r.json()); setBingoItems(d.items ?? []) }
+    finally { setLoadingBingo(false) }
+  }, [])
+
+  const fetchDiario = useCallback(async () => {
+    setLoadingDiario(true)
+    try { const d = await fetch('/api/admin/diario').then(r => r.json()); setDiarioEntries(d.entries ?? []) }
+    finally { setLoadingDiario(false) }
+  }, [])
+
+  const approveAll = async () => {
+    if (!confirm('Aprovar TODAS as mídias pendentes de uma vez?')) return
+    const res = await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve_all' }) })
+    const d = await res.json() as { count?: number }
+    fetchPending(); fetchApproved()
+    showToast(`✓ ${d.count ?? 0} mídias aprovadas!`)
+  }
+
   useEffect(() => {
     if (tab === 'settings') refreshCdnStats()
     if (tab === 'store') fetchStore()
     if (tab === 'avaliacao') fetchAvaliacao()
     if (tab === 'enquete') fetchEnquete()
-  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete])
+    if (tab === 'musicas') fetchMusicas()
+    if (tab === 'desafios') fetchDesafios()
+    if (tab === 'bingo') { fetchBingo() }
+    if (tab === 'diario') fetchDiario()
+  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario])
 
   useEffect(() => {
     if (tab !== 'settings') return
@@ -475,8 +536,10 @@ function AdminPanel() {
           <p style={S.title}>🐻 Painel Admin</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {pending.length > 0 && <button onClick={approveAll} style={{ ...tabStyle(false), background: '#e8f5e0', borderColor: '#5a9e3a', color: '#3a6d10' }}>✓ Aprovar todas ({pending.length})</button>}
           <button onClick={exportMediaZip} style={tabStyle(false)}>📦 Exportar mídia</button>
           <button onClick={exportTexts} style={tabStyle(false)}>📝 Exportar textos</button>
+          <a href="/album-print" target="_blank" style={{ ...tabStyle(false), textDecoration: 'none', display: 'inline-block', lineHeight: 'normal' }}>🖨 Álbum PDF</a>
           <button onClick={logout} style={{ ...tabStyle(false), color: '#a33', borderColor: '#e0a0a0' }}>Sair</button>
         </div>
       </div>
@@ -497,6 +560,10 @@ function AdminPanel() {
           { key: 'baby', label: '👶 Bebê', count: 0 },
           { key: 'avaliacao', label: '⭐ Avaliações', count: 0 },
           { key: 'enquete', label: '🗳 Enquete', count: 0 },
+          { key: 'musicas', label: '🎵 Músicas', count: 0 },
+          { key: 'desafios', label: '📸 Desafios', count: 0 },
+          { key: 'bingo', label: '🎯 Bingo', count: 0 },
+          { key: 'diario', label: '📖 Diário', count: 0 },
           { key: 'settings', label: '⚙ Configurações', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
@@ -738,6 +805,146 @@ function AdminPanel() {
           >
             {savingBaby ? 'Salvando…' : '💾 Salvar status do bebê'}
           </button>
+        </div>
+      )}
+
+      {tab === 'musicas' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🎵 Sugestões de Músicas</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 16 }}>Aprove as músicas para exibir na lista pública. As rejeitadas ficam ocultas.</p>
+            {loadingMusicas ? <p style={S.empty}>Carregando…</p> : musicas.length === 0 ? <p style={S.empty}>Nenhuma sugestão ainda 🎵</p> : (
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                {musicas.map(m => (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: `1px solid ${m.approved ? 'var(--beige)' : '#f5d0d0'}`, borderRadius: 14, background: m.approved ? 'var(--cream)' : '#fff8f8' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 700, color: 'var(--bd)', fontSize: '.95rem' }}>{m.title} <span style={{ fontWeight: 400, color: 'var(--bl)' }}>— {m.artist}</span></p>
+                      <p style={{ fontSize: '.8rem', color: 'var(--bl)' }}>por {m.author} · ♥ {m.votes} votos{m.spotifyUrl ? <> · <a href={m.spotifyUrl} target="_blank" rel="noreferrer" style={{ color: '#1db954' }}>Spotify</a></> : ''}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      {!m.approved && <button style={{ ...S.btnApprove, padding: '5px 10px', fontSize: '.8rem' }} onClick={async () => { await fetch('/api/admin/musicas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve', id: m.id }) }); fetchMusicas(); showToast('✓ Música aprovada!') }}>✓</button>}
+                      {m.approved && <button style={{ ...S.btnDelete, padding: '5px 10px', fontSize: '.8rem' }} onClick={async () => { await fetch('/api/admin/musicas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reject', id: m.id }) }); fetchMusicas(); showToast('Música ocultada.') }}>✗</button>}
+                      <button style={{ ...S.btnDelete, padding: '5px 10px', fontSize: '.8rem' }} onClick={async () => { if (!confirm('Excluir?')) return; await fetch('/api/admin/musicas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: m.id }) }); fetchMusicas(); showToast('🗑 Removida.') }}>🗑</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'desafios' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📸 Criar Desafio</h2>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input style={{ width: 60, border: '1px solid var(--sand)', borderRadius: 8, padding: '10px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1.2rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none', textAlign: 'center' }} placeholder="📸" value={desafioForm.emoji} onChange={e => setDesafioForm(f => ({ ...f, emoji: e.target.value }))} maxLength={4} />
+                <input style={{ flex: 1, border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Título do desafio *" value={desafioForm.title} onChange={e => setDesafioForm(f => ({ ...f, title: e.target.value }))} maxLength={100} />
+              </div>
+              <textarea style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none', resize: 'vertical', minHeight: 80 }} placeholder="Descrição do desafio *" value={desafioForm.description} onChange={e => setDesafioForm(f => ({ ...f, description: e.target.value }))} maxLength={300} />
+              <button style={S.btnApprove} onClick={async () => {
+                if (!desafioForm.title.trim() || !desafioForm.description.trim()) { showToast('Título e descrição obrigatórios'); return }
+                setSavingDesafio(true)
+                await fetch('/api/admin/desafios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', ...desafioForm }) })
+                setDesafioForm({ emoji: '📸', title: '', description: '' }); fetchDesafios(); showToast('📸 Desafio criado!'); setSavingDesafio(false)
+              }} disabled={savingDesafio}>{savingDesafio ? 'Criando…' : '+ Criar desafio'}</button>
+            </div>
+          </div>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 14 }}>Desafios ativos</h2>
+            {loadingDesafios ? <p style={S.empty}>Carregando…</p> : desafios.length === 0 ? <p style={S.empty}>Nenhum desafio criado ainda.</p> : (
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                {desafios.map(d => (
+                  <div key={d.id} style={{ display: 'flex', gap: 12, padding: '12px 16px', border: '1px solid var(--beige)', borderRadius: 14, background: 'var(--cream)', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '1.6rem' }}>{d.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontWeight: 700, color: 'var(--bd)', fontSize: '.95rem' }}>{d.title}</p>
+                      <p style={{ fontSize: '.82rem', color: 'var(--bl)', fontStyle: 'italic' }}>{d.description}</p>
+                      <p style={{ fontSize: '.72rem', color: 'var(--bl)', marginTop: 4 }}>{d.completions} completados</p>
+                    </div>
+                    <button style={{ ...S.btnDelete, padding: '5px 10px', fontSize: '.8rem' }} onClick={async () => { if (!confirm('Excluir desafio?')) return; await fetch('/api/admin/desafios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: d.id }) }); fetchDesafios(); showToast('🗑 Removido.') }}>🗑</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'bingo' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🎯 Bingo do Chá</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 16 }}>Marque os itens conforme os presentes são abertos. Os convidados veem em tempo real.</p>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' as const }}>
+              {bingoItems.length === 0 && (
+                <button style={{ ...S.btnApprove, padding: '9px 18px' }} onClick={async () => { await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'seed' }) }); fetchBingo(); showToast('🎯 30 itens padrão adicionados!') }}>
+                  🌱 Popular com itens padrão (30)
+                </button>
+              )}
+              <button style={{ ...S.btnDelete, padding: '9px 18px', background: '#fff7e6', color: '#8a6d1f', borderColor: '#f4a623' }} onClick={async () => { if (!confirm('Resetar todos os itens (desmarcar todos)?')) return; await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset' }) }); fetchBingo(); showToast('↻ Bingo resetado!') }}>↻ Resetar</button>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <input style={{ width: 60, border: '1px solid var(--sand)', borderRadius: 8, padding: '8px', textAlign: 'center', fontFamily: "'Cormorant Garamond',serif", fontSize: '1.1rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="🎁" value={bingoForm.emoji} onChange={e => setBingoForm(f => ({ ...f, emoji: e.target.value }))} maxLength={4} />
+              <input style={{ flex: 1, border: '1px solid var(--sand)', borderRadius: 8, padding: '8px 12px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Nome do item" value={bingoForm.label} onChange={e => setBingoForm(f => ({ ...f, label: e.target.value }))} onKeyDown={async e => { if (e.key !== 'Enter' || !bingoForm.label.trim()) return; await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', label: bingoForm.label.trim(), emoji: bingoForm.emoji }) }); setBingoForm(f => ({ ...f, label: '' })); fetchBingo() }} maxLength={60} />
+              <button style={S.btnApprove} onClick={async () => { if (!bingoForm.label.trim()) return; await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', label: bingoForm.label.trim(), emoji: bingoForm.emoji }) }); setBingoForm(f => ({ ...f, label: '' })); fetchBingo(); showToast('Item adicionado!') }}>+ Add</button>
+            </div>
+            {loadingBingo ? <p style={S.empty}>Carregando…</p> : bingoItems.length === 0 ? <p style={S.empty}>Nenhum item. Clique em "Popular" para começar!</p> : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 8 }}>
+                {bingoItems.map(item => (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: `1px solid ${item.called ? '#5a9e3a' : 'var(--beige)'}`, borderRadius: 10, background: item.called ? '#e8f5e0' : 'var(--cream)', cursor: 'pointer' }} onClick={async () => { await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: item.called ? 'uncall' : 'call', id: item.id }) }); fetchBingo() }}>
+                    <span style={{ fontSize: '1.1rem' }}>{item.emoji}</span>
+                    <span style={{ flex: 1, fontSize: '.85rem', color: 'var(--bd)', fontWeight: item.called ? 700 : 400 }}>{item.label}</span>
+                    {item.called && <span style={{ fontSize: '.7rem', color: '#3a6d10' }}>✓</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <p style={{ fontSize: '.76rem', color: 'var(--bl)', marginTop: 12, fontStyle: 'italic' }}>Clique em um item para marcar/desmarcar. Os convidados veem automaticamente.</p>
+          </div>
+        </div>
+      )}
+
+      {tab === 'diario' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📖 Nova Entrada no Diário</h2>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '11px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Título *" value={diarioForm.title} onChange={e => setDiarioForm(f => ({ ...f, title: e.target.value }))} maxLength={120} />
+              <textarea style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '11px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none', resize: 'vertical', minHeight: 120, lineHeight: 1.7 }} placeholder="Conte o momento *" value={diarioForm.content} onChange={e => setDiarioForm(f => ({ ...f, content: e.target.value }))} maxLength={2000} />
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '11px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="URL da foto (opcional)" value={diarioForm.imageUrl} onChange={e => setDiarioForm(f => ({ ...f, imageUrl: e.target.value }))} />
+              <label style={{ display: 'block' }}>
+                <span style={{ fontSize: '.78rem', color: 'var(--bl)', display: 'block', marginBottom: 4 }}>Data do marco</span>
+                <input type="date" style={{ border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none', width: '100%' }} value={diarioForm.milestoneDate} onChange={e => setDiarioForm(f => ({ ...f, milestoneDate: e.target.value }))} />
+              </label>
+              <button style={{ ...S.btnApprove, padding: '11px 24px', fontSize: '.95rem' }} onClick={async () => {
+                if (!diarioForm.title.trim() || !diarioForm.content.trim()) { showToast('Título e conteúdo obrigatórios'); return }
+                setSavingDiario(true)
+                await fetch('/api/admin/diario', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', title: diarioForm.title.trim(), content: diarioForm.content.trim(), imageUrl: diarioForm.imageUrl.trim() || null, milestoneDate: diarioForm.milestoneDate || null }) })
+                setDiarioForm({ title: '', content: '', imageUrl: '', milestoneDate: '' }); fetchDiario(); showToast('📖 Entrada publicada!'); setSavingDiario(false)
+              }} disabled={savingDiario}>{savingDiario ? 'Publicando…' : '📖 Publicar entrada'}</button>
+            </div>
+          </div>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 14 }}>Entradas publicadas</h2>
+            {loadingDiario ? <p style={S.empty}>Carregando…</p> : diarioEntries.length === 0 ? <p style={S.empty}>Nenhuma entrada ainda.</p> : (
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+                {diarioEntries.map(e => (
+                  <div key={e.id} style={{ padding: '14px 16px', border: `1px solid ${e.published ? 'var(--beige)' : '#f5d0d0'}`, borderRadius: 14, background: e.published ? 'var(--cream)' : '#fff8f8' }}>
+                    {e.imageUrl && <img src={e.imageUrl} alt={e.title} style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 10, marginBottom: 10 }} onError={ev => { (ev.currentTarget as HTMLImageElement).style.display = 'none' }} />}
+                    <p style={{ fontWeight: 700, color: 'var(--bd)', fontSize: '.95rem', marginBottom: 4 }}>{e.title}</p>
+                    <p style={{ fontSize: '.85rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 8, lineHeight: 1.5 }}>{e.content.slice(0, 100)}{e.content.length > 100 ? '…' : ''}</p>
+                    {e.milestoneDate && <p style={{ fontSize: '.72rem', color: 'var(--bl)', marginBottom: 8 }}>📅 {new Date(e.milestoneDate).toLocaleDateString('pt-BR')}</p>}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button style={{ ...S.btnDelete, flex: 1, fontSize: '.8rem' }} onClick={async () => { if (!confirm('Excluir entrada?')) return; await fetch('/api/admin/diario', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: e.id }) }); fetchDiario(); showToast('🗑 Entrada excluída.') }}>🗑 Excluir</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

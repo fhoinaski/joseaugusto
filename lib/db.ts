@@ -1252,3 +1252,263 @@ export async function dbGetPushSubscriptions(): Promise<PushSubscriptionRow[]> {
     throw err
   }
 }
+
+// ── Lista de Músicas ──────────────────────────────────────────────────────────
+
+export interface MusicaItem {
+  id: number
+  author: string
+  title: string
+  artist: string
+  spotifyUrl: string | null
+  votes: number
+  approved: boolean
+  createdAt: string
+}
+
+export async function dbEnsureMusicasTables(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS musicas (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    author      TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    artist      TEXT NOT NULL,
+    spotify_url TEXT,
+    approved    INTEGER DEFAULT 1,
+    created_at  TEXT DEFAULT (datetime('now'))
+  )`)
+  await d1Exec(`CREATE TABLE IF NOT EXISTS musica_votes (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    musica_id INTEGER NOT NULL,
+    voter_id  TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(musica_id, voter_id)
+  )`)
+}
+
+export async function dbGetMusicas(onlyApproved = true): Promise<MusicaItem[]> {
+  try {
+    const rows = await d1Query<{ id: number; author: string; title: string; artist: string; spotify_url: string | null; approved: number; votes: number; created_at: string }>(
+      `SELECT m.id, m.author, m.title, m.artist, m.spotify_url, m.approved, m.created_at,
+              COUNT(v.id) AS votes
+         FROM musicas m
+         LEFT JOIN musica_votes v ON v.musica_id = m.id
+         ${onlyApproved ? "WHERE m.approved = 1" : ""}
+         GROUP BY m.id ORDER BY votes DESC, m.created_at DESC`,
+    )
+    return rows.map(r => ({ id: r.id, author: r.author, title: r.title, artist: r.artist, spotifyUrl: r.spotify_url, votes: r.votes, approved: r.approved === 1, createdAt: r.created_at }))
+  } catch (err) {
+    if (isMissingTableError(err, 'musicas')) { await dbEnsureMusicasTables(); return [] }
+    throw err
+  }
+}
+
+export async function dbInsertMusica(author: string, title: string, artist: string, spotifyUrl?: string | null): Promise<void> {
+  try {
+    await d1Exec(`INSERT INTO musicas (author, title, artist, spotify_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`, [author, title, artist, spotifyUrl ?? null])
+  } catch (err) {
+    if (isMissingTableError(err, 'musicas')) { await dbEnsureMusicasTables(); await d1Exec(`INSERT INTO musicas (author, title, artist, spotify_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`, [author, title, artist, spotifyUrl ?? null]) }
+    else throw err
+  }
+}
+
+export async function dbVoteMusica(musicaId: number, voterId: string): Promise<void> {
+  try {
+    await d1Exec(`INSERT OR IGNORE INTO musica_votes (musica_id, voter_id, created_at) VALUES (?, ?, datetime('now'))`, [musicaId, voterId])
+  } catch (err) {
+    if (isMissingTableError(err, 'musica_votes')) { await dbEnsureMusicasTables(); await d1Exec(`INSERT OR IGNORE INTO musica_votes (musica_id, voter_id, created_at) VALUES (?, ?, datetime('now'))`, [musicaId, voterId]) }
+    else throw err
+  }
+}
+
+export async function dbApproveMusica(id: number, approved: boolean): Promise<void> {
+  try { await d1Exec(`UPDATE musicas SET approved = ? WHERE id = ?`, [approved ? 1 : 0, id]) }
+  catch (err) { if (isMissingTableError(err, 'musicas')) return; throw err }
+}
+
+export async function dbDeleteMusica(id: number): Promise<void> {
+  try { await d1Exec(`DELETE FROM musicas WHERE id = ?`, [id]) }
+  catch (err) { if (isMissingTableError(err, 'musicas')) return; throw err }
+}
+
+// ── Desafios Fotográficos ─────────────────────────────────────────────────────
+
+export interface DesafioItem {
+  id: number
+  emoji: string
+  title: string
+  description: string
+  sortOrder: number
+  active: boolean
+  completions: number
+  createdAt: string
+}
+
+export async function dbEnsureDesafiosTables(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS desafios (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    emoji       TEXT NOT NULL DEFAULT '📸',
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL,
+    sort_order  INTEGER DEFAULT 0,
+    active      INTEGER DEFAULT 1,
+    created_at  TEXT DEFAULT (datetime('now'))
+  )`)
+  await d1Exec(`CREATE TABLE IF NOT EXISTS desafio_completions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    desafio_id INTEGER NOT NULL,
+    media_id   TEXT NOT NULL,
+    author     TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbGetDesafios(onlyActive = true): Promise<DesafioItem[]> {
+  try {
+    const rows = await d1Query<{ id: number; emoji: string; title: string; description: string; sort_order: number; active: number; completions: number; created_at: string }>(
+      `SELECT d.id, d.emoji, d.title, d.description, d.sort_order, d.active, d.created_at,
+              COUNT(c.id) AS completions
+         FROM desafios d
+         LEFT JOIN desafio_completions c ON c.desafio_id = d.id
+         ${onlyActive ? 'WHERE d.active = 1' : ''}
+         GROUP BY d.id ORDER BY d.sort_order ASC, d.id ASC`,
+    )
+    return rows.map(r => ({ id: r.id, emoji: r.emoji, title: r.title, description: r.description, sortOrder: r.sort_order, active: r.active === 1, completions: r.completions, createdAt: r.created_at }))
+  } catch (err) {
+    if (isMissingTableError(err, 'desafios')) { await dbEnsureDesafiosTables(); return [] }
+    throw err
+  }
+}
+
+export async function dbInsertDesafio(emoji: string, title: string, description: string, sortOrder = 0): Promise<void> {
+  try { await d1Exec(`INSERT INTO desafios (emoji, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, datetime('now'))`, [emoji, title, description, sortOrder]) }
+  catch (err) { if (isMissingTableError(err, 'desafios')) { await dbEnsureDesafiosTables(); await d1Exec(`INSERT INTO desafios (emoji, title, description, sort_order, created_at) VALUES (?, ?, ?, ?, datetime('now'))`, [emoji, title, description, sortOrder]) } else throw err }
+}
+
+export async function dbDeleteDesafio(id: number): Promise<void> {
+  try { await d1Exec(`DELETE FROM desafios WHERE id = ?`, [id]) }
+  catch (err) { if (isMissingTableError(err, 'desafios')) return; throw err }
+}
+
+export async function dbCompleteDesafio(desafioId: number, mediaId: string, author: string): Promise<void> {
+  try { await d1Exec(`INSERT INTO desafio_completions (desafio_id, media_id, author, created_at) VALUES (?, ?, ?, datetime('now'))`, [desafioId, mediaId, author]) }
+  catch (err) { if (isMissingTableError(err, 'desafio_completions')) { await dbEnsureDesafiosTables(); await d1Exec(`INSERT INTO desafio_completions (desafio_id, media_id, author, created_at) VALUES (?, ?, ?, datetime('now'))`, [desafioId, mediaId, author]) } else throw err }
+}
+
+// ── Bingo do Chá ─────────────────────────────────────────────────────────────
+
+export interface BingoItem {
+  id: number
+  label: string
+  emoji: string
+  called: boolean
+  sortOrder: number
+}
+
+export async function dbEnsureBingoTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS bingo_items (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    label      TEXT NOT NULL,
+    emoji      TEXT DEFAULT '',
+    called     INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbGetBingoItems(): Promise<BingoItem[]> {
+  try {
+    const rows = await d1Query<{ id: number; label: string; emoji: string; called: number; sort_order: number }>(
+      `SELECT id, label, emoji, called, sort_order FROM bingo_items ORDER BY sort_order ASC, id ASC`,
+    )
+    return rows.map(r => ({ id: r.id, label: r.label, emoji: r.emoji, called: r.called === 1, sortOrder: r.sort_order }))
+  } catch (err) {
+    if (isMissingTableError(err, 'bingo_items')) { await dbEnsureBingoTable(); return [] }
+    throw err
+  }
+}
+
+export async function dbInsertBingoItem(label: string, emoji: string, sortOrder = 0): Promise<void> {
+  try { await d1Exec(`INSERT INTO bingo_items (label, emoji, sort_order, created_at) VALUES (?, ?, ?, datetime('now'))`, [label, emoji, sortOrder]) }
+  catch (err) { if (isMissingTableError(err, 'bingo_items')) { await dbEnsureBingoTable(); await d1Exec(`INSERT INTO bingo_items (label, emoji, sort_order, created_at) VALUES (?, ?, ?, datetime('now'))`, [label, emoji, sortOrder]) } else throw err }
+}
+
+export async function dbCallBingoItem(id: number, called: boolean): Promise<void> {
+  try { await d1Exec(`UPDATE bingo_items SET called = ? WHERE id = ?`, [called ? 1 : 0, id]) }
+  catch (err) { if (isMissingTableError(err, 'bingo_items')) return; throw err }
+}
+
+export async function dbDeleteBingoItem(id: number): Promise<void> {
+  try { await d1Exec(`DELETE FROM bingo_items WHERE id = ?`, [id]) }
+  catch (err) { if (isMissingTableError(err, 'bingo_items')) return; throw err }
+}
+
+export async function dbResetBingo(): Promise<void> {
+  try { await d1Exec(`UPDATE bingo_items SET called = 0`) }
+  catch (err) { if (isMissingTableError(err, 'bingo_items')) return; throw err }
+}
+
+// ── Diário do Bebê ────────────────────────────────────────────────────────────
+
+export interface DiarioEntry {
+  id: number
+  title: string
+  content: string
+  imageUrl: string | null
+  milestoneDate: string | null
+  published: boolean
+  createdAt: string
+}
+
+export async function dbEnsureDiarioTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS diario (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    title          TEXT NOT NULL,
+    content        TEXT NOT NULL,
+    image_url      TEXT,
+    milestone_date TEXT,
+    published      INTEGER DEFAULT 1,
+    created_at     TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbGetDiario(publishedOnly = true): Promise<DiarioEntry[]> {
+  try {
+    const rows = await d1Query<{ id: number; title: string; content: string; image_url: string | null; milestone_date: string | null; published: number; created_at: string }>(
+      `SELECT id, title, content, image_url, milestone_date, published, created_at FROM diario ${publishedOnly ? 'WHERE published = 1' : ''} ORDER BY milestone_date DESC, created_at DESC`,
+    )
+    return rows.map(r => ({ id: r.id, title: r.title, content: r.content, imageUrl: r.image_url, milestoneDate: r.milestone_date, published: r.published === 1, createdAt: r.created_at }))
+  } catch (err) {
+    if (isMissingTableError(err, 'diario')) { await dbEnsureDiarioTable(); return [] }
+    throw err
+  }
+}
+
+export async function dbInsertDiario(title: string, content: string, imageUrl?: string | null, milestoneDate?: string | null): Promise<void> {
+  try { await d1Exec(`INSERT INTO diario (title, content, image_url, milestone_date, created_at) VALUES (?, ?, ?, ?, datetime('now'))`, [title, content, imageUrl ?? null, milestoneDate ?? null]) }
+  catch (err) { if (isMissingTableError(err, 'diario')) { await dbEnsureDiarioTable(); await d1Exec(`INSERT INTO diario (title, content, image_url, milestone_date, created_at) VALUES (?, ?, ?, ?, datetime('now'))`, [title, content, imageUrl ?? null, milestoneDate ?? null]) } else throw err }
+}
+
+export async function dbUpdateDiario(id: number, fields: Partial<{ title: string; content: string; image_url: string | null; milestone_date: string | null; published: number }>): Promise<void> {
+  const sets = Object.keys(fields).map(k => `${k} = ?`).join(', ')
+  const vals = [...Object.values(fields), id]
+  if (!sets) return
+  try { await d1Exec(`UPDATE diario SET ${sets} WHERE id = ?`, vals) }
+  catch (err) { if (isMissingTableError(err, 'diario')) return; throw err }
+}
+
+export async function dbDeleteDiario(id: number): Promise<void> {
+  try { await d1Exec(`DELETE FROM diario WHERE id = ?`, [id]) }
+  catch (err) { if (isMissingTableError(err, 'diario')) return; throw err }
+}
+
+// ── Batch approve ─────────────────────────────────────────────────────────────
+
+export async function dbApproveAllPending(): Promise<number> {
+  try {
+    await d1Exec(`UPDATE media SET status = 'approved' WHERE status = 'pending'`)
+    const rows = await d1Query<{ n: number }>(`SELECT changes() AS n`)
+    return rows[0]?.n ?? 0
+  } catch {
+    return 0
+  }
+}

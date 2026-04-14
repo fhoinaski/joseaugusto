@@ -679,11 +679,17 @@ export default function Home() {
         <p className="section-label" style={{ textAlign: 'center', marginBottom: 14, padding: '0 16px' }}>✦ Explorar o Evento ✦</p>
         <div className="explore-grid">
           {[
-            { href: '/mural',    emoji: '🖼️', label: 'Mural',           desc: 'Polaroids dos convidados' },
-            { href: '/carta',    emoji: '💌', label: 'Carta ao Bebê',    desc: 'Mensagens para o José' },
-            { href: '/palpites', emoji: '🎲', label: 'Palpites',         desc: 'Quem acerta o peso?' },
-            { href: '/livro',    emoji: '📖', label: 'Livro de Visitas', desc: 'Mensagens do chá' },
-            { href: '/ranking',  emoji: '🏆', label: 'Ranking',          desc: 'Convidados mais ativos' },
+            { href: '/mural',       emoji: '🖼️', label: 'Mural',            desc: 'Polaroids dos convidados' },
+            { href: '/carta',       emoji: '💌', label: 'Carta ao Bebê',     desc: 'Mensagens para o José' },
+            { href: '/palpites',    emoji: '🎲', label: 'Palpites',          desc: 'Quem acerta o peso?' },
+            { href: '/livro',       emoji: '📖', label: 'Livro de Visitas',  desc: 'Mensagens do chá' },
+            { href: '/ranking',     emoji: '🏆', label: 'Ranking',           desc: 'Convidados mais ativos' },
+            { href: '/bingo',       emoji: '🎯', label: 'Bingo do Chá',      desc: 'Complete sua cartela!' },
+            { href: '/musicas',     emoji: '🎵', label: 'Músicas',           desc: 'Sugira e vote' },
+            { href: '/desafios',    emoji: '📸', label: 'Desafios',          desc: 'Missões fotográficas' },
+            { href: '/diario',      emoji: '🧸', label: 'Diário do Bebê',    desc: 'Primeiros momentos' },
+            { href: '/mosaico',     emoji: '🎨', label: 'Mosaico',           desc: 'Todas as fotos' },
+            { href: '/timeline',    emoji: '⏱',  label: 'Linha do Tempo',    desc: 'Toda a história' },
           ].map(({ href, emoji, label, desc }) => (
             <a key={href} href={href} className="explore-card">
               <span className="explore-card-icon">{emoji}</span>
