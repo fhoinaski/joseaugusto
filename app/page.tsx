@@ -648,33 +648,21 @@ export default function Home() {
       <div className="leaves" style={{opacity:.3,marginTop:8}}>· · · ✦ · · ·</div>
 
       {/* ── Explorar o Evento ── */}
-      <section className="reveal" style={{ padding: '0 16px', marginBottom: 8 }}>
-        <p className="section-label" style={{ textAlign: 'center', marginBottom: 14 }}>✦ Explorar o Evento ✦</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+      <section className="reveal" style={{ marginBottom: 8 }}>
+        <p className="section-label" style={{ textAlign: 'center', marginBottom: 14, padding: '0 16px' }}>✦ Explorar o Evento ✦</p>
+        <div className="explore-grid">
           {[
-            { href: '/mural',    emoji: '🖼️', label: 'Mural de Fotos',    desc: 'Polaroids dos convidados' },
-            { href: '/carta',    emoji: '💌', label: 'Carta ao Bebê',      desc: 'Mensagens para o José' },
-            { href: '/palpites', emoji: '🎲', label: 'Palpites',           desc: 'Quem vai acertar o peso?' },
-            { href: '/livro',    emoji: '📖', label: 'Livro de Visitas',   desc: 'Mensagens dos convidados' },
+            { href: '/mural',    emoji: '🖼️', label: 'Mural',          desc: 'Polaroids dos convidados' },
+            { href: '/carta',    emoji: '💌', label: 'Carta ao Bebê',   desc: 'Mensagens para o José' },
+            { href: '/palpites', emoji: '🎲', label: 'Palpites',        desc: 'Quem acerta o peso?' },
+            { href: '/livro',    emoji: '📖', label: 'Livro de Visitas',desc: 'Mensagens do chá' },
+            { href: '/store',    emoji: '🎁', label: 'Lista de Presentes', desc: 'Veja o que dar ao José' },
+            { href: '/ranking',  emoji: '🏆', label: 'Ranking',         desc: 'Convidados mais ativos' },
           ].map(({ href, emoji, label, desc }) => (
-            <a
-              key={href}
-              href={href}
-              style={{
-                textDecoration: 'none',
-                background: 'rgba(255,255,255,.04)',
-                border: '1px solid rgba(201,168,124,.22)',
-                borderRadius: 16,
-                padding: '14px 12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-                transition: 'background .18s, border-color .18s',
-              }}
-            >
-              <span style={{ fontSize: '1.6rem', lineHeight: 1 }}>{emoji}</span>
-              <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '.9rem', color: 'var(--bd)', fontWeight: 600, margin: 0 }}>{label}</p>
-              <p style={{ fontSize: '.75rem', color: 'var(--text-lo)', margin: 0, fontStyle: 'italic' }}>{desc}</p>
+            <a key={href} href={href} className="explore-card">
+              <span className="explore-card-icon">{emoji}</span>
+              <p className="explore-card-label">{label}</p>
+              <p className="explore-card-sub">{desc}</p>
             </a>
           ))}
         </div>

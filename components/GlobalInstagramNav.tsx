@@ -73,10 +73,13 @@ function IconMural({ active }: { active: boolean }) {
   )
 }
 
+const DARK_PATHS = ['/feed', '/mural', '/carta', '/palpites', '/reels', '/livro', '/u/', '/ranking']
+
 export default function GlobalInstagramNav() {
   const pathname = usePathname()
   const { canWrite } = useGeoAccess()
   const { openUpload } = useUpload()
+  const isDark = DARK_PATHS.some(p => pathname.startsWith(p))
 
   const items = [
     {
@@ -105,7 +108,7 @@ export default function GlobalInstagramNav() {
   ]
 
   return (
-    <nav className="ig-shell-nav" aria-label="Navegação principal">
+    <nav className={`ig-shell-nav${isDark ? ' nav-dark' : ''}`} aria-label="Navegação principal">
 
       {/* Brand — desktop sidebar only */}
       <div className="ig-shell-brand">Chá JA</div>
