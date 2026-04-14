@@ -933,6 +933,68 @@ export async function dbGetEventStats(): Promise<EventStats> {
   }
 }
 
+// ── Cartas para o Bebê ────────────────────────────────────────────────────────
+
+export interface CartaItem {
+  id: number
+  author: string
+  message: string
+  createdAt: string
+}
+
+export async function dbEnsureCartaTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS cartas (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    author     TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbGetCartas(limit = 100): Promise<CartaItem[]> {
+  try {
+    const rows = await d1Query<{ id: number; author: string; message: string; created_at: string }>(
+      `SELECT id, author, message, created_at FROM cartas ORDER BY created_at DESC LIMIT ?`,
+      [limit],
+    )
+    return rows.map(r => ({ id: r.id, author: r.author, message: r.message, createdAt: r.created_at }))
+  } catch (err) {
+    if (isMissingTableError(err, 'cartas')) {
+      await dbEnsureCartaTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbInsertCarta(author: string, message: string): Promise<void> {
+  try {
+    await d1Exec(
+      `INSERT INTO cartas (author, message, created_at) VALUES (?, ?, datetime('now'))`,
+      [author, message],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'cartas')) {
+      await dbEnsureCartaTable()
+      await d1Exec(
+        `INSERT INTO cartas (author, message, created_at) VALUES (?, ?, datetime('now'))`,
+        [author, message],
+      )
+    } else {
+      throw err
+    }
+  }
+}
+
+export async function dbGetCartaCount(): Promise<number> {
+  try {
+    const rows = await d1Query<{ n: number }>(`SELECT COUNT(*) AS n FROM cartas`)
+    return rows[0]?.n ?? 0
+  } catch {
+    return 0
+  }
+}
+
 // ── Push Subscriptions ────────────────────────────────────────────────────────
 
 export interface PushSubscriptionRow {

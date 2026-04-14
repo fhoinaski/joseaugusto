@@ -1304,4 +1304,18 @@ footer { text-align:center; padding:56px 24px 72px; }
   color:#fff; padding:8px 18px; cursor:pointer;
   font-family:inherit; font-size:.9rem; white-space:nowrap;
 }
+
+/* ── Reaction Storm ─────────────────────────────────────── */
+@keyframes reactionFloat {
+  0%   { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+  20%  { opacity: 1; transform: translateY(-80px) scale(1.2) rotate(-8deg); }
+  60%  { opacity: 0.8; transform: translateY(-220px) scale(1) rotate(6deg); }
+  100% { opacity: 0; transform: translateY(-400px) scale(0.7) rotate(-4deg); }
+}
+
+/* ── Baby Glow (birth announcement) ────────────────────── */
+@keyframes babyGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(80,200,80,.3), 0 4px 24px rgba(0,0,0,.4); }
+  50%       { box-shadow: 0 0 40px rgba(80,200,80,.6), 0 4px 24px rgba(0,0,0,.4); }
+}
 .geo-banner-error { width:100%; color:var(--rose); font-size:.82rem; }

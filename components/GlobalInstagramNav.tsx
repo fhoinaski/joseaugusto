@@ -55,6 +55,24 @@ function IconPlus() {
   )
 }
 
+function IconMural({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      {/* Polaroid frame */}
+      <rect x="3" y="3" width="18" height="18" rx="2" fill={active ? 'currentColor' : 'none'} />
+      {/* Photo area */}
+      <rect x="5.5" y="5.5" width="13" height="10" rx="1"
+        fill={active ? 'rgba(250,243,234,0.9)' : 'none'}
+        stroke={active ? 'rgba(250,243,234,0.6)' : 'currentColor'}
+        strokeWidth="1.2" />
+      {/* Caption line */}
+      <line x1="8" y1="18" x2="16" y2="18"
+        stroke={active ? 'rgba(250,243,234,0.7)' : 'currentColor'}
+        strokeWidth="1.4" />
+    </svg>
+  )
+}
+
 export default function GlobalInstagramNav() {
   const pathname = usePathname()
   const { canWrite } = useGeoAccess()
@@ -78,6 +96,11 @@ export default function GlobalInstagramNav() {
       href: '/reels',
       label: 'Reels',
       icon: (active: boolean) => <IconReels active={active} />,
+    },
+    {
+      href: '/mural',
+      label: 'Mural',
+      icon: (active: boolean) => <IconMural active={active} />,
     },
   ]
 

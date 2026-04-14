@@ -12,6 +12,13 @@ interface PalpiteItem {
   createdAt: string
 }
 
+interface Settings {
+  babyBorn: boolean
+  babyBornWeight: number | null
+  babyBornHora: string | null
+  babyBornCabelo: string | null
+}
+
 type CabeloOption = 'Sim' | 'Pouco' | 'Não'
 
 function formatPeso(g: number | null): string {
@@ -46,6 +53,11 @@ const CABELO_EMOJI: Record<CabeloOption, string> = {
   'Não': '🥚',
 }
 
+function parseHoraMinutes(hora: string): number {
+  const [h, m] = hora.split(':').map(Number)
+  return (h ?? 0) * 60 + (m ?? 0)
+}
+
 export default function PalpitesPage() {
   // Form state
   const [author, setAuthor] = useState('')
@@ -61,6 +73,16 @@ export default function PalpitesPage() {
   // List state
   const [palpites, setPalpites] = useState<PalpiteItem[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Settings state
+  const [settings, setSettings] = useState<Settings | null>(null)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then((data: Settings) => setSettings(data))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     try { setAuthor(localStorage.getItem('cha_author') ?? '') } catch {}
@@ -319,6 +341,44 @@ export default function PalpitesPage() {
           </form>
         )}
 
+        {/* Resultado Oficial */}
+        {settings?.babyBorn && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(26,58,26,.8), rgba(45,90,45,.8))',
+            border: '1px solid rgba(80,180,80,.3)',
+            borderRadius: 20,
+            padding: '24px 20px',
+            marginBottom: 32,
+            textAlign: 'center',
+            animation: 'babyGlow 2s ease-in-out infinite',
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>🍼</div>
+            <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.3rem', color: '#f5dab6', marginBottom: 6 }}>
+              José Augusto chegou!
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+              {settings.babyBornWeight != null && (
+                <span style={{ background: 'rgba(213,144,86,.2)', border: '1px solid rgba(213,144,86,.4)', borderRadius: 99, padding: '4px 14px', fontSize: '.9rem', color: '#d59056' }}>
+                  ⚖️ {formatPeso(settings.babyBornWeight)}
+                </span>
+              )}
+              {settings.babyBornHora && (
+                <span style={{ background: 'rgba(106,158,122,.2)', border: '1px solid rgba(106,158,122,.4)', borderRadius: 99, padding: '4px 14px', fontSize: '.9rem', color: '#9dcfad' }}>
+                  🕐 {settings.babyBornHora}
+                </span>
+              )}
+              {settings.babyBornCabelo && (
+                <span style={{ background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 99, padding: '4px 14px', fontSize: '.9rem', color: 'rgba(245,218,182,.8)' }}>
+                  Cabelo: {settings.babyBornCabelo}
+                </span>
+              )}
+            </div>
+            <p style={{ marginTop: 14, fontSize: '.85rem', color: 'rgba(245,218,182,.6)', fontStyle: 'italic' }}>
+              Veja abaixo quem chegou mais perto nos palpites!
+            </p>
+          </div>
+        )}
+
         {/* Palpites list */}
         <div>
           <p style={{
@@ -421,6 +481,39 @@ export default function PalpitesPage() {
                           Nenhum detalhe informado
                         </span>
                       )}
+
+                      {/* Accuracy chips — shown when baby has arrived */}
+                      {settings?.babyBorn && settings.babyBornWeight != null && p.peso_g != null && (() => {
+                        const diff = Math.abs(p.peso_g - settings.babyBornWeight!)
+                        const chipColor = diff <= 200
+                          ? { bg: 'rgba(80,200,80,.15)', border: 'rgba(80,200,80,.4)', text: '#7de87d' }
+                          : diff <= 500
+                          ? { bg: 'rgba(255,200,0,.12)', border: 'rgba(255,200,0,.35)', text: '#f5c842' }
+                          : { bg: 'rgba(255,255,255,.07)', border: 'rgba(255,255,255,.12)', text: 'rgba(245,218,182,.5)' }
+                        return (
+                          <span style={{
+                            background: chipColor.bg,
+                            border: `1px solid ${chipColor.border}`,
+                            borderRadius: 99, padding: '3px 10px',
+                            fontSize: '.75rem', color: chipColor.text,
+                          }}>
+                            ±{diff}g
+                          </span>
+                        )
+                      })()}
+                      {settings?.babyBorn && settings.babyBornHora && p.hora && (() => {
+                        const diffMin = Math.abs(parseHoraMinutes(p.hora) - parseHoraMinutes(settings.babyBornHora!))
+                        return (
+                          <span style={{
+                            background: 'rgba(106,158,122,.12)',
+                            border: '1px solid rgba(106,158,122,.25)',
+                            borderRadius: 99, padding: '3px 10px',
+                            fontSize: '.75rem', color: '#9dcfad',
+                          }}>
+                            ±{diffMin}min
+                          </span>
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>

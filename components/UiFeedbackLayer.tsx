@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 
 const NotificationBell = dynamic(() => import('@/components/NotificationBell'), { ssr: false })
 const PWAInstallPrompt = dynamic(() => import('@/components/PWAInstallPrompt'), { ssr: false })
+const ReactionStorm    = dynamic(() => import('@/components/ReactionStorm'),    { ssr: false })
 
 type ToastItem = {
   id: string
@@ -133,6 +134,7 @@ export default function UiFeedbackLayer() {
       </div>
 
       <PWAInstallPrompt />
+      <ReactionStorm />
 
       <div className="toast-container">
         {toasts.map(t => (

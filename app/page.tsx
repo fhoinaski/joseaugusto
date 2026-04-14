@@ -4,6 +4,7 @@ import { GeoStatus, useGeoAccess } from '@/components/GeoAccessProvider'
 import Stories, { StoryMediaItem } from '@/components/Stories'
 import HeroSection from '@/components/home/HeroSection'
 import MediaGallery from '@/components/home/MediaGallery'
+import CountdownBanner from '@/components/home/CountdownBanner'
 import { vibrateSoft } from '@/lib/ui-feedback'
 import { REACTION_EMOJIS } from '@/lib/config'
 
@@ -570,6 +571,11 @@ export default function Home() {
 
       <div className="leaves">🌿 🌸 🌿 🌸 🌿</div>
 
+      {/* Countdown / Baby Arrival */}
+      <div style={{ padding: '0 16px', marginBottom: 4 }}>
+        <CountdownBanner />
+      </div>
+
       {/* Party stats bar */}
       {eventStats && (
         <div className="event-stats-bar reveal">
@@ -640,6 +646,39 @@ export default function Home() {
       )}
 
       <div className="leaves" style={{opacity:.3,marginTop:8}}>· · · ✦ · · ·</div>
+
+      {/* ── Explorar o Evento ── */}
+      <section className="reveal" style={{ padding: '0 16px', marginBottom: 8 }}>
+        <p className="section-label" style={{ textAlign: 'center', marginBottom: 14 }}>✦ Explorar o Evento ✦</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+          {[
+            { href: '/mural',    emoji: '🖼️', label: 'Mural de Fotos',    desc: 'Polaroids dos convidados' },
+            { href: '/carta',    emoji: '💌', label: 'Carta ao Bebê',      desc: 'Mensagens para o José' },
+            { href: '/palpites', emoji: '🎲', label: 'Palpites',           desc: 'Quem vai acertar o peso?' },
+            { href: '/livro',    emoji: '📖', label: 'Livro de Visitas',   desc: 'Mensagens dos convidados' },
+          ].map(({ href, emoji, label, desc }) => (
+            <a
+              key={href}
+              href={href}
+              style={{
+                textDecoration: 'none',
+                background: 'rgba(255,255,255,.04)',
+                border: '1px solid rgba(201,168,124,.22)',
+                borderRadius: 16,
+                padding: '14px 12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                transition: 'background .18s, border-color .18s',
+              }}
+            >
+              <span style={{ fontSize: '1.6rem', lineHeight: 1 }}>{emoji}</span>
+              <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '.9rem', color: 'var(--bd)', fontWeight: 600, margin: 0 }}>{label}</p>
+              <p style={{ fontSize: '.75rem', color: 'var(--text-lo)', margin: 0, fontStyle: 'italic' }}>{desc}</p>
+            </a>
+          ))}
+        </div>
+      </section>
 
       <section id="comentarios-evento" className="parents-section reveal" style={{marginTop:14}}>
         <p className="section-label">✦ Novidades do Evento ✦</p>
