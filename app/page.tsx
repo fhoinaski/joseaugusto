@@ -9,6 +9,7 @@ import { vibrateSoft } from '@/lib/ui-feedback'
 import { REACTION_EMOJIS } from '@/lib/config'
 import AvaliacaoCard from '@/components/AvaliacaoCard'
 import EnqueteCard from '@/components/EnqueteCard'
+import { useUpload } from '@/components/UploadProvider'
 
 interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
@@ -389,6 +390,7 @@ export default function Home() {
   const [savedAuthor, setSavedAuthor]  = useState('')
   const [eventStats,  setEventStats]   = useState<{photos:number; reactions:number; comments:number; authors:number} | null>(null)
   const { geoStatus, canWrite, unlockWithKey } = useGeoAccess()
+  const { openUpload } = useUpload()
   const lastRtTs  = useRef<number>(0)
   const mediaRef = useRef<MediaItem[]>([])
   const authorRef = useRef('')
@@ -673,6 +675,34 @@ export default function Home() {
       )}
 
       <div className="leaves" style={{opacity:.3,marginTop:8}}>· · · ✦ · · ·</div>
+
+      {/* ── Upload CTA ── */}
+      <div className="reveal" style={{ padding: '0 16px', marginBottom: 20, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+        <button
+          onClick={openUpload}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 14,
+            padding: '18px 24px',
+            background: 'linear-gradient(135deg, var(--bd) 0%, var(--b) 100%)',
+            border: 'none',
+            borderRadius: 20,
+            cursor: 'pointer',
+            boxShadow: '0 4px 24px rgba(139,98,66,.30)',
+            fontFamily: "'Cormorant Garamond',serif",
+          }}
+        >
+          <span style={{ fontSize: '2rem', lineHeight: 1 }}>📷</span>
+          <div style={{ textAlign: 'left' }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: '1.1rem', color: '#fff', lineHeight: 1.2 }}>Compartilhar foto ou vídeo</p>
+            <p style={{ margin: 0, fontSize: '.84rem', color: 'rgba(255,255,255,.75)', marginTop: 2 }}>Adicione sua memória ao álbum do José</p>
+          </div>
+          <span style={{ marginLeft: 'auto', fontSize: '1.3rem', opacity: .8 }}>→</span>
+        </button>
+      </div>
 
       {/* ── Explorar o Evento ── */}
       <section className="reveal" style={{ marginBottom: 8 }}>
