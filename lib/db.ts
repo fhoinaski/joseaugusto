@@ -1675,3 +1675,211 @@ export async function dbDeleteMarco(id: number): Promise<void> {
   try { await d1Exec(`DELETE FROM marcos WHERE id = ?`, [id]) }
   catch (err) { if (isMissingTableError(err, 'marcos')) return; throw err }
 }
+
+// ── Vídeo-mensagens ───────────────────────────────────────────────────────────
+
+export interface VideoMensagemItem {
+  id: number
+  author: string
+  video_url: string
+  thumb_url: string | null
+  duration_s: number | null
+  message: string | null
+  approved: number
+  created_at: string
+}
+
+export async function dbEnsureVideoMensagensTable(): Promise<void> {
+  await d1Exec(`
+    CREATE TABLE IF NOT EXISTS video_mensagens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      author TEXT NOT NULL,
+      video_url TEXT NOT NULL,
+      thumb_url TEXT,
+      duration_s INTEGER,
+      message TEXT,
+      approved INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+}
+
+export async function dbGetVideoMensagens(approvedOnly = true): Promise<VideoMensagemItem[]> {
+  try {
+    const query = approvedOnly
+      ? `SELECT * FROM video_mensagens WHERE approved=1 ORDER BY created_at DESC`
+      : `SELECT * FROM video_mensagens ORDER BY created_at DESC`
+    const rows = await d1Query<VideoMensagemItem>(query)
+    return rows
+  } catch (err) {
+    if (isMissingTableError(err, 'video_mensagens')) {
+      await dbEnsureVideoMensagensTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbCreateVideoMensagem(data: {
+  author: string; video_url: string; thumb_url?: string; duration_s?: number; message?: string
+}): Promise<void> {
+  try {
+    await d1Exec(
+      `INSERT INTO video_mensagens (author, video_url, thumb_url, duration_s, message, approved)
+       VALUES (?, ?, ?, ?, ?, 0)`,
+      [data.author, data.video_url, data.thumb_url ?? null, data.duration_s ?? null, data.message ?? null],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'video_mensagens')) {
+      await dbEnsureVideoMensagensTable()
+      await d1Exec(
+        `INSERT INTO video_mensagens (author, video_url, thumb_url, duration_s, message, approved)
+         VALUES (?, ?, ?, ?, ?, 0)`,
+        [data.author, data.video_url, data.thumb_url ?? null, data.duration_s ?? null, data.message ?? null],
+      )
+    } else throw err
+  }
+}
+
+export async function dbApproveVideoMensagem(id: number, approved: number): Promise<void> {
+  try {
+    await d1Exec(`UPDATE video_mensagens SET approved=? WHERE id=?`, [approved, id])
+  } catch (err) {
+    if (isMissingTableError(err, 'video_mensagens')) return
+    throw err
+  }
+}
+
+export async function dbDeleteVideoMensagem(id: number): Promise<void> {
+  try {
+    await d1Exec(`DELETE FROM video_mensagens WHERE id=?`, [id])
+  } catch (err) {
+    if (isMissingTableError(err, 'video_mensagens')) return
+    throw err
+  }
+}
+
+// ── Mural cards (colaborativo) ────────────────────────────────────────────────
+
+export interface MuralCardItem {
+  id: number
+  author: string
+  text: string
+  color: string
+  created_at: string
+}
+
+export async function dbEnsureMuralCardsTable(): Promise<void> {
+  await d1Exec(`
+    CREATE TABLE IF NOT EXISTS mural_cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      author TEXT NOT NULL,
+      text TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#fdf6ee',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+}
+
+export async function dbGetMuralCards(): Promise<MuralCardItem[]> {
+  try {
+    const rows = await d1Query<MuralCardItem>(
+      `SELECT * FROM mural_cards ORDER BY created_at DESC LIMIT 100`,
+    )
+    return rows
+  } catch (err) {
+    if (isMissingTableError(err, 'mural_cards')) {
+      await dbEnsureMuralCardsTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbCreateMuralCard(data: {
+  author: string; text: string; color: string
+}): Promise<void> {
+  try {
+    await d1Exec(
+      `INSERT INTO mural_cards (author, text, color) VALUES (?, ?, ?)`,
+      [data.author, data.text, data.color],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'mural_cards')) {
+      await dbEnsureMuralCardsTable()
+      await d1Exec(
+        `INSERT INTO mural_cards (author, text, color) VALUES (?, ?, ?)`,
+        [data.author, data.text, data.color],
+      )
+    } else throw err
+  }
+}
+
+export async function dbDeleteMuralCard(id: number): Promise<void> {
+  try {
+    await d1Exec(`DELETE FROM mural_cards WHERE id=?`, [id])
+  } catch (err) {
+    if (isMissingTableError(err, 'mural_cards')) return
+    throw err
+  }
+}
+
+// ── Memórias automáticas ──────────────────────────────────────────────────────
+
+export interface MemoriaSubscriberItem {
+  id: number
+  author: string
+  email: string
+  opted_in: number
+  created_at: string
+}
+
+export async function dbEnsureMemoriasTable(): Promise<void> {
+  await d1Exec(`
+    CREATE TABLE IF NOT EXISTS memorias_subscribers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      author TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      opted_in INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+}
+
+export async function dbGetMemoriasSubscribers(): Promise<MemoriaSubscriberItem[]> {
+  try {
+    const rows = await d1Query<MemoriaSubscriberItem>(
+      `SELECT * FROM memorias_subscribers WHERE opted_in=1 ORDER BY created_at DESC`,
+    )
+    return rows
+  } catch (err) {
+    if (isMissingTableError(err, 'memorias_subscribers')) {
+      await dbEnsureMemoriasTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbCreateMemoriaSubscriber(data: {
+  author: string; email: string
+}): Promise<void> {
+  try {
+    await d1Exec(
+      `INSERT INTO memorias_subscribers (author, email, opted_in)
+       VALUES (?, ?, 1)
+       ON CONFLICT(email) DO UPDATE SET opted_in=1, author=excluded.author`,
+      [data.author, data.email],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'memorias_subscribers')) {
+      await dbEnsureMemoriasTable()
+      await d1Exec(
+        `INSERT INTO memorias_subscribers (author, email, opted_in)
+         VALUES (?, ?, 1)
+         ON CONFLICT(email) DO UPDATE SET opted_in=1, author=excluded.author`,
+        [data.author, data.email],
+      )
+    } else throw err
+  }
+}

@@ -12,6 +12,37 @@ interface Photo {
   type: string
 }
 
+interface MuralCard {
+  id: number
+  author: string
+  text: string
+  color: string
+  created_at: string
+}
+
+const CARD_COLORS = [
+  { value: '#fdf6ee', label: 'Creme' },
+  { value: '#fce4ec', label: 'Rosa' },
+  { value: '#e8f5e9', label: 'Verde' },
+  { value: '#e3f2fd', label: 'Azul' },
+  { value: '#fff8e1', label: 'Amarelo' },
+  { value: '#f3e5f5', label: 'Lilás' },
+]
+
+function cardRotation(id: number): number {
+  // Deterministic rotation based on id: -3 to +3 degrees
+  const seed = id * 2654435761
+  return ((seed % 600) - 300) / 100
+}
+
+function formatDateShort(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(iso))
+  } catch {
+    return ''
+  }
+}
+
 function polaroidStyle(id: string) {
   let h = 0
   for (const c of id) h = (h << 5) - h + c.charCodeAt(0)
@@ -25,6 +56,21 @@ export default function MuralPage() {
   const [loading, setLoading] = useState(true)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  // Mural cards state
+  const [cards, setCards]             = useState<MuralCard[]>([])
+  const [loadingCards, setLoadingCards] = useState(true)
+  const [cardAuthor, setCardAuthor]   = useState('')
+  const [cardText, setCardText]       = useState('')
+  const [cardColor, setCardColor]     = useState('#fdf6ee')
+  const [sendingCard, setSendingCard] = useState(false)
+  const [cardError, setCardError]     = useState('')
+  const [cardToast, setCardToast]     = useState('')
+
+  const showCardToast = (msg: string) => {
+    setCardToast(msg)
+    setTimeout(() => setCardToast(''), 3000)
+  }
 
   useEffect(() => {
     async function fetchPhotos() {
@@ -41,6 +87,58 @@ export default function MuralPage() {
     }
     fetchPhotos()
   }, [])
+
+  useEffect(() => {
+    async function fetchCards() {
+      try {
+        const res  = await fetch('/api/mural-cards')
+        const data = await res.json() as { cards?: MuralCard[] }
+        setCards(Array.isArray(data.cards) ? data.cards : [])
+      } catch {
+        setCards([])
+      } finally {
+        setLoadingCards(false)
+      }
+    }
+    fetchCards()
+
+    try {
+      const saved = localStorage.getItem('cha_author')
+      if (saved) setCardAuthor(saved)
+    } catch {}
+  }, [])
+
+  const handleCardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCardError('')
+    if (!cardAuthor.trim()) { setCardError('Informe seu nome.'); return }
+    if (!cardText.trim())   { setCardError('Escreva seu recado.'); return }
+
+    setSendingCard(true)
+    try {
+      const res  = await fetch('/api/mural-cards', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ author: cardAuthor.trim(), text: cardText.trim(), color: cardColor }),
+      })
+      const data = await res.json() as { error?: string }
+      if (!res.ok) {
+        setCardError(data.error ?? 'Erro ao enviar recado.')
+        return
+      }
+      try { localStorage.setItem('cha_author', cardAuthor.trim()) } catch {}
+      setCardText('')
+      showCardToast('📌 Recado fixado no mural!')
+      // Refresh cards
+      const refreshRes  = await fetch('/api/mural-cards')
+      const refreshData = await refreshRes.json() as { cards?: MuralCard[] }
+      setCards(Array.isArray(refreshData.cards) ? refreshData.cards : [])
+    } catch {
+      setCardError('Sem conexão. Tente novamente.')
+    } finally {
+      setSendingCard(false)
+    }
+  }
 
   const closeLightbox = useCallback(() => setLightboxIndex(null), [])
 
@@ -128,6 +226,153 @@ export default function MuralPage() {
           }}>
             Todos os momentos especiais do nosso chá
           </p>
+        </div>
+
+        {/* ── Mural Cards Section ───────────────────────────────────────── */}
+        <div style={{ maxWidth: 1200, margin: '0 auto 40px', padding: '0 20px' }}>
+
+          {/* Form: deixe seu recado */}
+          <div style={{
+            background: '#faf6ef',
+            border: '1px solid rgba(201,168,124,.3)',
+            borderRadius: 20,
+            padding: '24px 22px',
+            marginBottom: 28,
+            boxShadow: '0 4px 18px rgba(62,36,8,.07)',
+          }}>
+            <p style={{
+              fontFamily: "'Playfair Display',serif",
+              fontSize: '1.2rem', color: '#3e2408',
+              marginBottom: 18, fontWeight: 600,
+            }}>
+              📌 Deixe seu recado
+            </p>
+
+            <form onSubmit={handleCardSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input
+                type="text"
+                value={cardAuthor}
+                onChange={e => { setCardAuthor(e.target.value); setCardError('') }}
+                placeholder="Seu nome"
+                maxLength={60}
+                style={{
+                  border: '1px solid #e8d4b8', borderRadius: 12,
+                  padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif",
+                  fontSize: '1rem', color: '#3e2408', background: 'var(--warm,#fdf6ee)',
+                  outline: 'none',
+                }}
+              />
+              <textarea
+                value={cardText}
+                onChange={e => { setCardText(e.target.value.slice(0, 200)); setCardError('') }}
+                placeholder="Seu recado para o mural... (máx 200 caracteres)"
+                rows={3}
+                style={{
+                  border: '1px solid #e8d4b8', borderRadius: 12,
+                  padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif",
+                  fontSize: '1rem', color: '#3e2408', background: 'var(--warm,#fdf6ee)',
+                  outline: 'none', resize: 'vertical',
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '.8rem', color: 'rgba(62,36,8,.6)', fontWeight: 600 }}>Cor:</span>
+                {CARD_COLORS.map(c => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    title={c.label}
+                    onClick={() => setCardColor(c.value)}
+                    style={{
+                      width: 28, height: 28, borderRadius: '50%',
+                      background: c.value,
+                      border: cardColor === c.value ? '3px solid #7a4e28' : '2px solid #e8d4b8',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  />
+                ))}
+                <span style={{ marginLeft: 'auto', fontSize: '.75rem', color: 'rgba(62,36,8,.45)' }}>
+                  {200 - cardText.length} restantes
+                </span>
+              </div>
+
+              {cardError && (
+                <p style={{ color: '#c0392b', fontSize: '.85rem', fontStyle: 'italic' }}>{cardError}</p>
+              )}
+
+              <button
+                type="submit"
+                disabled={sendingCard}
+                style={{
+                  background: sendingCard ? '#e8d4b8' : 'linear-gradient(135deg,#c47a3a,#7a4e28)',
+                  color: sendingCard ? '#7a4e28' : '#fdf6ee',
+                  border: 'none', borderRadius: 14, padding: '11px 24px',
+                  fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem',
+                  fontWeight: 600, cursor: sendingCard ? 'not-allowed' : 'pointer',
+                  alignSelf: 'flex-start',
+                }}
+              >
+                {sendingCard ? 'Enviando...' : '📌 Fixar no mural'}
+              </button>
+            </form>
+          </div>
+
+          {/* Grid of mural cards */}
+          {!loadingCards && cards.length > 0 && (
+            <>
+              <p style={{
+                fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase',
+                color: 'rgba(62,36,8,.5)', fontWeight: 600, marginBottom: 16,
+              }}>
+                {cards.length} {cards.length === 1 ? 'recado' : 'recados'} no mural
+              </p>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gap: 20,
+                paddingBottom: 8,
+              }}>
+                {cards.map(card => (
+                  <div
+                    key={card.id}
+                    style={{
+                      background: card.color,
+                      borderRadius: 4,
+                      padding: '16px 16px 14px',
+                      boxShadow: '2px 4px 16px rgba(62,36,8,.14), 0 1px 4px rgba(62,36,8,.08)',
+                      transform: `rotate(${cardRotation(card.id)}deg)`,
+                      transition: 'transform .2s ease, box-shadow .2s ease',
+                    }}
+                  >
+                    <p style={{
+                      fontFamily: "'Cormorant Garamond',serif",
+                      fontSize: '.95rem',
+                      fontStyle: 'italic',
+                      color: '#3e2408',
+                      lineHeight: 1.55,
+                      marginBottom: 10,
+                      wordBreak: 'break-word',
+                    }}>
+                      {card.text}
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <p style={{
+                        fontFamily: "'Cormorant Garamond',serif",
+                        fontSize: '.82rem',
+                        fontWeight: 700,
+                        color: '#5a3e28',
+                      }}>
+                        — {card.author}
+                      </p>
+                      <p style={{ fontSize: '.7rem', color: 'rgba(62,36,8,.4)' }}>
+                        {formatDateShort(card.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Cork board area */}
@@ -383,6 +628,20 @@ export default function MuralPage() {
               ›
             </button>
           )}
+        </div>
+      )}
+
+      {/* Card toast */}
+      {cardToast && (
+        <div style={{
+          position: 'fixed', bottom: 100, left: '50%', transform: 'translateX(-50%)',
+          background: '#3e2408', color: '#f5dab6',
+          padding: '12px 22px', borderRadius: 999,
+          fontSize: '.92rem', fontWeight: 600, zIndex: 4000,
+          whiteSpace: 'nowrap', boxShadow: '0 4px 20px rgba(0,0,0,.3)',
+          fontFamily: "'Cormorant Garamond',serif",
+        }}>
+          {cardToast}
         </div>
       )}
     </>

@@ -39,7 +39,7 @@ interface RsvpStats { total: number; confirmed: number; maybe: number; declined:
 interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -124,6 +124,11 @@ function AdminPanel() {
   const [marcosForm,   setMarcosForm]   = useState({ emoji: '👶', title: '', marco_date: '', description: '', photo_url: '' })
   const [savingMarco,  setSavingMarco]  = useState(false)
   const [loadingMarcos, setLoadingMarcos] = useState(false)
+
+  // ── Memórias ──────────────────────────────────────────────────────────────────
+  interface MemoriaSubscriber { id: number; author: string; email: string; opted_in: number; created_at: string }
+  const [memorias,       setMemorias]       = useState<MemoriaSubscriber[]>([])
+  const [loadingMemorias, setLoadingMemorias] = useState(false)
 
   // ── Enquete ──────────────────────────────────────────────────────────────────
   const [enquete,       setEnquete]       = useState<{ id: number; question: string; options: string[]; active: boolean } | null>(null)
@@ -472,6 +477,16 @@ function AdminPanel() {
     finally { setLoadingMarcos(false) }
   }, [])
 
+  const fetchMemorias = useCallback(async () => {
+    setLoadingMemorias(true)
+    try {
+      const d = await fetch('/api/memorias').then(r => r.json()) as { subscribers?: MemoriaSubscriber[] }
+      setMemorias(d.subscribers ?? [])
+    } finally {
+      setLoadingMemorias(false)
+    }
+  }, [])
+
   const approveAll = async () => {
     if (!confirm('Aprovar TODAS as mídias pendentes de uma vez?')) return
     const res = await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve_all' }) })
@@ -492,7 +507,8 @@ function AdminPanel() {
     if (tab === 'pwa') { fetch('/api/pwa-session').then(r => r.json()).then(setPwaStats) }
     if (tab === 'rsvp') fetchRsvp()
     if (tab === 'marcos') fetchMarcos()
-  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos])
+    if (tab === 'memorias') fetchMemorias()
+  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias])
 
   useEffect(() => {
     if (tab !== 'settings') return
@@ -604,6 +620,7 @@ function AdminPanel() {
           { key: 'convite', label: '🔗 Convite', count: 0 },
           { key: 'rsvp', label: '📋 RSVP', count: 0 },
           { key: 'marcos', label: '🧸 Marcos', count: 0 },
+          { key: 'memorias', label: '📬 Memórias', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
@@ -1514,6 +1531,66 @@ function AdminPanel() {
                 </div>
               )
             }
+          </div>
+        </div>
+      )}
+
+      {tab === 'memorias' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>
+              📬 Memórias Automáticas
+            </h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20, lineHeight: 1.6 }}>
+              {loadingMemorias ? 'Carregando…' : `${memorias.length} ${memorias.length === 1 ? 'pessoa inscrita' : 'pessoas inscritas'} para receber memórias`}
+            </p>
+            <p style={{ fontSize: '.82rem', color: 'var(--bl)', background: 'rgba(201,168,124,.12)', borderRadius: 10, padding: '12px 16px', lineHeight: 1.6, marginBottom: 20 }}>
+              💡 As memórias serão enviadas manualmente ou por cron job no 1º aniversário do José Augusto (25/04/2027).
+            </p>
+            <button
+              style={{ ...S.btnApprove, padding: '10px 20px', fontSize: '.9rem', flex: 'none' }}
+              onClick={() => {
+                if (memorias.length === 0) return
+                const csv = ['Nome,Email,Data']
+                  .concat(memorias.map(m => `"${m.author}","${m.email}","${m.created_at}"`))
+                  .join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url  = URL.createObjectURL(blob)
+                const a    = document.createElement('a')
+                a.href = url; a.download = 'memorias-subscribers.csv'; a.click()
+                URL.revokeObjectURL(url)
+              }}
+            >
+              📋 Exportar lista CSV
+            </button>
+          </div>
+
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.1rem', color: 'var(--bd)', marginBottom: 16 }}>
+              Lista de inscritos
+            </h2>
+            {loadingMemorias ? (
+              <p style={S.empty}>Carregando…</p>
+            ) : memorias.length === 0 ? (
+              <p style={S.empty}>Nenhum inscrito ainda 🌸</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {memorias.map(m => (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', border: '1px solid var(--beige)', borderRadius: 14, background: 'var(--cream)' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#c9902a,#7a4e28)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: '.85rem', fontWeight: 700, flexShrink: 0 }}>
+                      {m.author.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '.95rem', color: 'var(--bd)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.author}</p>
+                      <p style={{ margin: 0, fontSize: '.8rem', color: 'var(--bl)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</p>
+                    </div>
+                    <p style={{ fontSize: '.72rem', color: 'var(--bl)', flexShrink: 0 }}>
+                      {new Date(m.created_at).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

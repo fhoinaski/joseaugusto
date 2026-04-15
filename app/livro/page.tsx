@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import MemoriasOptIn from '@/components/MemoriasOptIn'
 
 interface LivroMessage {
   id: number
@@ -330,6 +331,7 @@ export default function LivroPage() {
             )}
           </>
         )}
+        <MemoriasOptIn />
       </div>
 
       {/* Toast */}
