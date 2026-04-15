@@ -27,18 +27,30 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'URL não permitida.' }, { status: 403 })
   }
 
+  // Optional: override the download filename via ?filename= query param
+  const friendlyName = req.nextUrl.searchParams.get('filename')
+
   try {
     const upstream = await fetch(url, { cache: 'no-store' })
     if (!upstream.ok) {
       return NextResponse.json({ error: 'Falha ao buscar arquivo.' }, { status: upstream.status })
     }
 
-    const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream'
+    // Prefer the upstream Content-Type; fall back by extension
+    const upstreamCT = upstream.headers.get('content-type') ?? ''
+    const urlPath = new URL(url).pathname
+    const rawExt  = urlPath.split('.').pop()?.toLowerCase() ?? ''
+    const extMime: Record<string, string> = {
+      webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+      png: 'image/png', gif: 'image/gif', mp4: 'video/mp4',
+    }
+    const contentType = upstreamCT || extMime[rawExt] || 'application/octet-stream'
+
     const buffer = await upstream.arrayBuffer()
 
-    // Derive a filename from the URL path
-    const urlPath = new URL(url).pathname
-    const filename = urlPath.split('/').pop() ?? 'download'
+    // Use friendly name if provided, otherwise derive from URL (preserving real extension)
+    const rawFilename = urlPath.split('/').pop() ?? 'download'
+    const filename = friendlyName ?? rawFilename
 
     return new NextResponse(buffer, {
       status: 200,

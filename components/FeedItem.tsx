@@ -199,21 +199,41 @@ export default function FeedItem({
   }
 
   const downloadMedia = async () => {
+    // Detect extension from the actual URL (files are stored as .webp, .mp4, etc.)
+    const rawPath = item.fullUrl.split('?')[0]
+    const rawExt  = rawPath.split('.').pop()?.toLowerCase() ?? ''
+    const ext = item.type === 'video' ? 'mp4'
+      : ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'].includes(rawExt) ? rawExt
+      : 'webp'
+    const filename = `cha-jose-${item.author.replace(/\s+/g, '-')}.${ext}`
+
+    // iOS Safari: a.download on blob URLs is not supported and can't display WebP
+    // blobs — open the CDN URL directly so user can long-press → "Salvar foto"
+    const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent)
+    if (isIOS) {
+      window.open(item.fullUrl, '_blank')
+      emitToast('Toque e segure na imagem → "Salvar foto" 📲')
+      return
+    }
+
     try {
       emitToast('Baixando...')
-      const res = await fetch(`/api/download?url=${encodeURIComponent(item.fullUrl)}`)
+      const res = await fetch(`/api/download?url=${encodeURIComponent(item.fullUrl)}&filename=${encodeURIComponent(filename)}`)
       if (!res.ok) throw new Error()
-      const blob = await res.blob()
+      // Ensure the blob carries the right MIME so the browser opens it correctly
+      const rawBlob = await res.blob()
+      const mimeMap: Record<string, string> = { webp: 'image/webp', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', mp4: 'video/mp4' }
+      const mime = mimeMap[ext] ?? rawBlob.type
+      const blob = new Blob([rawBlob], { type: mime })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      const ext = item.type === 'video' ? 'mp4' : 'jpg'
-      a.download = `cha-jose-${item.author.replace(/\s+/g, '-')}.${ext}`
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 5000)
-      emitToast('Download concluído!')
+      setTimeout(() => URL.revokeObjectURL(url), 8000)
+      emitToast('Download concluído! ✓')
     } catch {
       emitToast('Não foi possível baixar')
     }
