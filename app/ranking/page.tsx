@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import type { LeaderboardEntry } from '@/lib/db'
 import dynamic from 'next/dynamic'
 
@@ -51,9 +52,9 @@ export default function RankingPage() {
     <div style={{ minHeight: '100dvh', background: 'var(--warm)', color: 'var(--bd)', paddingBottom: 100 }}>
       {/* Back link */}
       <div style={{ padding: '80px 20px 0' }}>
-        <a href="/" style={{ fontSize: '.85rem', color: 'var(--bl)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <Link href="/" style={{ fontSize: '.85rem', color: 'var(--bl)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           ← voltar
-        </a>
+        </Link>
       </div>
 
       {/* Header */}
