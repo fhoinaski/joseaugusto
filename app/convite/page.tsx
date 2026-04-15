@@ -163,54 +163,6 @@ export default function ConvitePage() {
         </p>
       )}
 
-      {/* Location card */}
-      <div style={{
-        background: '#fff',
-        border: '1px solid #e8d4b8',
-        borderRadius: 20,
-        padding: '20px 24px',
-        maxWidth: 400,
-        width: '100%',
-        marginBottom: 28,
-        boxShadow: '0 4px 24px rgba(62,36,8,.08)',
-        animation: 'convite-fade-in 1s ease .2s both',
-      }}>
-        <p style={{
-          fontFamily: "'Playfair Display',serif",
-          fontSize: '1rem',
-          fontWeight: 600,
-          color: '#3e2408',
-          marginBottom: 6,
-        }}>
-          📍 Local do evento
-        </p>
-        <p style={{
-          fontFamily: "'Cormorant Garamond',serif",
-          fontSize: '1rem',
-          color: '#7a4e28',
-          fontStyle: 'italic',
-          lineHeight: 1.5,
-          marginBottom: 12,
-        }}>
-          Endereço a ser confirmado pelos pais — fique ligado!
-        </p>
-        <a
-          href="https://maps.google.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            fontFamily: "'Cormorant Garamond',serif",
-            fontSize: '.92rem',
-            color: '#c47a3a',
-            textDecoration: 'none',
-            fontWeight: 700,
-            letterSpacing: '.04em',
-          }}
-        >
-          Ver no Maps →
-        </a>
-      </div>
-
       {/* QR Code */}
       {qrUrl && (
         <div style={{
@@ -253,13 +205,54 @@ export default function ConvitePage() {
         </div>
       )}
 
-      {/* CTA buttons */}
+      {/* Event details */}
       <div style={{
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: 12,
+        background: '#fff',
+        border: '1px solid #e8d4b8',
+        borderRadius: 20,
+        padding: '20px 24px',
         maxWidth: 400,
         width: '100%',
+        marginBottom: 24,
+        boxShadow: '0 4px 24px rgba(62,36,8,.08)',
+        animation: 'convite-fade-in 1s ease .35s both',
+      }}>
+        <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1rem', fontWeight: 600, color: '#3e2408', marginBottom: 16 }}>
+          Detalhes do Evento
+        </p>
+        {[
+          { icon: '📅', label: 'Data', value: '25 de Abril de 2026' },
+          { icon: '🕔', label: 'Horário', value: '17h00' },
+          { icon: '👗', label: 'Traje', value: 'Pastel / Elegante casual' },
+        ].map(item => (
+          <div key={item.label} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+            <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
+            <div>
+              <span style={{ fontSize: '.72rem', textTransform: 'uppercase' as const, letterSpacing: '.1em', color: '#a0713e', fontWeight: 600, display: 'block' }}>{item.label}</span>
+              <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: '#3e2408' }}>{item.value}</span>
+            </div>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: '1.2rem', flexShrink: 0, marginTop: 1 }}>📍</span>
+          <div>
+            <span style={{ fontSize: '.72rem', textTransform: 'uppercase' as const, letterSpacing: '.1em', color: '#a0713e', fontWeight: 600, display: 'block' }}>Local</span>
+            <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: '#3e2408', display: 'block', fontStyle: 'italic' }}>
+              Endereço a ser confirmado
+            </span>
+            <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
+              style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '.88rem', color: '#c47a3a', textDecoration: 'none', fontWeight: 700 }}>
+              Ver no Maps →
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Confirm presence CTA */}
+      <div style={{
+        maxWidth: 400,
+        width: '100%',
+        marginBottom: 24,
         animation: 'convite-fade-in 1s ease .4s both',
       }}>
         <a
@@ -279,8 +272,85 @@ export default function ConvitePage() {
             letterSpacing: '.03em',
           }}
         >
-          Confirmar presença →
+          📋 Confirmar presença →
         </a>
+      </div>
+
+      {/* Gifts section */}
+      <div style={{
+        background: '#fff',
+        border: '1px solid #e8d4b8',
+        borderRadius: 20,
+        padding: '20px 24px',
+        maxWidth: 400,
+        width: '100%',
+        marginBottom: 24,
+        boxShadow: '0 4px 24px rgba(62,36,8,.08)',
+        animation: 'convite-fade-in 1s ease .45s both',
+      }}>
+        <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1rem', fontWeight: 600, color: '#3e2408', marginBottom: 10 }}>
+          🎁 Lista de Presentes
+        </p>
+        <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: '#7a4e28', lineHeight: 1.6, fontStyle: 'italic', marginBottom: 14 }}>
+          Montamos uma lista especial com os itens que o José Augusto vai precisar. Se quiser presentear, confira nossa lista de presentes.
+        </p>
+        <a
+          href="/store"
+          style={{
+            display: 'inline-block',
+            fontFamily: "'Cormorant Garamond',serif",
+            fontSize: '.95rem',
+            color: '#c47a3a',
+            textDecoration: 'none',
+            fontWeight: 700,
+            letterSpacing: '.04em',
+          }}
+        >
+          Ver lista de presentes →
+        </a>
+      </div>
+
+      {/* FAQ */}
+      <div style={{
+        background: '#fff',
+        border: '1px solid #e8d4b8',
+        borderRadius: 20,
+        padding: '20px 24px',
+        maxWidth: 400,
+        width: '100%',
+        marginBottom: 28,
+        boxShadow: '0 4px 24px rgba(62,36,8,.08)',
+        animation: 'convite-fade-in 1s ease .5s both',
+      }}>
+        <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1rem', fontWeight: 600, color: '#3e2408', marginBottom: 16 }}>
+          Perguntas Frequentes
+        </p>
+        {[
+          { q: 'Posso levar meus filhos?', a: 'Sim! Crianças são muito bem-vindas no chá do José Augusto.' },
+          { q: 'Tem estacionamento?', a: 'Sim, o local dispõe de estacionamento gratuito para os convidados.' },
+          { q: 'Preciso levar presente?', a: 'A sua presença é o presente mais especial! Mas se quiser, confira nossa lista de presentes.' },
+          { q: 'O evento tem hora para terminar?', a: 'O evento começa às 17h. Fique à vontade para ficar até o fim da festa!' },
+        ].map((item, idx) => (
+          <div key={idx} style={{ marginBottom: idx < 3 ? 14 : 0 }}>
+            <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '.92rem', fontWeight: 600, color: '#3e2408', marginBottom: 4 }}>
+              {item.q}
+            </p>
+            <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', color: '#7a4e28', lineHeight: 1.55 }}>
+              {item.a}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Back link */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: 12,
+        maxWidth: 400,
+        width: '100%',
+        animation: 'convite-fade-in 1s ease .55s both',
+      }}>
         <a
           href="/"
           style={{
@@ -309,7 +379,7 @@ export default function ConvitePage() {
         color: '#a0713e',
         marginTop: 48,
         textAlign: 'center',
-        animation: 'convite-fade-in 1s ease .5s both',
+        animation: 'convite-fade-in 1s ease .6s both',
       }}>
         Com amor, família Fhoinaski 🧸
       </p>

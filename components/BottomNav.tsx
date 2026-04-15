@@ -60,6 +60,8 @@ const EXPLORE_LINKS = [
   { href: '/ranking',   emoji: '🏆', label: 'Ranking' },
   { href: '/timeline',  emoji: '⏱',  label: 'Timeline' },
   { href: '/convite',   emoji: '📩', label: 'Convite' },
+  { href: '/rsvp',      emoji: '📋', label: 'RSVP' },
+  { href: '/marcos',    emoji: '👣', label: 'Marcos' },
 ]
 
 const EXPLORE_PATHS = EXPLORE_LINKS.map(l => l.href)

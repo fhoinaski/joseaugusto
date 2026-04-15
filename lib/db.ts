@@ -1547,3 +1547,131 @@ export async function dbGetPwaStats(): Promise<{ installs: number; sessions: num
     throw err
   }
 }
+
+// ── RSVP ─────────────────────────────────────────────────────────────────────
+
+export async function dbCreateRsvpTable(db?: unknown): Promise<void> {
+  await d1Exec(`
+    CREATE TABLE IF NOT EXISTS rsvp (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'confirmed',
+      guests_count INTEGER NOT NULL DEFAULT 1,
+      message TEXT,
+      contact TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+}
+
+export async function dbGetRsvpList(): Promise<{
+  id: number; name: string; status: string; guests_count: number;
+  message: string | null; contact: string | null; created_at: string
+}[]> {
+  try {
+    const res = await d1Query<{
+      id: number; name: string; status: string; guests_count: number;
+      message: string | null; contact: string | null; created_at: string
+    }>(`SELECT * FROM rsvp ORDER BY created_at DESC`)
+    return res
+  } catch (err) {
+    if (isMissingTableError(err, 'rsvp')) { await dbCreateRsvpTable(); return [] }
+    throw err
+  }
+}
+
+export async function dbCreateRsvp(data: {
+  name: string; status: string; guests_count: number; message?: string; contact?: string
+}): Promise<void> {
+  try {
+    await d1Exec(`
+      INSERT INTO rsvp (name, status, guests_count, message, contact)
+      VALUES (?, ?, ?, ?, ?)
+    `, [data.name, data.status, data.guests_count, data.message ?? null, data.contact ?? null])
+  } catch (err) {
+    if (isMissingTableError(err, 'rsvp')) {
+      await dbCreateRsvpTable()
+      await d1Exec(`
+        INSERT INTO rsvp (name, status, guests_count, message, contact)
+        VALUES (?, ?, ?, ?, ?)
+      `, [data.name, data.status, data.guests_count, data.message ?? null, data.contact ?? null])
+    } else throw err
+  }
+}
+
+export async function dbGetRsvpStats(): Promise<{
+  total: number; confirmed: number; maybe: number; declined: number; total_guests: number
+}> {
+  try {
+    const rows = await d1Query<{
+      total: number; confirmed: number; maybe: number; declined: number; total_guests: number
+    }>(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) as confirmed,
+        SUM(CASE WHEN status='maybe' THEN 1 ELSE 0 END) as maybe,
+        SUM(CASE WHEN status='declined' THEN 1 ELSE 0 END) as declined,
+        SUM(CASE WHEN status='confirmed' OR status='maybe' THEN guests_count ELSE 0 END) as total_guests
+      FROM rsvp
+    `)
+    return rows[0] ?? { total: 0, confirmed: 0, maybe: 0, declined: 0, total_guests: 0 }
+  } catch (err) {
+    if (isMissingTableError(err, 'rsvp')) { await dbCreateRsvpTable(); return { total: 0, confirmed: 0, maybe: 0, declined: 0, total_guests: 0 } }
+    throw err
+  }
+}
+
+// ── Marcos do bebê ────────────────────────────────────────────────────────────
+
+export async function dbCreateMarcosTable(): Promise<void> {
+  await d1Exec(`
+    CREATE TABLE IF NOT EXISTS marcos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      emoji TEXT NOT NULL DEFAULT '⭐',
+      description TEXT,
+      marco_date TEXT NOT NULL,
+      photo_url TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+}
+
+export async function dbGetMarcos(): Promise<{
+  id: number; title: string; emoji: string; description: string | null;
+  marco_date: string; photo_url: string | null; created_at: string
+}[]> {
+  try {
+    return await d1Query<{
+      id: number; title: string; emoji: string; description: string | null;
+      marco_date: string; photo_url: string | null; created_at: string
+    }>(`SELECT * FROM marcos ORDER BY marco_date ASC`)
+  } catch (err) {
+    if (isMissingTableError(err, 'marcos')) { await dbCreateMarcosTable(); return [] }
+    throw err
+  }
+}
+
+export async function dbCreateMarco(data: {
+  title: string; emoji: string; description?: string; marco_date: string; photo_url?: string
+}): Promise<void> {
+  try {
+    await d1Exec(`
+      INSERT INTO marcos (title, emoji, description, marco_date, photo_url)
+      VALUES (?, ?, ?, ?, ?)
+    `, [data.title, data.emoji, data.description ?? null, data.marco_date, data.photo_url ?? null])
+  } catch (err) {
+    if (isMissingTableError(err, 'marcos')) {
+      await dbCreateMarcosTable()
+      await d1Exec(`
+        INSERT INTO marcos (title, emoji, description, marco_date, photo_url)
+        VALUES (?, ?, ?, ?, ?)
+      `, [data.title, data.emoji, data.description ?? null, data.marco_date, data.photo_url ?? null])
+    } else throw err
+  }
+}
+
+export async function dbDeleteMarco(id: number): Promise<void> {
+  try { await d1Exec(`DELETE FROM marcos WHERE id = ?`, [id]) }
+  catch (err) { if (isMissingTableError(err, 'marcos')) return; throw err }
+}

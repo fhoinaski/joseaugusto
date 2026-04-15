@@ -34,9 +34,12 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 }
 
 interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
+interface RsvpItem { id: number; name: string; status: string; guests_count: number; contact: string | null; message: string | null; created_at: string }
+interface RsvpStats { total: number; confirmed: number; maybe: number; declined: number; total_guests: number }
+interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -110,6 +113,17 @@ function AdminPanel() {
 
   // ── PWA ───────────────────────────────────────────────────────────────────────
   const [pwaStats, setPwaStats] = useState<{ installs: number; sessions: number; devices: Array<{ author: string | null; event: string; created_at: string }> } | null>(null)
+
+  // ── RSVP ──────────────────────────────────────────────────────────────────────
+  const [rsvpList,   setRsvpList]   = useState<RsvpItem[]>([])
+  const [rsvpStats,  setRsvpStats]  = useState<RsvpStats | null>(null)
+  const [loadingRsvp, setLoadingRsvp] = useState(false)
+
+  // ── Marcos ────────────────────────────────────────────────────────────────────
+  const [marcos,       setMarcos]       = useState<MarcoAdmin[]>([])
+  const [marcosForm,   setMarcosForm]   = useState({ emoji: '👶', title: '', marco_date: '', description: '', photo_url: '' })
+  const [savingMarco,  setSavingMarco]  = useState(false)
+  const [loadingMarcos, setLoadingMarcos] = useState(false)
 
   // ── Enquete ──────────────────────────────────────────────────────────────────
   const [enquete,       setEnquete]       = useState<{ id: number; question: string; options: string[]; active: boolean } | null>(null)
@@ -443,6 +457,21 @@ function AdminPanel() {
     finally { setLoadingDiario(false) }
   }, [])
 
+  const fetchRsvp = useCallback(async () => {
+    setLoadingRsvp(true)
+    try {
+      const d = await fetch('/api/rsvp').then(r => r.json()) as { rsvps?: RsvpItem[]; stats?: RsvpStats }
+      setRsvpList(d.rsvps ?? [])
+      setRsvpStats(d.stats ?? null)
+    } finally { setLoadingRsvp(false) }
+  }, [])
+
+  const fetchMarcos = useCallback(async () => {
+    setLoadingMarcos(true)
+    try { const d = await fetch('/api/marcos').then(r => r.json()) as { marcos?: MarcoAdmin[] }; setMarcos(d.marcos ?? []) }
+    finally { setLoadingMarcos(false) }
+  }, [])
+
   const approveAll = async () => {
     if (!confirm('Aprovar TODAS as mídias pendentes de uma vez?')) return
     const res = await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve_all' }) })
@@ -461,7 +490,9 @@ function AdminPanel() {
     if (tab === 'bingo') { fetchBingo() }
     if (tab === 'diario') fetchDiario()
     if (tab === 'pwa') { fetch('/api/pwa-session').then(r => r.json()).then(setPwaStats) }
-  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario])
+    if (tab === 'rsvp') fetchRsvp()
+    if (tab === 'marcos') fetchMarcos()
+  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos])
 
   useEffect(() => {
     if (tab !== 'settings') return
@@ -571,6 +602,8 @@ function AdminPanel() {
           { key: 'settings', label: '⚙ Configurações', count: 0 },
           { key: 'pwa', label: '📱 PWA', count: 0 },
           { key: 'convite', label: '🔗 Convite', count: 0 },
+          { key: 'rsvp', label: '📋 RSVP', count: 0 },
+          { key: 'marcos', label: '🧸 Marcos', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
@@ -1300,6 +1333,190 @@ function AdminPanel() {
           </div>
         )
       })()}
+
+      {tab === 'rsvp' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Stats */}
+          {rsvpStats && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 14 }}>
+              <div style={{ ...S.statCard, borderColor: 'rgba(90,158,58,.3)', background: 'rgba(90,158,58,.06)' }}>
+                <span style={{ ...S.statNum, color: '#3a6d10' }}>{rsvpStats.confirmed}</span>
+                <span style={S.statLbl}>Confirmados</span>
+              </div>
+              <div style={{ ...S.statCard, borderColor: 'rgba(201,160,32,.3)', background: 'rgba(201,160,32,.06)' }}>
+                <span style={{ ...S.statNum, color: '#7a5f10' }}>{rsvpStats.maybe}</span>
+                <span style={S.statLbl}>Talvez</span>
+              </div>
+              <div style={{ ...S.statCard, borderColor: 'rgba(192,57,43,.3)', background: 'rgba(192,57,43,.06)' }}>
+                <span style={{ ...S.statNum, color: '#a33' }}>{rsvpStats.declined}</span>
+                <span style={S.statLbl}>Não podem</span>
+              </div>
+              <div style={S.statCard}>
+                <span style={S.statNum}>{rsvpStats.total_guests}</span>
+                <span style={S.statLbl}>Pessoas esperadas</span>
+              </div>
+            </div>
+          )}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📋 Confirmações de Presença</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>
+              {rsvpList.length} {rsvpList.length === 1 ? 'resposta' : 'respostas'} recebidas
+            </p>
+            {loadingRsvp ? <p style={S.empty}>Carregando…</p> : rsvpList.length === 0
+              ? <p style={S.empty}>Nenhuma confirmação ainda 🎀</p>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {rsvpList.map(item => {
+                    const statusColors: Record<string, { bg: string; color: string; label: string }> = {
+                      confirmed: { bg: 'rgba(90,158,58,.12)', color: '#3a6d10', label: '✅ Confirmado' },
+                      maybe:     { bg: 'rgba(201,160,32,.12)', color: '#7a5f10', label: '🤔 Talvez' },
+                      declined:  { bg: 'rgba(192,57,43,.1)', color: '#a33', label: '❌ Não pode' },
+                    }
+                    const sc = statusColors[item.status] ?? statusColors.confirmed
+                    return (
+                      <div key={item.id} style={{ padding: '12px 16px', border: '1px solid var(--beige)', borderRadius: 14, background: 'var(--cream)' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+                              <p style={{ fontWeight: 600, fontSize: '.95rem', color: 'var(--bd)', margin: 0 }}>{item.name}</p>
+                              <span style={{ fontSize: '.72rem', padding: '2px 8px', borderRadius: 99, background: sc.bg, color: sc.color, fontWeight: 600 }}>{sc.label}</span>
+                              {(item.status === 'confirmed' || item.status === 'maybe') && (
+                                <span style={{ fontSize: '.72rem', color: 'var(--bl)' }}>👥 {item.guests_count} {item.guests_count === 1 ? 'pessoa' : 'pessoas'}</span>
+                              )}
+                            </div>
+                            {item.contact && <p style={{ margin: '0 0 3px', fontSize: '.82rem', color: 'var(--bl)' }}>📞 {item.contact}</p>}
+                            {item.message && <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--bd)', fontStyle: 'italic', lineHeight: 1.5 }}>"{item.message}"</p>}
+                          </div>
+                          <p style={{ margin: 0, fontSize: '.72rem', color: 'var(--bl)', fontStyle: 'italic', flexShrink: 0 }}>
+                            {new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            }
+          </div>
+        </div>
+      )}
+
+      {tab === 'marcos' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Add form */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>Adicionar Marco</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 18 }}>Registre os momentos especiais do José Augusto.</p>
+
+            {/* Suggested chips */}
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--bl)', fontWeight: 600, marginBottom: 8 }}>Sugestões</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[
+                  { emoji: '👶', title: 'Chegou ao mundo' },
+                  { emoji: '😊', title: 'Primeiro sorriso' },
+                  { emoji: '🛁', title: 'Primeiro banho' },
+                  { emoji: '💬', title: 'Primeiras palavras' },
+                  { emoji: '🦷', title: 'Primeiro dentinho' },
+                  { emoji: '👣', title: 'Primeiros passos' },
+                  { emoji: '🎂', title: 'Primeiro aniversário' },
+                ].map(chip => (
+                  <button
+                    key={chip.title}
+                    type="button"
+                    onClick={() => setMarcosForm(f => ({ ...f, emoji: chip.emoji, title: chip.title }))}
+                    style={{ padding: '6px 12px', borderRadius: 99, border: '1px solid var(--beige)', background: 'var(--warm)', cursor: 'pointer', fontSize: '.82rem', fontFamily: "'Cormorant Garamond',serif", color: 'var(--bd)' }}
+                  >
+                    {chip.emoji} {chip.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Emoji picker */}
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--bl)', fontWeight: 600, marginBottom: 8 }}>Emoji</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['👶','😊','🛁','💬','🦷','👣','🎂','⭐','🌟','🍼','💕','🧸'].map(em => (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => setMarcosForm(f => ({ ...f, emoji: em }))}
+                    style={{ width: 38, height: 38, borderRadius: 10, border: `1.5px solid ${marcosForm.emoji === em ? 'var(--sand)' : 'var(--beige)'}`, background: marcosForm.emoji === em ? 'var(--beige)' : 'var(--warm)', cursor: 'pointer', fontSize: '1.2rem', display: 'grid', placeItems: 'center' }}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Título do marco *" value={marcosForm.title} onChange={e => setMarcosForm(f => ({ ...f, title: e.target.value }))} />
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} type="date" placeholder="Data *" value={marcosForm.marco_date} onChange={e => setMarcosForm(f => ({ ...f, marco_date: e.target.value }))} />
+              <textarea style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none', resize: 'vertical', minHeight: 80 }} placeholder="Descrição (opcional)" value={marcosForm.description} onChange={e => setMarcosForm(f => ({ ...f, description: e.target.value }))} />
+              <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="URL da foto (opcional)" value={marcosForm.photo_url} onChange={e => setMarcosForm(f => ({ ...f, photo_url: e.target.value }))} />
+              <button
+                style={{ ...S.btnApprove, padding: '11px 24px', fontSize: '.95rem' }}
+                disabled={savingMarco || !marcosForm.title.trim() || !marcosForm.marco_date}
+                onClick={async () => {
+                  setSavingMarco(true)
+                  try {
+                    const res = await fetch('/api/marcos', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        emoji: marcosForm.emoji,
+                        title: marcosForm.title.trim(),
+                        marco_date: marcosForm.marco_date,
+                        description: marcosForm.description.trim() || undefined,
+                        photo_url: marcosForm.photo_url.trim() || undefined,
+                      }),
+                    })
+                    if (res.ok) {
+                      setMarcosForm({ emoji: '👶', title: '', marco_date: '', description: '', photo_url: '' })
+                      await fetchMarcos()
+                      showToast('🧸 Marco adicionado!')
+                    } else {
+                      const d = await res.json() as { error?: string }
+                      showToast(d.error ?? 'Erro ao adicionar marco.')
+                    }
+                  } finally { setSavingMarco(false) }
+                }}
+              >
+                {savingMarco ? 'Adicionando…' : '+ Adicionar marco'}
+              </button>
+            </div>
+          </div>
+
+          {/* List */}
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>Marcos registrados</h2>
+            {loadingMarcos ? <p style={S.empty}>Carregando…</p> : marcos.length === 0
+              ? <p style={S.empty}>Nenhum marco registrado ainda 🌸</p>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+                  {marcos.map(m => (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', border: '1px solid var(--beige)', borderRadius: 14, background: 'var(--cream)' }}>
+                      <span style={{ fontSize: '1.6rem', flexShrink: 0 }}>{m.emoji}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '.95rem', color: 'var(--bd)' }}>{m.title}</p>
+                        <p style={{ margin: 0, fontSize: '.78rem', color: 'var(--bl)', fontStyle: 'italic' }}>{m.marco_date}</p>
+                        {m.description && <p style={{ margin: '3px 0 0', fontSize: '.82rem', color: 'var(--bd)', lineHeight: 1.5 }}>{m.description}</p>}
+                      </div>
+                      <button style={S.btnDelete} onClick={async () => {
+                        if (!confirm(`Excluir marco "${m.title}"?`)) return
+                        await fetch('/api/marcos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }) })
+                        setMarcos(prev => prev.filter(x => x.id !== m.id))
+                        showToast('🗑 Marco removido.')
+                      }}>🗑</button>
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          </div>
+        </div>
+      )}
 
       <div style={S.toast}>{toast}</div>
     </div>
