@@ -32,16 +32,23 @@ const iconBtn: React.CSSProperties = {
   backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', flexShrink: 0,
 }
 
+type BoomerangState = 'idle' | 'recording' | 'preview'
+
 export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
   const [status, setStatus] = useState<'loading' | 'live' | 'countdown' | 'preview' | 'error'>('loading')
   const [facing, setFacing] = useState<'user' | 'environment'>('environment')
   const [filter, setFilter] = useState('none')
-  const [panel, setPanel] = useState<'filter' | 'sticker'>('filter')
+  const [panel, setPanel] = useState<'filter' | 'sticker' | 'clip'>('filter')
   const [stickers, setStickers] = useState<PlacedSticker[]>([])
   const [countdown, setCountdown] = useState(3)
   const [capturedUrl, setCapturedUrl] = useState('')
   const [capturedFile, setCapturedFile] = useState<File | null>(null)
   const [errMsg, setErrMsg] = useState('')
+
+  // Clip / Boomerang state
+  const [boomerangState, setBoomerangState] = useState<BoomerangState>('idle')
+  const [clipUrl, setClipUrl] = useState('')
+  const [clipCountdown, setClipCountdown] = useState(3)
 
   const videoRef    = useRef<HTMLVideoElement>(null)
   const canvasRef   = useRef<HTMLCanvasElement>(null)
@@ -49,6 +56,9 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
   const streamRef   = useRef<MediaStream | null>(null)
   const dragRef     = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const clipUrlRef = useRef<string>('')
 
   /* ── Camera ─────────────────────────────────────────────────────── */
   const startCamera = useCallback(async (facingMode: 'user' | 'environment') => {
@@ -78,6 +88,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop())
       if (countdownRef.current) clearInterval(countdownRef.current)
+      if (clipUrlRef.current) URL.revokeObjectURL(clipUrlRef.current)
     }
   }, [startCamera])
 
@@ -85,6 +96,62 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
     const next = facing === 'environment' ? 'user' : 'environment'
     setFacing(next)
     startCamera(next)
+  }
+
+  /* ── Clip / Boomerang ────────────────────────────────────────────── */
+  const startBoomerang = () => {
+    if (!streamRef.current) return
+    if (clipUrlRef.current) {
+      URL.revokeObjectURL(clipUrlRef.current)
+      clipUrlRef.current = ''
+    }
+    chunksRef.current = []
+    const mimeType = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : 'video/webm'
+    const recorder = new MediaRecorder(streamRef.current, { mimeType })
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      clipUrlRef.current = url
+      setClipUrl(url)
+      setBoomerangState('preview')
+    }
+    mediaRecorderRef.current = recorder
+    recorder.start()
+    setBoomerangState('recording')
+    setClipCountdown(3)
+
+    // Visual countdown: 3 → 2 → 1
+    let c = 3
+    const tick = setInterval(() => {
+      c -= 1
+      setClipCountdown(c)
+      if (c <= 0) clearInterval(tick)
+    }, 1000)
+
+    setTimeout(() => {
+      clearInterval(tick)
+      recorder.stop()
+    }, 3000)
+  }
+
+  const rerecordClip = () => {
+    if (clipUrlRef.current) {
+      URL.revokeObjectURL(clipUrlRef.current)
+      clipUrlRef.current = ''
+    }
+    setClipUrl('')
+    setBoomerangState('idle')
+  }
+
+  const downloadClip = () => {
+    if (!clipUrl) return
+    const a = document.createElement('a')
+    a.href = clipUrl
+    a.download = 'boomerang-cha-jose.webm'
+    a.click()
   }
 
   /* ── Stickers ────────────────────────────────────────────────────── */
@@ -185,6 +252,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
 
   const retake = () => {
     setCapturedUrl(''); setCapturedFile(null); setStickers([])
+    setBoomerangState('idle'); setClipUrl('')
     startCamera(facing)
   }
 
@@ -272,6 +340,53 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
           </div>
         ))}
 
+        {/* ── Clip preview overlay ── */}
+        {panel === 'clip' && boomerangState === 'preview' && clipUrl && (
+          <div style={{ position: 'absolute', inset: 0, background: '#000', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+            <video
+              src={clipUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+            {/* Clip action buttons */}
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              background: 'linear-gradient(to top, rgba(0,0,0,.92) 80%, transparent)',
+              padding: '20px 16px',
+              paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+              display: 'flex', gap: 10,
+            }}>
+              <button
+                onClick={rerecordClip}
+                style={{
+                  flex: 1, padding: '14px', borderRadius: 14,
+                  border: '1.5px solid rgba(255,255,255,.2)',
+                  background: 'rgba(255,255,255,.07)',
+                  color: '#fff', fontSize: '.92rem',
+                  fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                🔄 Regravar
+              </button>
+              <button
+                onClick={downloadClip}
+                style={{
+                  flex: 1.4, padding: '14px', borderRadius: 14, border: 'none',
+                  background: 'linear-gradient(135deg, #e74c3c, #922b21)',
+                  color: '#fff', fontSize: '.95rem',
+                  fontFamily: "'Cormorant Garamond',serif", fontWeight: 700, cursor: 'pointer',
+                  boxShadow: '0 4px 18px rgba(231,76,60,.45)',
+                }}
+              >
+                ⬇ Baixar clipe
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── TOP BAR (overlaid) ── */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0,
@@ -295,14 +410,14 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
             paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
           }}>
 
-            {/* ── Tab selector: Filtros | Stickers ── */}
+            {/* ── Tab selector: Filtros | Stickers | Clipe ── */}
             <div style={{ display: 'flex', justifyContent: 'center', gap: 6, padding: '10px 16px 6px' }}>
-              {(['filter', 'sticker'] as const).map(p => (
+              {(['filter', 'sticker', 'clip'] as const).map(p => (
                 <button
                   key={p}
                   onClick={() => setPanel(p)}
                   style={{
-                    padding: '5px 18px', borderRadius: 20, cursor: 'pointer',
+                    padding: '5px 14px', borderRadius: 20, cursor: 'pointer',
                     border: panel === p ? '1.5px solid #c9a87c' : '1.5px solid rgba(255,255,255,.2)',
                     background: panel === p ? 'rgba(201,168,124,.22)' : 'rgba(255,255,255,.07)',
                     color: panel === p ? '#f5dab6' : 'rgba(255,255,255,.55)',
@@ -311,7 +426,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
                     transition: 'all .15s',
                   }}
                 >
-                  {p === 'filter' ? '🎨 Filtros' : '🎭 Stickers'}
+                  {p === 'filter' ? '🎨 Filtros' : p === 'sticker' ? '🎭 Stickers' : '🎥 Clipe'}
                 </button>
               ))}
             </div>
@@ -356,35 +471,76 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
               </div>
             )}
 
+            {/* ── Clip panel placeholder strip (keeps height consistent) ── */}
+            {panel === 'clip' && (
+              <div style={{ height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <p style={{ margin: 0, color: 'rgba(255,255,255,.35)', fontSize: '.7rem', fontStyle: 'italic', fontFamily: "'Cormorant Garamond',serif" }}>
+                  Grava 3 segundos de vídeo
+                </p>
+              </div>
+            )}
+
             {/* ── Capture row ── */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 20px 2px', gap: 28 }}>
 
               {/* Flip camera */}
               <button onClick={flipCamera} title="Virar câmera" style={iconBtn}>🔄</button>
 
-              {/* Shutter button */}
-              <button
-                onClick={startCountdown}
-                disabled={status === 'countdown'}
-                aria-label="Tirar foto"
-                style={{
-                  width: 72, height: 72, borderRadius: '50%',
-                  border: '4px solid #fff',
-                  background: status === 'countdown'
-                    ? 'rgba(255,255,255,.18)'
-                    : 'linear-gradient(135deg, #c47a3a, #7a4e28)',
-                  cursor: status === 'countdown' ? 'wait' : 'pointer',
-                  boxShadow: '0 4px 22px rgba(0,0,0,.55), 0 0 0 2px rgba(196,122,58,.4)',
-                  fontSize: '1.75rem',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'transform .12s',
-                }}
-              >
-                {status === 'countdown' ? '⏳' : '📷'}
-              </button>
+              {/* Clip mode: record button */}
+              {panel === 'clip' ? (
+                <button
+                  onClick={boomerangState === 'idle' ? startBoomerang : undefined}
+                  disabled={boomerangState === 'recording'}
+                  aria-label="Gravar clipe"
+                  style={{
+                    width: 72, height: 72, borderRadius: '50%',
+                    border: boomerangState === 'recording' ? '4px solid #e74c3c' : '4px solid #fff',
+                    background: boomerangState === 'recording'
+                      ? 'rgba(231,76,60,.25)'
+                      : 'linear-gradient(135deg, #e74c3c, #922b21)',
+                    cursor: boomerangState === 'recording' ? 'wait' : 'pointer',
+                    boxShadow: boomerangState === 'recording'
+                      ? '0 0 0 4px rgba(231,76,60,.5), 0 4px 22px rgba(0,0,0,.55)'
+                      : '0 4px 22px rgba(0,0,0,.55)',
+                    fontSize: boomerangState === 'recording' ? '1.1rem' : '1.75rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexDirection: 'column', gap: 2,
+                    animation: boomerangState === 'recording' ? 'boothRecordPulse 1s ease-in-out infinite' : 'none',
+                    transition: 'all .2s',
+                  }}
+                >
+                  {boomerangState === 'recording' ? (
+                    <>
+                      <span style={{ fontSize: '1.5rem' }}>🔴</span>
+                      <span style={{ fontSize: '.55rem', fontFamily: 'sans-serif', fontWeight: 700, lineHeight: 1 }}>{clipCountdown > 0 ? clipCountdown : '…'}</span>
+                    </>
+                  ) : '⏺'}
+                </button>
+              ) : (
+                /* Shutter button */
+                <button
+                  onClick={startCountdown}
+                  disabled={status === 'countdown'}
+                  aria-label="Tirar foto"
+                  style={{
+                    width: 72, height: 72, borderRadius: '50%',
+                    border: '4px solid #fff',
+                    background: status === 'countdown'
+                      ? 'rgba(255,255,255,.18)'
+                      : 'linear-gradient(135deg, #c47a3a, #7a4e28)',
+                    cursor: status === 'countdown' ? 'wait' : 'pointer',
+                    boxShadow: '0 4px 22px rgba(0,0,0,.55), 0 0 0 2px rgba(196,122,58,.4)',
+                    fontSize: '1.75rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'transform .12s',
+                  }}
+                >
+                  {status === 'countdown' ? '⏳' : '📷'}
+                </button>
+              )}
 
               {/* Clear stickers OR placeholder */}
-              {stickers.length > 0
+              {stickers.length > 0 && panel !== 'clip'
                 ? <button onClick={() => setStickers([])} title="Limpar stickers" style={{ ...iconBtn, background: 'rgba(192,57,43,.4)' }}>🗑️</button>
                 : <div style={{ width: 44 }} />
               }
@@ -394,6 +550,13 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
             {panel === 'sticker' && stickers.length > 0 && (
               <p style={{ margin: '4px 0 0', textAlign: 'center', color: 'rgba(255,255,255,.38)', fontSize: '.62rem', fontStyle: 'italic', lineHeight: 1 }}>
                 Arraste · 2× toque para remover
+              </p>
+            )}
+
+            {/* Clip recording label */}
+            {panel === 'clip' && boomerangState === 'recording' && (
+              <p style={{ margin: '4px 0 0', textAlign: 'center', color: '#e74c3c', fontSize: '.72rem', fontWeight: 700, letterSpacing: '.05em', lineHeight: 1, fontFamily: 'sans-serif' }}>
+                Gravando...
               </p>
             )}
           </div>
