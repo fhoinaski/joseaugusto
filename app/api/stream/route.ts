@@ -29,6 +29,7 @@ export async function GET() {
       let lastMsg  = ''
       let lastReactionTs = 0
       let lastCommentTs = 0
+      let lastAnnounce = ''
       try {
         const rt = await getRealtimeDataR2()
         if (rt?.ts) lastRtTs = rt.ts
@@ -37,6 +38,7 @@ export async function GET() {
         const comment = await getCommentDataR2()
         if (comment?.ts) lastCommentTs = comment.ts
         lastMsg = await dbGetConfig('parents_message')
+        lastAnnounce = await dbGetConfig('live_announce', '')
       } catch {}
 
       // Poll every 8s, emit only when something changed
@@ -65,6 +67,17 @@ export async function GET() {
           if (msg !== lastMsg) {
             lastMsg = msg
             send('message-update', { message: msg })
+          }
+
+          const announceRaw = await dbGetConfig('live_announce', '')
+          if (announceRaw !== lastAnnounce) {
+            lastAnnounce = announceRaw
+            try {
+              const parsed = announceRaw ? JSON.parse(announceRaw) : { message: '', ts: 0 }
+              send('announce', parsed)
+            } catch {
+              send('announce', { message: '', ts: 0 })
+            }
           }
         } catch {}
       }, 8000)
