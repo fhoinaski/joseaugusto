@@ -87,10 +87,14 @@ export default function UploadModal({
   onClose,
   onSuccess,
   authorDefault,
+  initialFile,
+  onOpenBooth,
 }: {
   onClose: () => void
   onSuccess: (author: string, thumb: string) => void
   authorDefault: string
+  initialFile?: File
+  onOpenBooth?: () => void
 }) {
   const [author, setAuthor] = useState(authorDefault)
   const [askName, setAskName] = useState(!authorDefault.trim())
@@ -222,6 +226,17 @@ export default function UploadModal({
     setQueue([{ file: f, name: f.name, preview: '', status: 'waiting', progress: 0, type: 'audio', retries: 0, isOfflineError: false }])
     setStep('queue')
   }
+
+  // Process initialFile if provided (coming from Photo Booth)
+  const handleImgFilesRef = useRef(handleImgFiles)
+  handleImgFilesRef.current = handleImgFiles
+
+  useEffect(() => {
+    if (!initialFile) return
+    const dt = new DataTransfer()
+    dt.items.add(initialFile)
+    handleImgFilesRef.current(dt.files)
+  }, [initialFile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const uploadAll = async () => {
     if (queue.length === 0) {
@@ -439,6 +454,33 @@ export default function UploadModal({
                 Programmatic input.click() is silently blocked on many mobile
                 browsers when the input is display:none.                    */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+              {/* ── Photo Booth button ── */}
+              <button
+                className="upload-primary-btn"
+                style={{
+                  cursor: askName ? 'not-allowed' : 'pointer',
+                  opacity: askName ? .55 : 1,
+                  border: '2px solid #c9a87c',
+                  background: 'linear-gradient(135deg, rgba(196,122,58,.1), rgba(122,78,40,.06))',
+                  marginBottom: 4,
+                  width: '100%',
+                  display: 'flex',
+                  gap: 12,
+                  alignItems: 'center',
+                  padding: '14px 16px',
+                  borderRadius: 14,
+                  fontFamily: 'inherit',
+                }}
+                disabled={askName}
+                onClick={() => { if (!askName && onOpenBooth) onOpenBooth() }}
+              >
+                <span style={{ fontSize: 28 }}>🎭</span>
+                <div style={{ textAlign: 'left' }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2, color: '#3e2408' }}>Photo Booth ao vivo</p>
+                  <p style={{ margin: 0, fontSize: '.8rem', opacity: .7, color: '#7a4e28' }}>Câmera com filtros e stickers</p>
+                </div>
+                <span style={{ marginLeft: 'auto', fontSize: '.7rem', fontWeight: 700, color: '#c47a3a', background: 'rgba(196,122,58,.12)', border: '1px solid #c9a87c', borderRadius: 99, padding: '2px 8px' }}>NOVO</span>
+              </button>
               <label
                 htmlFor="cha-input-cam"
                 className="upload-primary-btn"
