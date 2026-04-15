@@ -153,7 +153,7 @@ function PushSubscribeInline() {
 export default function BottomNav() {
   const pathname = usePathname()
   const router = useRouter()
-  const { openUpload, closeUpload } = useUpload()
+  const { openUpload, openBooth, closeUpload } = useUpload()
 
   const [exploreOpen, setExploreOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
