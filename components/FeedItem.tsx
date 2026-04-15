@@ -293,8 +293,10 @@ export default function FeedItem({
   }
 
   const shareWhatsApp = () => {
-    // encodeURIComponent on item.id so slashes in the R2 key don't break the query param
-    const url = `${window.location.origin}/?foto=${encodeURIComponent(item.id)}`
+    // /foto/<slug> is a server-rendered page with OG tags so WhatsApp
+    // shows the photo preview in the chat before the recipient clicks.
+    const slugPath = item.id.split('/').map(encodeURIComponent).join('/')
+    const url  = `${window.location.origin}/foto/${slugPath}`
     const text = item.caption?.trim() || 'Confira essa foto do Chá do José Augusto! 🧸'
     const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}`
     window.open(waUrl, '_blank')

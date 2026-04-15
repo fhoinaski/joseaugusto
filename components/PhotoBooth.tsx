@@ -70,7 +70,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
+        audio: true,
       })
       streamRef.current = stream
       if (videoRef.current) {
@@ -107,8 +107,13 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
       clipUrlRef.current = ''
     }
     chunksRef.current = []
-    const mimeType = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
+    // Pick the best supported codec — always include opus for audio
+    const mimeType = typeof MediaRecorder !== 'undefined'
+      ? (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+          ? 'video/webm;codecs=vp9,opus'
+          : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+            ? 'video/webm;codecs=vp8,opus'
+            : 'video/webm')
       : 'video/webm'
     const recorder = new MediaRecorder(streamRef.current, { mimeType })
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
