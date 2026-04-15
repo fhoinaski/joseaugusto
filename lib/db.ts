@@ -178,6 +178,15 @@ export async function dbGetMedia(status: string): Promise<Array<Omit<MediaItem, 
   return collapseMediaRows(rows)
 }
 
+/** Fetches a single approved media item by ID (used for WhatsApp deep-links). */
+export async function dbGetMediaById(id: string): Promise<Omit<MediaItem, 'thumbUrl' | 'fullUrl'> | null> {
+  const rows = await dbGetMediaRowsByIds([id])
+  const items = collapseMediaRows(rows)
+  const item = items.find(i => i.id === id)
+  if (!item || item.status !== 'approved') return null
+  return item
+}
+
 export async function dbGetMediaPage(
   status: string,
   limit: number,

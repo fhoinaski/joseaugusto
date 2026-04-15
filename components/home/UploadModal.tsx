@@ -233,9 +233,26 @@ export default function UploadModal({
 
   useEffect(() => {
     if (!initialFile) return
-    const dt = new DataTransfer()
-    dt.items.add(initialFile)
-    handleImgFilesRef.current(dt.files)
+    if (initialFile.type.startsWith('video/')) {
+      // Video clips (e.g. WebM from Photo Booth) bypass handleImgFiles which
+      // only accepts image/* types — add directly to queue as a video item.
+      setMediaError('')
+      setQueue([{
+        file: initialFile,
+        name: initialFile.name,
+        preview: URL.createObjectURL(initialFile),
+        status: 'waiting',
+        progress: 0,
+        type: 'video',
+        retries: 0,
+        isOfflineError: false,
+      }])
+      setStep('queue')
+    } else {
+      const dt = new DataTransfer()
+      dt.items.add(initialFile)
+      handleImgFilesRef.current(dt.files)
+    }
   }, [initialFile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const uploadAll = async () => {
