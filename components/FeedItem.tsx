@@ -293,8 +293,9 @@ export default function FeedItem({
   }
 
   const shareWhatsApp = () => {
-    const url = `${window.location.origin}/?foto=${item.id}`
-    const text = item.caption?.trim() || 'Confira essa foto do Chá do José Augusto!'
+    // encodeURIComponent on item.id so slashes in the R2 key don't break the query param
+    const url = `${window.location.origin}/?foto=${encodeURIComponent(item.id)}`
+    const text = item.caption?.trim() || 'Confira essa foto do Chá do José Augusto! 🧸'
     const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}`
     window.open(waUrl, '_blank')
   }
@@ -467,15 +468,6 @@ export default function FeedItem({
               }
             </button>
 
-            {/* Share */}
-            <button
-              onClick={sharePost}
-              style={{ border: '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: 'rgba(255,255,255,.12)', color: '#fff', padding: '8px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
-              aria-label="Compartilhar"
-            >
-              ↗ Compartilhar
-            </button>
-
             {/* WhatsApp */}
             <button
               onClick={shareWhatsApp}
@@ -505,18 +497,6 @@ export default function FeedItem({
               {starred ? '⭐' : '☆'}
             </button>
 
-            {/* Download */}
-            {item.type !== 'audio' && (
-              <button
-                onClick={downloadMedia}
-                style={{ border: '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: 'rgba(255,255,255,.12)', color: '#fff', padding: '8px 12px', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
-                aria-label="Baixar"
-                title="Baixar foto"
-              >
-                ⬇
-              </button>
-            )}
-
             {/* Stories */}
             {item.type === 'image' && (
               <button
@@ -527,36 +507,6 @@ export default function FeedItem({
               >
                 📤 Stories
               </button>
-            )}
-
-            {/* Tag */}
-            <button
-              onClick={() => setShowTagInput(v => !v)}
-              style={{ border: showTagInput ? '1px solid rgba(196,122,58,.6)' : '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: showTagInput ? 'rgba(196,122,58,.25)' : 'rgba(255,255,255,.12)', color: showTagInput ? '#f5c78f' : '#fff', padding: '8px 12px', cursor: 'pointer', fontSize: 15, lineHeight: 1 }}
-              aria-label="Marcar pessoa na foto"
-              title="Marcar pessoa na foto"
-            >
-              🏷
-            </button>
-
-            {showTagInput && (
-              <div style={{ width: '100%', marginTop: 8, display: 'flex', gap: 8 }}>
-                <input
-                  value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  placeholder="Nome de quem está na foto..."
-                  maxLength={60}
-                  style={{ flex: 1, border: '1px solid rgba(255,255,255,.3)', borderRadius: 8, padding: '6px 10px', background: 'rgba(0,0,0,.4)', color: '#fff', fontSize: '.85rem', outline: 'none' }}
-                  onKeyDown={e => { if (e.key === 'Enter') handleTag() }}
-                />
-                <button
-                  onClick={handleTag}
-                  disabled={tagging || !tagInput.trim()}
-                  style={{ background: '#c47a3a', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: tagging || !tagInput.trim() ? 'not-allowed' : 'pointer', fontSize: '.85rem', opacity: tagging || !tagInput.trim() ? 0.6 : 1 }}
-                >
-                  {tagging ? '...' : 'Marcar'}
-                </button>
-              </div>
             )}
 
             {showEmojiPicker && (
