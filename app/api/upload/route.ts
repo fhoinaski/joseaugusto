@@ -82,10 +82,15 @@ export async function POST(req: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
 
+    // video/ MIME takes priority — checked first so video/webm is never mis-classified as audio
     const isVideo = file.type.startsWith('video/')
-    const isImage = file.type.startsWith('image/')
-    const isAudio = file.type.startsWith('audio/') ||
-                    /\.(mp3|webm|ogg|m4a|wav|aac)$/i.test(file.name)
+    const isImage = !isVideo && file.type.startsWith('image/')
+    // .webm intentionally excluded from audio extensions: video/webm is handled by isVideo above;
+    // audio/webm is caught by the audio/ MIME check. Extension-only fallback covers mp3/ogg/etc.
+    const isAudio = !isVideo && !isImage && (
+      file.type.startsWith('audio/') ||
+      /\.(mp3|ogg|m4a|wav|aac)$/i.test(file.name)
+    )
 
     if (isImage && !author) {
       return NextResponse.json({ error: 'Informe seu nome para enviar imagem.' }, { status: 400 })
@@ -108,16 +113,16 @@ export async function POST(req: NextRequest) {
     let mediaType:   'image' | 'video' | 'audio'
     let status:      'approved' | 'rejected' = 'approved'
 
-    if (isAudio) {
-      body        = Buffer.from(arrayBuffer)
-      contentType = file.type || 'audio/webm'
-      ext         = file.name.split('.').pop() ?? 'webm'
-      mediaType   = 'audio'
-    } else if (isVideo) {
+    if (isVideo) {
       body        = Buffer.from(arrayBuffer)
       contentType = file.type
       ext         = file.name.split('.').pop() ?? 'mp4'
       mediaType   = 'video'
+    } else if (isAudio) {
+      body        = Buffer.from(arrayBuffer)
+      contentType = file.type || 'audio/webm'
+      ext         = file.name.split('.').pop() ?? 'mp3'
+      mediaType   = 'audio'
     } else {
       // Convert image to WebP 80 quality + run AI moderation in parallel
       // .rotate() auto-applies EXIF orientation before processing and strips
