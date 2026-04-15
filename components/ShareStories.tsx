@@ -84,10 +84,11 @@ export default function ShareStories({ imageUrl, author, onClose }: ShareStories
     const photoH = 1180
     const radius = 28
 
-    // Draw the photo once image loads
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
+    // Load the image via server proxy to bypass R2 CORS restrictions.
+    // Blob URLs are same-origin so canvas.toBlob() won't throw a security error.
+    let blobUrl = ''
+
+    const drawImage = (img: HTMLImageElement) => {
       ctx.save()
 
       // Rounded clip
@@ -127,8 +128,7 @@ export default function ShareStories({ imageUrl, author, onClose }: ShareStories
       ctx.font = `600 44px 'Cormorant Garamond', Georgia, serif`
       ctx.fillStyle = '#3e2408'
       ctx.textAlign = 'center'
-      const authorText = `📸 ${author}`
-      ctx.fillText(authorText, 540, photoY + photoH + 66)
+      ctx.fillText(`📸 ${author}`, 540, photoY + photoH + 66)
       ctx.restore()
 
       // ── Watermark footer ─────────────────────────────────────────────────
@@ -142,21 +142,37 @@ export default function ShareStories({ imageUrl, author, onClose }: ShareStories
       setReady(true)
     }
 
-    img.onerror = () => {
-      // If image fails (CORS), still show UI without photo
+    const showPlaceholder = () => {
       ctx.save()
       ctx.fillStyle = 'rgba(62,36,8,.08)'
       ctx.roundRect(photoX, photoY, photoW, photoH, radius)
       ctx.fill()
       ctx.fillStyle = '#a0713e'
-      ctx.font = '48px serif'
+      ctx.font = '96px serif'
       ctx.textAlign = 'center'
-      ctx.fillText('📷', 540, photoY + photoH / 2)
+      ctx.fillText('🌸', 540, photoY + photoH / 2 + 32)
       ctx.restore()
       setReady(true)
     }
 
-    img.src = imageUrl
+    // Fetch image through Next.js proxy (server-to-R2, no CORS restriction).
+    // Resulting blob URL is same-origin → canvas stays untainted → toBlob() works.
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/download?url=${encodeURIComponent(imageUrl)}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const blob = await res.blob()
+        blobUrl = URL.createObjectURL(blob)
+        const img = new Image()
+        img.onload  = () => drawImage(img)
+        img.onerror = () => showPlaceholder()
+        img.src = blobUrl
+      } catch {
+        showPlaceholder()
+      }
+    })()
+
+    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
   }, [imageUrl, author])
 
   const saveImage = async () => {
