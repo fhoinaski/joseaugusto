@@ -59,8 +59,6 @@ const EXPLORE_LINKS = [
   { href: '/mosaico',           emoji: '🎨', label: 'Mosaico' },
   { href: '/ranking',           emoji: '🏆', label: 'Ranking' },
   { href: '/timeline',          emoji: '⏱',  label: 'Timeline' },
-  { href: '/convite',           emoji: '📩', label: 'Convite' },
-  { href: '/rsvp',              emoji: '📋', label: 'RSVP' },
   { href: '/marcos',            emoji: '👣', label: 'Marcos' },
   { href: '/video-mensagens',   emoji: '🎬', label: 'Vídeos' },
 ]
