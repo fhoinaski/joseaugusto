@@ -295,6 +295,7 @@ export default function Home() {
   const [pinnedText,  setPinnedText]   = useState('')
   const [savedAuthor, setSavedAuthor]  = useState('')
   const [eventStats,  setEventStats]   = useState<{photos:number; reactions:number; comments:number; authors:number} | null>(null)
+  const [liveAnnounce, setLiveAnnounce] = useState<{message:string;ts:number}|null>(null)
   const { geoStatus, canWrite, unlockWithKey } = useGeoAccess()
   const { openUpload } = useUpload()
   const lastRtTs  = useRef<number>(0)
@@ -452,6 +453,17 @@ export default function Home() {
     })
     es.addEventListener('message-update',(e:MessageEvent)=>{
       try{const{message}=JSON.parse(e.data);if(message)setParentsMsg(message)}catch{}
+    })
+    es.addEventListener('announce', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data) as { message?: string; ts?: number }
+        if (data.message) {
+          setLiveAnnounce({ message: data.message, ts: data.ts ?? Date.now() })
+          setTimeout(() => setLiveAnnounce(null), 15000)
+        } else {
+          setLiveAnnounce(null)
+        }
+      } catch {}
     })
 
     return()=>{
@@ -702,6 +714,32 @@ export default function Home() {
         <Lightbox items={media} index={lbIdx} onClose={()=>setLbIdx(null)}
           onNav={d=>setLbIdx(prev=>prev!==null?Math.max(0,Math.min(media.length-1,prev+d)):null)}
           onReact={handleReact}/>
+      )}
+
+      {liveAnnounce && (
+        <div
+          onClick={() => setLiveAnnounce(null)}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 5000,
+            background: 'linear-gradient(135deg, #c47a3a, #7a4e28)',
+            color: '#fff', padding: '16px 20px',
+            display: 'flex', alignItems: 'center', gap: 14,
+            boxShadow: '0 4px 24px rgba(0,0,0,.4)',
+            animation: 'announceSlide .35s ease-out',
+            cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontSize: '1.6rem', flexShrink: 0 }}>📣</span>
+          <p style={{ margin: 0, fontFamily: "'Playfair Display',serif", fontSize: '1rem', fontWeight: 600, flex: 1, lineHeight: 1.3 }}>
+            {liveAnnounce.message}
+          </p>
+          <button
+            onClick={e => { e.stopPropagation(); setLiveAnnounce(null) }}
+            style={{ background: 'rgba(255,255,255,.2)', border: 'none', color: '#fff', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: '.85rem', flexShrink: 0 }}
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       <ToastManager toasts={toasts} onRemove={id=>setToasts(prev=>prev.filter(t=>t.id!==id))}/>

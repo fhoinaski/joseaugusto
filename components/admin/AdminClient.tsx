@@ -41,7 +41,7 @@ interface RsvpStats { total: number; confirmed: number; maybe: number; declined:
 interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes' | 'anunciar'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -132,6 +132,11 @@ function AdminPanel() {
   const [memorias,       setMemorias]       = useState<MemoriaSubscriber[]>([])
   const [loadingMemorias, setLoadingMemorias] = useState(false)
 
+  // ── Anunciar ──────────────────────────────────────────────────────────────────
+  const [announceMsg,     setAnnounceMsg]     = useState('')
+  const [sendingAnnounce, setSendingAnnounce] = useState(false)
+  const [announceSuccess, setAnnounceSuccess] = useState(false)
+
   // ── Cartões ───────────────────────────────────────────────────────────────────
   const [cartaoTo,      setCartaoTo]      = useState('')
   const [cartaoFrom,    setCartaoFrom]    = useState('Fernando & Mariana')
@@ -147,6 +152,33 @@ function AdminPanel() {
   const [loadingEnquete, setLoadingEnquete] = useState(false)
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
+
+  const sendAnnounce = async () => {
+    if (!announceMsg.trim() || sendingAnnounce) return
+    setSendingAnnounce(true)
+    setAnnounceSuccess(false)
+    try {
+      const res = await fetch('/api/admin/announce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: announceMsg.trim() }),
+      })
+      if (res.ok) { setAnnounceSuccess(true); setTimeout(() => setAnnounceSuccess(false), 5000) }
+    } finally {
+      setSendingAnnounce(false)
+    }
+  }
+
+  const clearAnnounce = async () => {
+    setSendingAnnounce(true)
+    try {
+      await fetch('/api/admin/announce', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: '' }) })
+      setAnnounceMsg('')
+      setAnnounceSuccess(false)
+    } finally {
+      setSendingAnnounce(false)
+    }
+  }
 
   const fetchPending = useCallback(async () => {
     setLoadingP(true)
@@ -635,6 +667,7 @@ function AdminPanel() {
           { key: 'marcos', label: '🧸 Marcos', count: 0 },
           { key: 'memorias', label: '📬 Memórias', count: 0 },
           { key: 'cartoes', label: '💌 Cartões', count: 0 },
+          { key: 'anunciar', label: '📣 Anunciar', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
@@ -1681,6 +1714,79 @@ function AdminPanel() {
                   message={cartaoMsg.trim()}
                 />
               </Suspense>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'anunciar' && (
+        <div style={{ maxWidth: 560 }}>
+          <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.15rem', color: 'var(--bd)', fontWeight: 600, marginBottom: 4 }}>📣 Anunciar ao Vivo</p>
+          <p style={{ fontSize: '.85rem', color: 'var(--text-lo)', marginBottom: 20, fontStyle: 'italic' }}>
+            Envia push notification para todos os convidados e exibe banner na home e no telão em tempo real.
+          </p>
+
+          {/* Quick presets */}
+          <p style={{ fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-lo)', fontWeight: 600, marginBottom: 10 }}>Mensagens rápidas</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+            {[
+              '📸 Hora da foto oficial! Abra o app!',
+              '🎂 O bolo chegou! Vamos cantar!',
+              '🎁 Sorteio em 5 minutos! Fique atento!',
+              '📷 Missão: foto com os futuros pais!',
+              '🎉 Chegou a hora de assinar o livro!',
+              '✨ Última chance de enviar fotos!',
+            ].map(preset => (
+              <button
+                key={preset}
+                onClick={() => setAnnounceMsg(preset)}
+                style={{
+                  background: announceMsg === preset ? 'var(--accent)' : 'var(--warm)',
+                  border: `1px solid ${announceMsg === preset ? 'var(--accent)' : 'var(--beige)'}`,
+                  color: announceMsg === preset ? '#fff' : 'var(--bd)',
+                  borderRadius: 20, padding: '7px 14px',
+                  fontSize: '.82rem', cursor: 'pointer', transition: 'all .15s',
+                }}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom message */}
+          <p style={{ fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-lo)', fontWeight: 600, marginBottom: 8 }}>Mensagem personalizada</p>
+          <textarea
+            value={announceMsg}
+            onChange={e => setAnnounceMsg(e.target.value)}
+            placeholder="Digite o anúncio para todos os convidados..."
+            maxLength={120}
+            rows={3}
+            style={{ width: '100%', border: '1px solid var(--sand)', borderRadius: 12, padding: '12px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--warm)', outline: 'none', resize: 'vertical', marginBottom: 4 }}
+          />
+          <p style={{ fontSize: '.78rem', color: 'var(--text-lo)', textAlign: 'right', margin: '0 0 16px' }}>{announceMsg.length}/120</p>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={sendAnnounce}
+              disabled={!announceMsg.trim() || sendingAnnounce}
+              className="btn-primary"
+              style={{ flex: 2, justifyContent: 'center' }}
+            >
+              {sendingAnnounce ? 'Enviando…' : '📣 Anunciar agora'}
+            </button>
+            <button
+              onClick={clearAnnounce}
+              disabled={sendingAnnounce}
+              className="btn-secondary"
+              style={{ flex: 1 }}
+            >
+              🗑 Limpar
+            </button>
+          </div>
+
+          {announceSuccess && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f9f4', border: '1px solid #b8dece', borderRadius: 10, color: '#2d6a4f', fontSize: '.88rem' }}>
+              ✓ Anúncio enviado com sucesso! Banner ativo por 15 segundos.
             </div>
           )}
         </div>
