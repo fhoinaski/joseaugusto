@@ -377,7 +377,7 @@ export default function UploadModal({
       ctx.fillText('Chá · José Augusto', out.width / 2, out.height - Math.floor(barH * 0.3))
       ctx.font = `${Math.floor(fontSize * 0.75)}px serif`
       ctx.fillStyle = 'rgba(245,218,182,.6)'
-      ctx.fillText('25 de Abril · 2025', out.width / 2, out.height - Math.floor(fontSize * 0.7))
+      ctx.fillText('25 de Abril · 2026', out.width / 2, out.height - Math.floor(fontSize * 0.7))
     }
 
     return out

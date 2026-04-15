@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface TimelineEvent {
   date: string
@@ -56,7 +57,7 @@ export default function TimelinePage() {
   return (
     <div style={{ minHeight: '100svh', background: 'var(--warm)', padding: '24px 16px 100px', fontFamily: "'Cormorant Garamond',serif" }}>
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
-        <a href="/" style={{ fontSize: '.8rem', color: 'var(--bl)', textDecoration: 'none', display: 'block', marginBottom: 20 }}>← voltar</a>
+        <Link href="/" style={{ fontSize: '.8rem', color: 'var(--bl)', textDecoration: 'none', display: 'block', marginBottom: 20 }}>← voltar</Link>
         <p style={{ textAlign: 'center', fontSize: '.72rem', letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--bl)', marginBottom: 6 }}>✦ Chá do José Augusto ✦</p>
         <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '2rem', color: 'var(--bd)', textAlign: 'center', marginBottom: 4 }}>⏱ Linha do Tempo</h1>
         <p style={{ textAlign: 'center', color: 'var(--bl)', fontSize: '.92rem', marginBottom: 24, fontStyle: 'italic' }}>Todos os momentos do José Augusto, em ordem</p>

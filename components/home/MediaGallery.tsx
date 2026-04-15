@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { REACTION_EMOJIS } from '@/lib/config'
 
@@ -223,7 +224,7 @@ export default function MediaGallery({
                 <div className="gallery-card-footer"><span className="gallery-card-author">{item.type === 'video' ? '🎥' : item.type === 'audio' ? '🎙️' : '📷'} {item.author}</span></div>
                 <div className="gallery-inline-actions" onClick={e => e.stopPropagation()}>
                   <button className="gallery-inline-btn" onClick={() => handleReact(item.id, '♥')}>👍 Curtir</button>
-                  <a className="gallery-inline-btn" href="/feed">💬 Comentar</a>
+                  <Link className="gallery-inline-btn" href="/feed">💬 Comentar</Link>
                 </div>
                 <ReactionBar item={item} onReact={handleReact}/>
               </motion.div>

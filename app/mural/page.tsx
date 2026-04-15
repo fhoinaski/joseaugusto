@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 
 interface Photo {
   id: string
@@ -94,9 +95,9 @@ export default function MuralPage() {
       }}>
         {/* Back link */}
         <div style={{ padding: '0 20px 0' }}>
-          <a href="/" style={{ fontSize: '.85rem', color: 'var(--bl)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Link href="/" style={{ fontSize: '.85rem', color: 'var(--bl)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             ← voltar
-          </a>
+          </Link>
         </div>
 
         {/* Header */}

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface MediaItem { id: string; thumbUrl: string; fullUrl: string; author: string; type: string }
 
@@ -24,7 +25,7 @@ export default function MosaicoPage() {
     <div style={{ minHeight: '100svh', background: '#0d0d0d' }}>
       {/* Header */}
       <div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(13,13,13,.9)', backdropFilter: 'blur(12px)', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <a href="/" style={{ color: 'rgba(255,255,255,.6)', fontSize: '.85rem', textDecoration: 'none' }}>← voltar</a>
+        <Link href="/" style={{ color: 'rgba(255,255,255,.6)', fontSize: '.85rem', textDecoration: 'none' }}>← voltar</Link>
         <div style={{ textAlign: 'center' }}>
           <p style={{ color: 'rgba(255,255,255,.4)', fontSize: '.68rem', letterSpacing: '.14em', textTransform: 'uppercase' }}>Chá do José Augusto</p>
           <p style={{ fontFamily: "'Playfair Display',serif", color: '#fff', fontSize: '1.1rem' }}>🖼️ Mosaico de Fotos</p>

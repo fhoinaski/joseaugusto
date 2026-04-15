@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { GeoStatus, useGeoAccess } from '@/components/GeoAccessProvider'
 import Stories, { StoryMediaItem } from '@/components/Stories'
 import HeroSection from '@/components/home/HeroSection'
@@ -620,7 +621,7 @@ export default function Home() {
           <div className="parents-card" style={{padding:'14px 18px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
               <strong style={{color:'var(--bd)',fontSize:'.9rem'}}>Comentários em tempo real</strong>
-              <a href="/feed" style={{fontSize:'.84rem',color:'var(--bl)'}}>ver feed ↗</a>
+              <Link href="/feed" style={{fontSize:'.84rem',color:'var(--bl)'}}>ver feed ↗</Link>
             </div>
             <div style={{display:'grid',gap:8}}>
               {recentComments.map((c, idx) => (
