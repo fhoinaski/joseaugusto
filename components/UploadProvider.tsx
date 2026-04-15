@@ -6,9 +6,10 @@ import { emitToast } from '@/lib/ui-feedback'
 
 interface UploadContextValue {
   openUpload: () => void
+  closeUpload: () => void
 }
 
-const UploadContext = createContext<UploadContextValue>({ openUpload: () => {} })
+const UploadContext = createContext<UploadContextValue>({ openUpload: () => {}, closeUpload: () => {} })
 
 export function UploadProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -39,7 +40,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     setOpen(false)
   }, [])
 
-  const value = useMemo<UploadContextValue>(() => ({ openUpload }), [openUpload])
+  const closeUpload = useCallback(() => setOpen(false), [])
+
+  const value = useMemo<UploadContextValue>(() => ({ openUpload, closeUpload }), [openUpload, closeUpload])
 
   return (
     <UploadContext.Provider value={value}>

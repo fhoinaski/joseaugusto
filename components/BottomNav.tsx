@@ -153,7 +153,7 @@ function PushSubscribeInline() {
 export default function BottomNav() {
   const pathname = usePathname()
   const router = useRouter()
-  const { openUpload } = useUpload()
+  const { openUpload, closeUpload } = useUpload()
 
   const [exploreOpen, setExploreOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -218,12 +218,14 @@ export default function BottomNav() {
     const opening = !notifOpen
     setNotifOpen(opening)
     setExploreOpen(false)
-    if (opening && unread > 0) markRead()
+    if (opening) { closeUpload(); if (unread > 0) markRead() }
   }
 
   const handleExploreOpen = () => {
-    setExploreOpen(v => !v)
+    const opening = !exploreOpen
+    setExploreOpen(opening)
     setNotifOpen(false)
+    if (opening) closeUpload()
   }
 
   // PWA tracking
@@ -315,7 +317,7 @@ export default function BottomNav() {
             {EXPLORE_LINKS.map(({ href, emoji, label }) => (
               <button
                 key={href}
-                onClick={() => { setExploreOpen(false); router.push(href) }}
+                onClick={() => { closeUpload(); setExploreOpen(false); router.push(href) }}
                 style={{
                   background: '#fff',
                   border: '1.5px solid #e8d4b8',
@@ -451,7 +453,7 @@ export default function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
         {/* Tab 1 — Início */}
-        <button style={tabBase} onClick={() => { setExploreOpen(false); setNotifOpen(false); router.push('/') }}>
+        <button style={tabBase} onClick={() => { closeUpload(); setExploreOpen(false); setNotifOpen(false); router.push('/') }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill={isHome ? ACCENT : 'none'} stroke={isHome ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
@@ -460,7 +462,7 @@ export default function BottomNav() {
         </button>
 
         {/* Tab 2 — Feed */}
-        <button style={tabBase} onClick={() => { setExploreOpen(false); setNotifOpen(false); router.push('/feed') }}>
+        <button style={tabBase} onClick={() => { closeUpload(); setExploreOpen(false); setNotifOpen(false); router.push('/feed') }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill={isFeed ? ACCENT : 'none'} stroke={isFeed ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
             <circle cx="8.5" cy="8.5" r="1.5" />
