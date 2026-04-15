@@ -75,7 +75,7 @@ export default function MuralPage() {
         }
         .polaroid-card:hover {
           transform: rotate(0deg) scale(1.06) translateY(-8px) !important;
-          box-shadow: 0 16px 40px rgba(0,0,0,.5) !important;
+          box-shadow: 0 16px 40px rgba(62,36,8,.25) !important;
           z-index: 10;
           position: relative;
         }
@@ -88,16 +88,23 @@ export default function MuralPage() {
 
       <div style={{
         minHeight: '100dvh',
-        background: 'linear-gradient(160deg, #1a0d00 0%, #3e2408 50%, #1a0d00 100%)',
+        background: 'var(--warm)',
         paddingTop: 80,
         paddingBottom: 120,
       }}>
+        {/* Back link */}
+        <div style={{ padding: '0 20px 0' }}>
+          <a href="/" style={{ fontSize: '.85rem', color: 'var(--bl)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            ← voltar
+          </a>
+        </div>
+
         {/* Header */}
-        <div style={{ textAlign: 'center', padding: '24px 20px 32px', color: '#f5dab6' }}>
+        <div style={{ textAlign: 'center', padding: '16px 20px 32px', color: 'var(--bd)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📸</div>
           <p style={{
             fontFamily: "'Dancing Script',cursive",
-            color: '#d59056',
+            color: 'var(--accent)',
             fontSize: '1.05rem',
             marginBottom: 4,
           }}>
@@ -107,13 +114,13 @@ export default function MuralPage() {
             fontFamily: "'Playfair Display',serif",
             fontSize: '2rem',
             margin: '0 0 8px',
-            color: '#f5dab6',
+            color: 'var(--bd)',
           }}>
             Mural de <em>Memórias</em>
           </h1>
           <p style={{
             fontSize: '.9rem',
-            color: 'rgba(245,218,182,.6)',
+            color: 'var(--bl)',
             fontStyle: 'italic',
             maxWidth: 320,
             margin: '0 auto',
@@ -127,13 +134,14 @@ export default function MuralPage() {
           maxWidth: 1200,
           margin: '0 auto',
           padding: '32px 20px',
-          backgroundColor: '#b8944a',
+          backgroundColor: '#f0e0c8',
           backgroundImage: `
-            radial-gradient(ellipse at 20% 30%, rgba(180,140,60,.4) 0%, transparent 60%),
-            radial-gradient(ellipse at 80% 70%, rgba(140,100,30,.3) 0%, transparent 50%)
+            radial-gradient(ellipse at 20% 30%, rgba(196,122,58,.15) 0%, transparent 60%),
+            radial-gradient(ellipse at 80% 70%, rgba(160,113,62,.12) 0%, transparent 50%)
           `,
           borderRadius: 24,
           minHeight: 400,
+          border: '1px solid rgba(160,113,62,.2)',
         }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'rgba(90,62,40,.7)' }}>
@@ -170,8 +178,8 @@ export default function MuralPage() {
                       background: '#faf6ef',
                       padding: '10px 10px 40px 10px',
                       boxShadow: isHovered
-                        ? '0 16px 40px rgba(0,0,0,.5)'
-                        : '0 4px 18px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.2)',
+                        ? '0 16px 40px rgba(62,36,8,.25)'
+                        : '0 4px 18px rgba(62,36,8,.18), 0 1px 4px rgba(62,36,8,.1)',
                       borderRadius: 2,
                       transform: isHovered
                         ? 'rotate(0deg) scale(1.06) translateY(-8px)'
@@ -219,7 +227,7 @@ export default function MuralPage() {
         {photos.length > 0 && (
           <p style={{
             textAlign: 'center',
-            color: 'rgba(245,218,182,.5)',
+            color: 'var(--bl)',
             fontSize: '.85rem',
             marginTop: 24,
             fontStyle: 'italic',
@@ -323,7 +331,7 @@ export default function MuralPage() {
                 fontFamily: "'Dancing Script',cursive",
                 fontSize: '1.1rem',
                 margin: 0,
-                color: '#d59056',
+                color: '#c47a3a',
               }}>
                 {currentPhoto.author}
               </p>
