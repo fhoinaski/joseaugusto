@@ -48,7 +48,6 @@ function urlBase64ToUint8Array(b64: string): Uint8Array<ArrayBuffer> {
 // ── Explore links ─────────────────────────────────────────────────────────────
 
 const EXPLORE_LINKS = [
-  { href: '/feed',      emoji: '📷', label: 'Álbum' },
   { href: '/bingo',     emoji: '🎯', label: 'Bingo' },
   { href: '/desafios',  emoji: '📸', label: 'Desafios' },
   { href: '/musicas',   emoji: '🎵', label: 'Músicas' },
@@ -253,8 +252,9 @@ export default function BottomNav() {
   }, [])
 
   // Active states
-  const isHome = pathname === '/'
-  const isExploreActive = exploreOpen || EXPLORE_PATHS.includes(pathname)
+  const isHome    = pathname === '/'
+  const isFeed    = pathname === '/feed'
+  const isExploreActive = exploreOpen || EXPLORE_PATHS.filter(p => p !== '/feed').includes(pathname)
 
   // Colors
   const ACCENT = '#c47a3a'
@@ -285,24 +285,24 @@ export default function BottomNav() {
             inset: 0,
             background: 'rgba(0,0,0,.45)',
             backdropFilter: 'blur(4px)',
-            zIndex: 1850,
+            zIndex: 1960,
           }}
         />
       )}
 
-      {/* Explore sheet */}
+      {/* Explore sheet — z-index above nav (1900) so it isn't cut off */}
       {exploreOpen && (
         <div style={{
           position: 'fixed',
           bottom: 0,
           left: 0,
           right: 0,
-          zIndex: 1900,
+          zIndex: 1980,
           background: '#fdf6ee',
           borderRadius: '24px 24px 0 0',
-          padding: '0 16px max(20px,env(safe-area-inset-bottom)) 16px',
-          maxHeight: '80vh',
+          maxHeight: '82vh',
           overflowY: 'auto',
+          paddingBottom: 'calc(72px + env(safe-area-inset-bottom))',
         }}>
           {/* Drag handle */}
           <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
@@ -347,24 +347,24 @@ export default function BottomNav() {
             inset: 0,
             background: 'rgba(0,0,0,.45)',
             backdropFilter: 'blur(4px)',
-            zIndex: 1850,
+            zIndex: 1960,
           }}
         />
       )}
 
-      {/* Notification sheet */}
+      {/* Notification sheet — z-index above nav (1900) so it isn't cut off */}
       {notifOpen && (
         <div style={{
           position: 'fixed',
           bottom: 0,
           left: 0,
           right: 0,
-          zIndex: 1900,
+          zIndex: 1980,
           background: '#fdf6ee',
           borderRadius: '24px 24px 0 0',
-          padding: '0 0 max(20px,env(safe-area-inset-bottom)) 0',
-          maxHeight: '80vh',
+          maxHeight: '82vh',
           overflowY: 'auto',
+          paddingBottom: 'calc(72px + env(safe-area-inset-bottom))',
         }}>
           {/* Drag handle */}
           <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
@@ -459,7 +459,17 @@ export default function BottomNav() {
           <span style={{ fontSize: '10px', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: isHome ? ACCENT : MUTED, lineHeight: 1 }}>Início</span>
         </button>
 
-        {/* Tab 2 — Enviar (upload) */}
+        {/* Tab 2 — Feed */}
+        <button style={tabBase} onClick={() => { setExploreOpen(false); setNotifOpen(false); router.push('/feed') }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill={isFeed ? ACCENT : 'none'} stroke={isFeed ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+          <span style={{ fontSize: '10px', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: isFeed ? ACCENT : MUTED, lineHeight: 1 }}>Feed</span>
+        </button>
+
+        {/* Tab 3 — Postar (upload, raised center) */}
         <button
           style={{ ...tabBase, paddingTop: 0, justifyContent: 'center' }}
           onClick={() => { setExploreOpen(false); setNotifOpen(false); openUpload() }}
@@ -481,11 +491,11 @@ export default function BottomNav() {
               <path d="M8.5 5l1.5-2h4l1.5 2" />
             </svg>
           </div>
-          <span style={{ fontSize: '10px', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: MUTED, lineHeight: 1, marginTop: 2 }}>Enviar</span>
+          <span style={{ fontSize: '10px', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: MUTED, lineHeight: 1, marginTop: 2 }}>Postar</span>
         </button>
 
-        {/* Tab 3 — Explorar */}
-        <button style={tabBase} onClick={handleExploreOpen}>
+        {/* Tab 4 — Explorar */}
+        <button style={{ ...tabBase }} onClick={handleExploreOpen}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill={isExploreActive ? ACCENT : 'none'} stroke={isExploreActive ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
@@ -493,7 +503,7 @@ export default function BottomNav() {
           <span style={{ fontSize: '10px', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: isExploreActive ? ACCENT : MUTED, lineHeight: 1 }}>Explorar</span>
         </button>
 
-        {/* Tab 4 — Notificações */}
+        {/* Tab 5 — Notificações */}
         <button style={{ ...tabBase, position: 'relative' }} onClick={handleNotifOpen}>
           <div style={{ position: 'relative' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill={notifOpen ? ACCENT : 'none'} stroke={notifOpen ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
