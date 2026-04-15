@@ -1883,3 +1883,125 @@ export async function dbCreateMemoriaSubscriber(data: {
     } else throw err
   }
 }
+
+// ── Author Stats ──────────────────────────────────────────────────────────────
+
+export interface AuthorStats {
+  photos: number
+  reactions: number
+  comments: number
+}
+
+export async function dbGetAuthorStats(author: string): Promise<AuthorStats> {
+  const [photoRows, reactionRows, commentRows] = await Promise.all([
+    d1Query<{ count: number }>(
+      `SELECT COUNT(*) as count FROM media WHERE author = ? AND status = 'approved'`,
+      [author],
+    ),
+    d1Query<{ total: number }>(
+      `SELECT COALESCE(SUM(r.count), 0) as total
+         FROM reactions r
+         JOIN media m ON r.media_id = m.id
+        WHERE m.author = ? AND m.status = 'approved'`,
+      [author],
+    ),
+    d1Query<{ count: number }>(
+      `SELECT COUNT(*) as count FROM comments c
+         JOIN media m ON c.media_id = m.id
+        WHERE m.author = ?`,
+      [author],
+    ),
+  ])
+  return {
+    photos:    photoRows[0]?.count    ?? 0,
+    reactions: reactionRows[0]?.total ?? 0,
+    comments:  commentRows[0]?.count  ?? 0,
+  }
+}
+
+// ── Photo Tags ────────────────────────────────────────────────────────────────
+
+async function dbEnsurePhotoTagsTable(): Promise<void> {
+  await d1Exec(`
+    CREATE TABLE IF NOT EXISTS photo_tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      media_id TEXT NOT NULL,
+      tagged_name TEXT NOT NULL,
+      tagged_by TEXT NOT NULL DEFAULT 'Convidado',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+  await d1Exec(`CREATE INDEX IF NOT EXISTS idx_photo_tags_media ON photo_tags(media_id)`)
+  await d1Exec(`CREATE INDEX IF NOT EXISTS idx_photo_tags_name ON photo_tags(tagged_name)`)
+}
+
+export interface PhotoTag {
+  tagged_name: string
+  tagged_by: string
+}
+
+export async function dbGetPhotoTags(mediaId: string): Promise<PhotoTag[]> {
+  try {
+    return await d1Query<PhotoTag>(
+      `SELECT tagged_name, tagged_by FROM photo_tags WHERE media_id = ? ORDER BY created_at ASC`,
+      [mediaId],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'photo_tags')) {
+      await dbEnsurePhotoTagsTable()
+      return []
+    }
+    throw err
+  }
+}
+
+export async function dbAddPhotoTag(mediaId: string, taggedName: string, taggedBy: string): Promise<boolean> {
+  try {
+    const exists = await d1Query<{ id: number }>(
+      `SELECT id FROM photo_tags WHERE media_id = ? AND tagged_name = ? COLLATE NOCASE`,
+      [mediaId, taggedName],
+    )
+    if (exists.length > 0) return false
+    await d1Exec(
+      `INSERT INTO photo_tags (media_id, tagged_name, tagged_by) VALUES (?, ?, ?)`,
+      [mediaId, taggedName.trim().slice(0, 60), taggedBy.slice(0, 60)],
+    )
+    return true
+  } catch (err) {
+    if (isMissingTableError(err, 'photo_tags')) {
+      await dbEnsurePhotoTagsTable()
+      await d1Exec(
+        `INSERT INTO photo_tags (media_id, tagged_name, tagged_by) VALUES (?, ?, ?)`,
+        [mediaId, taggedName.trim().slice(0, 60), taggedBy.slice(0, 60)],
+      )
+      return true
+    }
+    throw err
+  }
+}
+
+export interface TaggedPhoto {
+  id: string
+  author: string
+  caption: string
+  created_at: string
+}
+
+export async function dbGetTaggedPhotosForPerson(name: string): Promise<TaggedPhoto[]> {
+  try {
+    return await d1Query<TaggedPhoto>(
+      `SELECT m.id, m.author, m.caption, m.created_at
+         FROM photo_tags pt
+         JOIN media m ON pt.media_id = m.id
+        WHERE pt.tagged_name = ? COLLATE NOCASE AND m.status = 'approved'
+        ORDER BY m.created_at DESC`,
+      [name],
+    )
+  } catch (err) {
+    if (isMissingTableError(err, 'photo_tags')) {
+      await dbEnsurePhotoTagsTable()
+      return []
+    }
+    throw err
+  }
+}
