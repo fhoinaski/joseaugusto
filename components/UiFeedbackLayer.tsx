@@ -3,11 +3,10 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 
-const NotificationBell    = dynamic(() => import('@/components/NotificationBell'),    { ssr: false })
 const PWAInstallPrompt    = dynamic(() => import('@/components/PWAInstallPrompt'),    { ssr: false })
 const ReactionStorm       = dynamic(() => import('@/components/ReactionStorm'),       { ssr: false })
 const ConfettiCelebration = dynamic(() => import('@/components/ConfettiCelebration'), { ssr: false })
-const ExplorarModal       = dynamic(() => import('@/components/ExplorarModal'),       { ssr: false })
+const BottomNav           = dynamic(() => import('@/components/BottomNav'),           { ssr: false })
 
 type ToastItem = {
   id: string
@@ -99,7 +98,7 @@ export default function UiFeedbackLayer() {
 
   return (
     <>
-      {/* Top-right cluster: connection pill + notification bell */}
+      {/* Top-right: connection pill only (bell moved to BottomNav) */}
       <div style={{
         position: 'fixed',
         top: 'max(10px, calc(8px + env(safe-area-inset-top)))',
@@ -109,7 +108,6 @@ export default function UiFeedbackLayer() {
         alignItems: 'center',
         gap: 8,
       }}>
-        <NotificationBell />
         <div
           className={`connection-pill ${isOnline ? 'online' : 'offline'}`}
           role="status"
@@ -138,7 +136,7 @@ export default function UiFeedbackLayer() {
       <PWAInstallPrompt />
       <ReactionStorm />
       <ConfettiCelebration />
-      <ExplorarModal />
+      <BottomNav />
 
       <div className="toast-container">
         {toasts.map(t => (

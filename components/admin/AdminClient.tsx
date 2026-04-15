@@ -36,7 +36,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -107,6 +107,9 @@ function AdminPanel() {
   const [diarioForm,    setDiarioForm]    = useState({ title: '', content: '', imageUrl: '', milestoneDate: '' })
   const [savingDiario,  setSavingDiario]  = useState(false)
   const [loadingDiario, setLoadingDiario] = useState(false)
+
+  // ── PWA ───────────────────────────────────────────────────────────────────────
+  const [pwaStats, setPwaStats] = useState<{ installs: number; sessions: number; devices: Array<{ author: string | null; event: string; created_at: string }> } | null>(null)
 
   // ── Enquete ──────────────────────────────────────────────────────────────────
   const [enquete,       setEnquete]       = useState<{ id: number; question: string; options: string[]; active: boolean } | null>(null)
@@ -457,6 +460,7 @@ function AdminPanel() {
     if (tab === 'desafios') fetchDesafios()
     if (tab === 'bingo') { fetchBingo() }
     if (tab === 'diario') fetchDiario()
+    if (tab === 'pwa') { fetch('/api/pwa-session').then(r => r.json()).then(setPwaStats) }
   }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario])
 
   useEffect(() => {
@@ -565,6 +569,7 @@ function AdminPanel() {
           { key: 'bingo', label: '🎯 Bingo', count: 0 },
           { key: 'diario', label: '📖 Diário', count: 0 },
           { key: 'settings', label: '⚙ Configurações', count: 0 },
+          { key: 'pwa', label: '📱 PWA', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
@@ -1213,6 +1218,40 @@ function AdminPanel() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {tab === 'pwa' && (
+        <div style={S.card}>
+          <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📱 PWA — Instalações e Sessões</h2>
+          <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Rastreamento de instalações do app e sessões standalone.</p>
+          {!pwaStats ? (
+            <p style={S.empty}>Carregando…</p>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 14, marginBottom: 24 }}>
+                <div style={S.statCard}><span style={S.statNum}>{pwaStats.installs}</span><span style={S.statLbl}>Instalações</span></div>
+                <div style={S.statCard}><span style={S.statNum}>{pwaStats.sessions}</span><span style={S.statLbl}>Sessões</span></div>
+                <div style={S.statCard}><span style={S.statNum}>{pwaStats.devices.length}</span><span style={S.statLbl}>Registros</span></div>
+              </div>
+              <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1rem', color: 'var(--bd)', marginBottom: 12 }}>Atividade recente</h3>
+              {pwaStats.devices.length === 0 ? (
+                <p style={S.empty}>Nenhum registro ainda.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+                  {pwaStats.devices.map((d, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', border: '1px solid var(--beige)', borderRadius: 12, background: 'var(--cream)' }}>
+                      <span style={{ fontSize: '1.2rem' }}>{d.event === 'installed' ? '📲' : '📱'}</span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: 0, fontSize: '.88rem', color: 'var(--bd)', fontWeight: 500 }}>{d.event === 'installed' ? 'Instalação' : 'Sessão'}{d.author ? ` · ${d.author}` : ''}</p>
+                        <p style={{ margin: 0, fontSize: '.76rem', color: 'var(--bl)', fontStyle: 'italic' }}>{new Date(d.created_at).toLocaleString('pt-BR')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
