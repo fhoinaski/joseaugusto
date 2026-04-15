@@ -48,6 +48,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
   // Clip / Boomerang state
   const [boomerangState, setBoomerangState] = useState<BoomerangState>('idle')
   const [clipUrl, setClipUrl] = useState('')
+  const [clipBlob, setClipBlob] = useState<Blob | null>(null)
   const [clipCountdown, setClipCountdown] = useState(3)
 
   const videoRef    = useRef<HTMLVideoElement>(null)
@@ -115,6 +116,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
       const blob = new Blob(chunksRef.current, { type: mimeType })
       const url = URL.createObjectURL(blob)
       clipUrlRef.current = url
+      setClipBlob(blob)
       setClipUrl(url)
       setBoomerangState('preview')
     }
@@ -143,6 +145,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
       clipUrlRef.current = ''
     }
     setClipUrl('')
+    setClipBlob(null)
     setBoomerangState('idle')
   }
 
@@ -152,6 +155,12 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
     a.href = clipUrl
     a.download = 'boomerang-cha-jose.webm'
     a.click()
+  }
+
+  const sendClipToFeed = () => {
+    if (!clipBlob) return
+    const file = new File([clipBlob], `clipe-${Date.now()}.webm`, { type: clipBlob.type || 'video/webm' })
+    onCapture(file)
   }
 
   /* ── Stickers ────────────────────────────────────────────────────── */
@@ -235,19 +244,10 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
     }, 'image/webp', 0.92)
   }, [filter, facing, stickers])
 
+  // Dispara direto — sem countdown
   const startCountdown = () => {
     if (status !== 'live') return
-    setStatus('countdown')
-    let c = 3
-    setCountdown(c)
-    countdownRef.current = setInterval(() => {
-      c -= 1
-      setCountdown(c)
-      if (c <= 0) {
-        if (countdownRef.current) clearInterval(countdownRef.current)
-        capture()
-      }
-    }, 900)
+    capture()
   }
 
   const retake = () => {
@@ -362,10 +362,10 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
               <button
                 onClick={rerecordClip}
                 style={{
-                  flex: 1, padding: '14px', borderRadius: 14,
+                  flex: 1, padding: '12px', borderRadius: 14,
                   border: '1.5px solid rgba(255,255,255,.2)',
                   background: 'rgba(255,255,255,.07)',
-                  color: '#fff', fontSize: '.92rem',
+                  color: '#fff', fontSize: '.88rem',
                   fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, cursor: 'pointer',
                 }}
               >
@@ -374,14 +374,26 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
               <button
                 onClick={downloadClip}
                 style={{
-                  flex: 1.4, padding: '14px', borderRadius: 14, border: 'none',
-                  background: 'linear-gradient(135deg, #e74c3c, #922b21)',
-                  color: '#fff', fontSize: '.95rem',
-                  fontFamily: "'Cormorant Garamond',serif", fontWeight: 700, cursor: 'pointer',
-                  boxShadow: '0 4px 18px rgba(231,76,60,.45)',
+                  flex: 1, padding: '12px', borderRadius: 14,
+                  border: '1.5px solid rgba(255,255,255,.25)',
+                  background: 'rgba(255,255,255,.12)',
+                  color: '#fff', fontSize: '.88rem',
+                  fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, cursor: 'pointer',
                 }}
               >
-                ⬇ Baixar clipe
+                ⬇ Baixar
+              </button>
+              <button
+                onClick={sendClipToFeed}
+                style={{
+                  flex: 1.4, padding: '12px', borderRadius: 14, border: 'none',
+                  background: 'linear-gradient(135deg, #c47a3a, #7a4e28)',
+                  color: '#fff', fontSize: '.95rem',
+                  fontFamily: "'Cormorant Garamond',serif", fontWeight: 700, cursor: 'pointer',
+                  boxShadow: '0 4px 18px rgba(196,122,58,.45)',
+                }}
+              >
+                📤 Enviar ao feed
               </button>
             </div>
           </div>
