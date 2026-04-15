@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { GeoStatus, useGeoAccess } from '@/components/GeoAccessProvider'
 import Stories, { StoryMediaItem } from '@/components/Stories'
@@ -233,6 +234,29 @@ function ToastManager({ toasts, onRemove }:{ toasts:ToastMsg[]; onRemove:(id:str
   )
 }
 
+// ── WhatsApp / external deep-link handler ────────────────────────────────
+// Must be inside <Suspense> because it calls useSearchParams().
+// Fetches the single photo from the API and passes it to onFound().
+function FotoDeepLink({ onFound }: { onFound: (item: MediaItem) => void }) {
+  const searchParams = useSearchParams()
+  const handledRef = useRef(false)
+  const onFoundRef = useRef(onFound)
+  onFoundRef.current = onFound
+
+  useEffect(() => {
+    if (handledRef.current) return
+    const fotoId = searchParams.get('foto')
+    if (!fotoId) return
+    handledRef.current = true
+    fetchJsonSafe<{ media?: MediaItem[] }>(`/api/photos?id=${encodeURIComponent(fotoId)}`, {}).then(data => {
+      const item = data.media?.[0]
+      if (item) onFoundRef.current(item)
+    })
+  }, [searchParams])
+
+  return null
+}
+
 // ── PWA Banner ────────────────────────────────────────────────────────────
 function PWABanner() {
   const [show,setShow]=useState(false)
@@ -449,6 +473,12 @@ export default function Home() {
     setToasts(prev=>[...prev.slice(-2),{id,text,thumb}])
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4000)
   }
+
+  // Called by FotoDeepLink when a ?foto= deep-link resolves to a media item
+  const handleDeepLinkItem = useCallback((item: MediaItem) => {
+    setMedia(prev=>[item,...prev.filter(m=>m.id!==item.id)])
+    setLbIdx(0)
+  }, [])
 
   const handleReact=useCallback(async(id:string,emoji:string)=>{
     const reacted=getReacted(id)
@@ -676,6 +706,11 @@ export default function Home() {
 
       <ToastManager toasts={toasts} onRemove={id=>setToasts(prev=>prev.filter(t=>t.id!==id))}/>
       <PWABanner/>
+
+      {/* Deep-link: ?foto=<mediaId> — must be inside Suspense for useSearchParams */}
+      <Suspense fallback={null}>
+        <FotoDeepLink onFound={handleDeepLinkItem}/>
+      </Suspense>
     </>
   )
 }

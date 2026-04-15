@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { dbGetMediaPage } from '@/lib/db'
+import { dbGetMediaPage, dbGetMediaById } from '@/lib/db'
 import { dbGetTopAuthors } from '@/lib/db'
 import { dbGetConfig } from '@/lib/db'
 import { isD1AuthError } from '@/lib/db'
@@ -9,6 +9,16 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
+    // ── Single-item lookup (WhatsApp / external deep-links) ──────────────────
+    const singleId = req.nextUrl.searchParams.get('id')?.trim()
+    if (singleId) {
+      const item = await dbGetMediaById(singleId)
+      if (!item) return NextResponse.json({ media: [] })
+      return NextResponse.json({
+        media: [{ ...item, thumbUrl: objectUrl(item.id), fullUrl: objectUrl(item.id) }],
+      })
+    }
+
     const cursor = req.nextUrl.searchParams.get('cursor')?.trim() || undefined
     const rawLimit = Number(req.nextUrl.searchParams.get('limit') ?? 20)
     const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, rawLimit)) : 50
