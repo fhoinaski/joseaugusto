@@ -48,12 +48,19 @@ export default function RankingPage() {
   const maxPts = entries[0]?.total_points || 1
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'linear-gradient(160deg, #1a0d00 0%, #3e2408 50%, #1a0d00 100%)', color: '#f5dab6', paddingBottom: 100 }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--warm)', color: 'var(--bd)', paddingBottom: 100 }}>
+      {/* Back link */}
+      <div style={{ padding: '80px 20px 0' }}>
+        <a href="/" style={{ fontSize: '.85rem', color: 'var(--bl)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          ← voltar
+        </a>
+      </div>
+
       {/* Header */}
-      <div style={{ padding: '28px 20px 20px', textAlign: 'center' }}>
-        <p style={{ fontFamily: "'Dancing Script',cursive", color: '#d59056', fontSize: '1rem', marginBottom: 4 }}>✦ Convidados mais ativos ✦</p>
-        <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '2rem', margin: 0, color: '#f5dab6' }}>Ranking do <em>Chá</em></h1>
-        <p style={{ fontSize: '.82rem', color: 'rgba(245,218,182,.55)', marginTop: 8, fontStyle: 'italic' }}>
+      <div style={{ padding: '12px 20px 20px', textAlign: 'center' }}>
+        <p style={{ fontFamily: "'Dancing Script',cursive", color: 'var(--accent)', fontSize: '1rem', marginBottom: 4 }}>✦ Convidados mais ativos ✦</p>
+        <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '2rem', margin: 0, color: 'var(--bd)' }}>Ranking do <em>Chá</em></h1>
+        <p style={{ fontSize: '.82rem', color: 'var(--bl)', marginTop: 8, fontStyle: 'italic' }}>
           +10 pts por foto · +3 pts por comentário · +2 pts por reação recebida
         </p>
         <div style={{ maxWidth: 340, margin: '16px auto 0' }}>
@@ -62,13 +69,13 @@ export default function RankingPage() {
       </div>
 
       {loading && (
-        <div style={{ textAlign: 'center', padding: 60, color: 'rgba(245,218,182,.5)', fontStyle: 'italic' }}>Carregando...</div>
+        <div style={{ textAlign: 'center', padding: 60, color: 'var(--bl)', fontStyle: 'italic' }}>Carregando...</div>
       )}
 
       {!loading && entries.length === 0 && (
         <div style={{ textAlign: 'center', padding: '60px 24px' }}>
           <div style={{ fontSize: '3rem', marginBottom: 12 }}>📸</div>
-          <p style={{ fontStyle: 'italic', color: 'rgba(245,218,182,.6)' }}>Nenhum convidado participou ainda.<br/>Seja o primeiro a postar!</p>
+          <p style={{ fontStyle: 'italic', color: 'var(--bl)' }}>Nenhum convidado participou ainda.<br/>Seja o primeiro a postar!</p>
         </div>
       )}
 
@@ -93,17 +100,17 @@ export default function RankingPage() {
                     fontWeight: 700,
                     color: '#fff',
                     fontFamily: "'Cormorant Garamond',serif",
-                    border: isMe ? '3px solid #f4c78f' : `2px solid rgba(255,255,255,${isFirst ? .4 : .2})`,
+                    border: isMe ? '3px solid #c47a3a' : `2px solid rgba(62,36,8,${isFirst ? .3 : .15})`,
                     marginBottom: 8,
-                    boxShadow: isFirst ? '0 0 24px rgba(212,160,86,.45)' : 'none',
+                    boxShadow: isFirst ? '0 0 24px rgba(196,122,58,.35)' : 'none',
                   }}
                 >
                   {getInitials(entry.author)}
                 </div>
-                <p style={{ fontSize: isFirst ? '.82rem' : '.75rem', fontWeight: 700, textAlign: 'center', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+                <p style={{ fontSize: isFirst ? '.82rem' : '.75rem', fontWeight: 700, textAlign: 'center', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4, color: 'var(--bd)' }}>
                   {isMe ? 'Você' : entry.author.split(' ')[0]}
                 </p>
-                <p style={{ fontSize: isFirst ? '.95rem' : '.85rem', fontWeight: 700, color: isFirst ? '#f4c78f' : '#d59056', marginBottom: 4 }}>
+                <p style={{ fontSize: isFirst ? '.95rem' : '.85rem', fontWeight: 700, color: isFirst ? '#c47a3a' : 'var(--bl)', marginBottom: 4 }}>
                   {entry.total_points} pts
                 </p>
                 <div
@@ -111,8 +118,8 @@ export default function RankingPage() {
                     width: '100%',
                     height: isFirst ? 60 : 40,
                     background: isFirst
-                      ? 'linear-gradient(180deg,#c9920a,#7a5c00)'
-                      : 'linear-gradient(180deg,rgba(255,255,255,.18),rgba(255,255,255,.08))',
+                      ? 'linear-gradient(180deg,#c47a3a,#7a4e28)'
+                      : 'linear-gradient(180deg,rgba(160,113,62,.25),rgba(160,113,62,.12))',
                     borderRadius: '6px 6px 0 0',
                     display: 'flex',
                     alignItems: 'flex-start',
@@ -143,11 +150,11 @@ export default function RankingPage() {
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 14px', marginBottom: 8,
                   borderRadius: 14,
-                  background: isMe ? 'rgba(212,160,86,.14)' : 'rgba(255,255,255,.06)',
-                  border: isMe ? '1px solid rgba(212,160,86,.4)' : '1px solid rgba(255,255,255,.08)',
+                  background: isMe ? 'rgba(196,122,58,.1)' : 'rgba(62,36,8,.04)',
+                  border: isMe ? '1px solid rgba(196,122,58,.35)' : '1px solid rgba(62,36,8,.08)',
                 }}
               >
-                <span style={{ fontSize: '.85rem', fontWeight: 700, minWidth: 28, textAlign: 'center', color: 'rgba(245,218,182,.55)' }}>
+                <span style={{ fontSize: '.85rem', fontWeight: 700, minWidth: 28, textAlign: 'center', color: 'var(--bl)' }}>
                   {rank + 1}°
                 </span>
                 <div style={{ width: 38, height: 38, borderRadius: '50%', background: avatarBg(entry.author), display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13, color: '#fff', flexShrink: 0, fontFamily: "'Cormorant Garamond',serif" }}>
@@ -155,16 +162,16 @@ export default function RankingPage() {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <p style={{ fontWeight: 600, fontSize: '.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {isMe ? <span style={{ color: '#f4c78f' }}>Você ({entry.author})</span> : entry.author}
+                    <p style={{ fontWeight: 600, fontSize: '.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--bd)' }}>
+                      {isMe ? <span style={{ color: '#c47a3a' }}>Você ({entry.author})</span> : entry.author}
                       {' '}<span style={{ fontSize: '.75rem' }}>{entry.badge}</span>
                     </p>
-                    <p style={{ fontSize: '.85rem', fontWeight: 700, color: '#d59056', flexShrink: 0, paddingLeft: 8 }}>{entry.total_points} pts</p>
+                    <p style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--accent)', flexShrink: 0, paddingLeft: 8 }}>{entry.total_points} pts</p>
                   </div>
-                  <div style={{ height: 4, background: 'rgba(255,255,255,.1)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: 4, background: 'rgba(62,36,8,.1)', borderRadius: 99, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${barWidth}%`, background: 'linear-gradient(90deg,#7a4e28,#d59056)', borderRadius: 99, transition: 'width .6s ease' }} />
                   </div>
-                  <p style={{ fontSize: '.72rem', color: 'rgba(245,218,182,.5)', marginTop: 4 }}>
+                  <p style={{ fontSize: '.72rem', color: 'var(--bl)', marginTop: 4 }}>
                     {entry.uploads} foto{entry.uploads !== 1 ? 's' : ''} · {entry.reactions_received} reação{entry.reactions_received !== 1 ? 'ões' : ''} · {entry.comments_made} comentário{entry.comments_made !== 1 ? 's' : ''}
                   </p>
                 </div>

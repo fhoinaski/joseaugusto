@@ -7,6 +7,7 @@ const NotificationBell    = dynamic(() => import('@/components/NotificationBell'
 const PWAInstallPrompt    = dynamic(() => import('@/components/PWAInstallPrompt'),    { ssr: false })
 const ReactionStorm       = dynamic(() => import('@/components/ReactionStorm'),       { ssr: false })
 const ConfettiCelebration = dynamic(() => import('@/components/ConfettiCelebration'), { ssr: false })
+const ExplorarModal       = dynamic(() => import('@/components/ExplorarModal'),       { ssr: false })
 
 type ToastItem = {
   id: string
@@ -137,6 +138,7 @@ export default function UiFeedbackLayer() {
       <PWAInstallPrompt />
       <ReactionStorm />
       <ConfettiCelebration />
+      <ExplorarModal />
 
       <div className="toast-container">
         {toasts.map(t => (
