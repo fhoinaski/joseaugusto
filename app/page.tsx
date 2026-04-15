@@ -523,54 +523,6 @@ export default function Home() {
         </a>
       </div>
 
-      {/* ── Explorar o Evento ── */}
-      <section className="reveal" style={{ marginBottom: 16 }}>
-        <p className="section-label" style={{ textAlign: 'center', marginBottom: 12, padding: '0 16px' }}>✦ Explorar o Evento ✦</p>
-
-        {/* Horizontal scroll strip */}
-        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 8, scrollbarWidth: 'none' }}>
-          <div style={{ display: 'flex', gap: 10, padding: '4px 16px', width: 'max-content' }}>
-            {[
-              { href: '/bingo',    emoji: '🎯', label: 'Bingo' },
-              { href: '/desafios', emoji: '📸', label: 'Desafios' },
-              { href: '/musicas',  emoji: '🎵', label: 'Músicas' },
-              { href: '/palpites', emoji: '🎲', label: 'Palpites' },
-              { href: '/carta',    emoji: '💌', label: 'Carta ao José' },
-              { href: '/mural',    emoji: '🖼️', label: 'Mural' },
-              { href: '/livro',    emoji: '📖', label: 'Livro' },
-              { href: '/diario',   emoji: '🧸', label: 'Diário' },
-              { href: '/mosaico',  emoji: '🎨', label: 'Mosaico' },
-              { href: '/ranking',  emoji: '🏆', label: 'Ranking' },
-              { href: '/timeline', emoji: '⏱',  label: 'Timeline' },
-            ].map(({ href, emoji, label }) => (
-              <a
-                key={href}
-                href={href}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '12px 14px',
-                  background: 'var(--cream)',
-                  border: '1.5px solid var(--beige)',
-                  borderRadius: 14,
-                  textDecoration: 'none',
-                  color: 'var(--bd)',
-                  minWidth: 72,
-                  boxShadow: '0 2px 8px rgba(139,98,66,.06)',
-                  transition: 'border-color .2s, box-shadow .2s',
-                  flexShrink: 0,
-                }}
-              >
-                <span style={{ fontSize: '1.5rem' }}>{emoji}</span>
-                <span style={{ fontSize: '.72rem', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: 'var(--b)', textAlign: 'center', lineHeight: 1.2 }}>{label}</span>
-              </a>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Stories bar */}
       {media.length > 0 && (
         <Stories items={media as StoryMediaItem[]} />

@@ -1824,3 +1824,6 @@ footer { text-align:center; padding:56px 24px 72px; }
 .explore-card:last-child:nth-child(odd) .explore-card-sub {
   margin-top: 2px;
 }
+
+/* Bottom nav clearance — prevents content hiding behind the fixed bar */
+body { padding-bottom: max(62px, calc(62px + env(safe-area-inset-bottom))); }

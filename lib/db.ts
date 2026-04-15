@@ -1512,3 +1512,38 @@ export async function dbApproveAllPending(): Promise<number> {
     return 0
   }
 }
+
+// ── PWA Sessions ─────────────────────────────────────────────────────────────
+
+async function dbEnsurePwaTable(): Promise<void> {
+  await d1Exec(`CREATE TABLE IF NOT EXISTS pwa_sessions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    event      TEXT NOT NULL DEFAULT 'session',
+    user_agent TEXT NOT NULL DEFAULT '',
+    author     TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`)
+}
+
+export async function dbRecordPwaSession(event: string, userAgent: string, author: string | null): Promise<void> {
+  try {
+    await d1Exec(`INSERT INTO pwa_sessions (event, user_agent, author, created_at) VALUES (?,?,?,datetime('now'))`, [event, userAgent, author ?? null])
+  } catch (err) {
+    if (isMissingTableError(err, 'pwa_sessions')) { await dbEnsurePwaTable(); await d1Exec(`INSERT INTO pwa_sessions (event, user_agent, author, created_at) VALUES (?,?,?,datetime('now'))`, [event, userAgent, author ?? null]) }
+    else throw err
+  }
+}
+
+export async function dbGetPwaStats(): Promise<{ installs: number; sessions: number; devices: Array<{ author: string | null; event: string; created_at: string }> }> {
+  try {
+    const [installs, sessions, devices] = await Promise.all([
+      d1Query<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM pwa_sessions WHERE event='installed'`, []),
+      d1Query<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM pwa_sessions WHERE event='session'`, []),
+      d1Query<{ author: string | null; event: string; created_at: string }>(`SELECT author, event, created_at FROM pwa_sessions ORDER BY id DESC LIMIT 50`, []),
+    ])
+    return { installs: installs[0]?.cnt ?? 0, sessions: sessions[0]?.cnt ?? 0, devices }
+  } catch (err) {
+    if (isMissingTableError(err, 'pwa_sessions')) return { installs: 0, sessions: 0, devices: [] }
+    throw err
+  }
+}
