@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { GeoAccessProvider } from '@/components/GeoAccessProvider'
 import { UploadProvider } from '@/components/UploadProvider'
-import GlobalInstagramNav from '@/components/GlobalInstagramNav'
 import UiFeedbackLayer from '@/components/UiFeedbackLayer'
 
 export const metadata: Metadata = {
@@ -34,7 +33,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <GeoAccessProvider>
           <UploadProvider>
             <div className="ig-app-shell">
-              <GlobalInstagramNav />
               <UiFeedbackLayer />
               <div className="ig-app-content">{children}</div>
             </div>
