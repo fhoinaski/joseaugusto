@@ -59,6 +59,7 @@ const EXPLORE_LINKS = [
   { href: '/mosaico',   emoji: '🎨', label: 'Mosaico' },
   { href: '/ranking',   emoji: '🏆', label: 'Ranking' },
   { href: '/timeline',  emoji: '⏱',  label: 'Timeline' },
+  { href: '/convite',   emoji: '📩', label: 'Convite' },
 ]
 
 const EXPLORE_PATHS = EXPLORE_LINKS.map(l => l.href)

@@ -36,7 +36,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -570,6 +570,7 @@ function AdminPanel() {
           { key: 'diario', label: '📖 Diário', count: 0 },
           { key: 'settings', label: '⚙ Configurações', count: 0 },
           { key: 'pwa', label: '📱 PWA', count: 0 },
+          { key: 'convite', label: '🔗 Convite', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
@@ -1254,6 +1255,51 @@ function AdminPanel() {
           )}
         </div>
       )}
+
+      {tab === 'convite' && (() => {
+        const origin = typeof window !== 'undefined' ? window.location.origin : ''
+        const conviteUrl = `${origin}/convite`
+        const qrSrc = origin ? `/api/qrcode?url=${encodeURIComponent(conviteUrl)}&size=240` : ''
+        const copyLink = () => {
+          navigator.clipboard.writeText(conviteUrl).then(() => showToast('🔗 Link copiado!')).catch(() => showToast('Erro ao copiar link'))
+        }
+        return (
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🔗 Convite Digital</h2>
+            <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 24 }}>QR Code e link do convite público para compartilhar com os convidados.</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 20 }}>
+              {qrSrc && (
+                <div style={{ background: '#fdf6ee', border: '1px solid var(--beige)', borderRadius: 16, padding: 20, display: 'inline-block' }}>
+                  <img src={qrSrc} alt="QR Code do convite" width={240} height={240} style={{ display: 'block' }} />
+                </div>
+              )}
+
+              <p style={{ fontSize: '.85rem', color: 'var(--bl)', fontStyle: 'italic', wordBreak: 'break-all' as const, textAlign: 'center' as const }}>
+                {conviteUrl}
+              </p>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const, justifyContent: 'center' as const }}>
+                <button
+                  style={S.btnApprove}
+                  onClick={() => origin && window.open(`/api/qrcode?url=${encodeURIComponent(conviteUrl)}&size=600`, '_blank')}
+                >
+                  ⬇ Baixar QR Code (600px)
+                </button>
+                <button
+                  style={{ ...S.btnApprove, background: '#eef1ff', color: '#3d4f9b' }}
+                  onClick={() => window.open('/convite', '_blank')}
+                >
+                  👁 Ver convite
+                </button>
+                <button style={{ ...S.btnApprove, background: '#fff7d6', color: '#8a6d1f' }} onClick={copyLink}>
+                  🔗 Copiar link
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <div style={S.toast}>{toast}</div>
     </div>

@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { emitToast, vibrateSoft } from '@/lib/ui-feedback'
 import { REACTION_EMOJIS } from '@/lib/config'
+
+const ShareStories = dynamic(() => import('./ShareStories'), { ssr: false })
 
 export interface FeedMediaItem {
   id: string
@@ -56,6 +59,7 @@ export default function FeedItem({
   const [isDesktop, setIsDesktop] = useState(false)
   const [commentsLoaded, setCommentsLoaded] = useState(false)
   const [replyTo, setReplyTo] = useState<string | null>(null)
+  const [showShareStories, setShowShareStories] = useState(false)
   const lastTapRef = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -375,6 +379,18 @@ export default function FeedItem({
               </button>
             )}
 
+            {/* Stories */}
+            {item.type === 'image' && (
+              <button
+                onClick={() => setShowShareStories(true)}
+                style={{ border: '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: 'rgba(255,255,255,.12)', color: '#fff', padding: '8px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, lineHeight: 1 }}
+                aria-label="Compartilhar para Stories"
+                title="Compartilhar para Stories"
+              >
+                📤 Stories
+              </button>
+            )}
+
             {showEmojiPicker && (
               <div style={{ width: '100%', marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8, background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.2)', borderRadius: 14, padding: 10 }}>
                 {REACTION_OPTIONS.map(emoji => (
@@ -498,6 +514,14 @@ export default function FeedItem({
       </div>
 
       <style>{`@keyframes feed-heart-pop { 0% { transform: scale(.34) translateY(10px); opacity: 0; filter: blur(1px); } 30% { transform: scale(1.12) translateY(-2px); opacity: 1; filter: blur(0); } 62% { transform: scale(1.04) translateY(-8px); opacity: .96; } 100% { transform: scale(1.24) translateY(-20px); opacity: 0; } }`}</style>
+
+      {showShareStories && item.type === 'image' && (
+        <ShareStories
+          imageUrl={item.fullUrl}
+          author={item.author}
+          onClose={() => setShowShareStories(false)}
+        />
+      )}
     </article>
   )
 }
