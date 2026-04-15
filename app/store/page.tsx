@@ -5,6 +5,48 @@ import type { StoreItem } from '@/lib/db'
 
 type Item = StoreItem
 
+// Thumbnail that gracefully hides on error (avoids broken-image camera icon)
+function ItemThumb({ src, alt, size }: { src: string; alt: string; size: number }) {
+  const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  if (failed) return (
+    <div style={{
+      width: size, minHeight: size, flexShrink: 0,
+      background: 'linear-gradient(135deg,rgba(201,144,86,.15),rgba(122,78,40,.08))',
+      display: 'grid', placeItems: 'center',
+      fontSize: size > 60 ? '2rem' : '1.4rem',
+      borderRight: '1px solid var(--beige)',
+    }}>
+      🎁
+    </div>
+  )
+
+  return (
+    <div style={{ width: size, minHeight: size, flexShrink: 0, position: 'relative', background: 'var(--beige)' }}>
+      {!loaded && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(135deg,rgba(201,144,86,.12),rgba(122,78,40,.06))',
+          display: 'grid', placeItems: 'center', fontSize: '1.2rem',
+        }}>
+          🎁
+        </div>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+        style={{
+          width: size, minHeight: size, objectFit: 'cover', flexShrink: 0, display: 'block',
+          opacity: loaded ? 1 : 0, transition: 'opacity .25s',
+        }}
+      />
+    </div>
+  )
+}
+
 function priceLabel(cents: number | null): string {
   if (!cents) return ''
   return `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
@@ -136,9 +178,10 @@ export default function StorePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
               {available.map(item => (
                 <div key={item.id} style={{ background: 'var(--cream)', border: '1px solid var(--beige)', borderRadius: 16, overflow: 'hidden', display: 'flex', gap: 0 }}>
-                  {item.image_url && (
-                    <img src={item.image_url} alt={item.name} style={{ width: 90, minHeight: 90, objectFit: 'cover', flexShrink: 0 }} />
-                  )}
+                  {item.image_url
+                    ? <ItemThumb src={item.image_url} alt={item.name} size={90} />
+                    : <div style={{ width: 90, minHeight: 90, flexShrink: 0, background: 'linear-gradient(135deg,rgba(201,144,86,.15),rgba(122,78,40,.08))', display: 'grid', placeItems: 'center', fontSize: '2rem', borderRight: '1px solid var(--beige)' }}>🎁</div>
+                  }
                   <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <p style={{ fontFamily: "'Playfair Display',serif", fontWeight: 600, fontSize: '1rem', color: 'var(--bd)', margin: 0 }}>{item.name}</p>
                     {item.description && <p style={{ fontSize: '.85rem', color: 'var(--text-md)', margin: 0 }}>{item.description}</p>}
@@ -173,9 +216,10 @@ export default function StorePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {claimed.map(item => (
                 <div key={item.id} style={{ background: '#f0f5f1', border: '1px solid #c8dece', borderRadius: 14, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: .8 }}>
-                  {item.image_url && (
-                    <img src={item.image_url} alt={item.name} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
-                  )}
+                  {item.image_url
+                    ? <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}><ItemThumb src={item.image_url} alt={item.name} size={52} /></div>
+                    : <div style={{ width: 52, height: 52, borderRadius: 10, flexShrink: 0, background: 'rgba(122,78,40,.1)', display: 'grid', placeItems: 'center', fontSize: '1.4rem' }}>🎁</div>
+                  }
                   <div style={{ flex: 1 }}>
                     <p style={{ fontWeight: 600, fontSize: '.95rem', color: 'var(--bd)', margin: 0, textDecoration: 'line-through', opacity: .7 }}>{item.name}</p>
                     <p style={{ fontSize: '.82rem', color: 'var(--sage)', margin: '2px 0 0', fontStyle: 'italic' }}>
