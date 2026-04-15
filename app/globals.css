@@ -888,6 +888,10 @@ footer { text-align:center; padding:56px 24px 72px; }
   from { opacity: 0; transform: scale(0.4); }
   to   { opacity: 1; transform: scale(1); }
 }
+@keyframes boothRecordPulse {
+  0%,100% { box-shadow: 0 0 0 4px rgba(231,76,60,.5), 0 4px 22px rgba(0,0,0,.55); }
+  50%      { box-shadow: 0 0 0 10px rgba(231,76,60,.2), 0 4px 22px rgba(0,0,0,.55); }
+}
 .reveal { opacity:0; transform:translateY(30px); transition:opacity .7s ease, transform .7s ease; }
 .reveal.visible { opacity:1; transform:translateY(0); }
 
@@ -1186,6 +1190,13 @@ footer { text-align:center; padding:56px 24px 72px; }
   20%  { opacity: 1; transform: translateY(-80px) scale(1.2) rotate(-8deg); }
   60%  { opacity: 0.8; transform: translateY(-220px) scale(1) rotate(6deg); }
   100% { opacity: 0; transform: translateY(-400px) scale(0.7) rotate(-4deg); }
+}
+
+/* ── TV Mode reaction float ─────────────────────────────── */
+@keyframes tvReactionFloat {
+  0%   { transform: translateY(0) scale(1);    opacity: 1; }
+  60%  { transform: translateY(-180px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-320px) scale(0.8); opacity: 0; }
 }
 
 /* ── Baby Glow (birth announcement) ────────────────────── */

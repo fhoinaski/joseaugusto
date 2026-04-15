@@ -15,6 +15,19 @@ interface MediaItem {
   reactions: Record<string, number>
 }
 
+interface AuthorStats {
+  photos: number
+  reactions: number
+  comments: number
+}
+
+interface TaggedPhoto {
+  id: string
+  author: string
+  caption: string
+  created_at: string
+}
+
 function getInitials(name: string): string {
   return name.split(' ').slice(0, 2).map(n => n[0] ?? '').join('').toUpperCase() || '?'
 }
@@ -171,6 +184,10 @@ export default function GuestProfilePage() {
   const [loading, setLoading] = useState(true)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [authorStats, setAuthorStats] = useState<AuthorStats | null>(null)
+  const [rankPosition, setRankPosition] = useState<number | null>(null)
+  const [taggedPhotos, setTaggedPhotos] = useState<TaggedPhoto[]>([])
+  const [taggedLoading, setTaggedLoading] = useState(true)
 
   const fetchPhotos = useCallback(async () => {
     try {
@@ -197,7 +214,55 @@ export default function GuestProfilePage() {
     }
   }, [name])
 
-  useEffect(() => { fetchPhotos() }, [fetchPhotos])
+  const fetchStats = useCallback(async () => {
+    if (!name) return
+    try {
+      const res = await fetch(`/api/author-stats?author=${encodeURIComponent(name)}`)
+      if (res.ok) {
+        const data = await res.json() as AuthorStats
+        setAuthorStats(data)
+      }
+    } catch {
+      // non-critical
+    }
+  }, [name])
+
+  const fetchRank = useCallback(async () => {
+    if (!name) return
+    try {
+      const res = await fetch('/api/leaderboard')
+      if (res.ok) {
+        const data = await res.json() as { entries?: { author: string }[] }
+        const idx = (data.entries ?? []).findIndex(e => e.author === name)
+        setRankPosition(idx >= 0 ? idx + 1 : null)
+      }
+    } catch {
+      // non-critical
+    }
+  }, [name])
+
+  const fetchTaggedPhotos = useCallback(async () => {
+    if (!name) return
+    setTaggedLoading(true)
+    try {
+      const res = await fetch(`/api/tags?person=${encodeURIComponent(name)}`)
+      if (res.ok) {
+        const data = await res.json() as { photos?: TaggedPhoto[] }
+        setTaggedPhotos(data.photos ?? [])
+      }
+    } catch {
+      setTaggedPhotos([])
+    } finally {
+      setTaggedLoading(false)
+    }
+  }, [name])
+
+  useEffect(() => {
+    fetchPhotos()
+    fetchStats()
+    fetchRank()
+    fetchTaggedPhotos()
+  }, [fetchPhotos, fetchStats, fetchRank, fetchTaggedPhotos])
 
   const reactions = photos.reduce((acc, p) => acc + totalReactions(p.reactions), 0)
 
@@ -275,23 +340,47 @@ export default function GuestProfilePage() {
 
         {/* Stats row */}
         {!loading && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 32, marginTop: 8 }}>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.4rem', fontWeight: 700, color: 'var(--bd)' }}>
-                {photos.length}
+          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 12, marginTop: 12, padding: '0 12px' }}>
+            <div style={{ textAlign: 'center', background: 'var(--cream)', border: '1px solid var(--beige)', borderRadius: 16, padding: '14px 20px', minWidth: 80 }}>
+              <p style={{ margin: 0, fontSize: '1.5rem' }}>📸</p>
+              <p style={{ margin: '4px 0 2px', fontFamily: "'Playfair Display',serif", fontSize: '1.5rem', fontWeight: 700, color: 'var(--bd)' }}>
+                {authorStats?.photos ?? photos.length}
               </p>
-              <p style={{ fontSize: '.75rem', color: 'var(--text-lo)', letterSpacing: '.05em', textTransform: 'uppercase' }}>
-                {photos.length === 1 ? 'foto' : 'fotos'}
-              </p>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.4rem', fontWeight: 700, color: 'var(--bd)' }}>
-                {reactions}
-              </p>
-              <p style={{ fontSize: '.75rem', color: 'var(--text-lo)', letterSpacing: '.05em', textTransform: 'uppercase' }}>
-                {reactions === 1 ? 'reação' : 'reações'}
+              <p style={{ margin: 0, fontSize: '.7rem', color: 'var(--text-lo)', letterSpacing: '.05em', textTransform: 'uppercase' }}>
+                fotos
               </p>
             </div>
+            <div style={{ textAlign: 'center', background: 'var(--cream)', border: '1px solid var(--beige)', borderRadius: 16, padding: '14px 20px', minWidth: 80 }}>
+              <p style={{ margin: 0, fontSize: '1.5rem' }}>❤️</p>
+              <p style={{ margin: '4px 0 2px', fontFamily: "'Playfair Display',serif", fontSize: '1.5rem', fontWeight: 700, color: 'var(--bd)' }}>
+                {authorStats?.reactions ?? reactions}
+              </p>
+              <p style={{ margin: 0, fontSize: '.7rem', color: 'var(--text-lo)', letterSpacing: '.05em', textTransform: 'uppercase' }}>
+                reações
+              </p>
+            </div>
+            {authorStats !== null && (
+              <div style={{ textAlign: 'center', background: 'var(--cream)', border: '1px solid var(--beige)', borderRadius: 16, padding: '14px 20px', minWidth: 80 }}>
+                <p style={{ margin: 0, fontSize: '1.5rem' }}>💬</p>
+                <p style={{ margin: '4px 0 2px', fontFamily: "'Playfair Display',serif", fontSize: '1.5rem', fontWeight: 700, color: 'var(--bd)' }}>
+                  {authorStats.comments}
+                </p>
+                <p style={{ margin: 0, fontSize: '.7rem', color: 'var(--text-lo)', letterSpacing: '.05em', textTransform: 'uppercase' }}>
+                  comentários
+                </p>
+              </div>
+            )}
+            {rankPosition !== null && (
+              <div style={{ textAlign: 'center', background: 'linear-gradient(135deg,rgba(196,122,58,.12),rgba(122,78,40,.08))', border: '1px solid rgba(196,122,58,.3)', borderRadius: 16, padding: '14px 20px', minWidth: 80 }}>
+                <p style={{ margin: 0, fontSize: '1.5rem' }}>🏆</p>
+                <p style={{ margin: '4px 0 2px', fontFamily: "'Playfair Display',serif", fontSize: '1.5rem', fontWeight: 700, color: '#c47a3a' }}>
+                  {rankPosition}º
+                </p>
+                <p style={{ margin: 0, fontSize: '.7rem', color: 'var(--text-lo)', letterSpacing: '.05em', textTransform: 'uppercase' }}>
+                  ranking
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -407,6 +496,45 @@ export default function GuestProfilePage() {
                   </div>
                 )}
               </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tagged Photos Section */}
+      {!taggedLoading && taggedPhotos.length > 0 && (
+        <div style={{ maxWidth: 640, margin: '32px auto 0', padding: '0 12px' }}>
+          <div style={{ height: 1, background: 'var(--beige)', marginBottom: 20 }} />
+          <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.1rem', color: 'var(--bd)', marginBottom: 4, textAlign: 'center' }}>
+            📸 Fotos onde {name} aparece
+          </h2>
+          <p style={{ textAlign: 'center', fontSize: '.85rem', color: 'var(--text-lo)', fontStyle: 'italic', marginBottom: 16 }}>
+            {taggedPhotos.length} {taggedPhotos.length === 1 ? 'foto' : 'fotos'}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 3 }}>
+            {taggedPhotos.map(photo => (
+              <a
+                key={photo.id}
+                href={`/?foto=${photo.id}`}
+                style={{ aspectRatio: '1', borderRadius: 4, overflow: 'hidden', display: 'block', position: 'relative', background: 'var(--beige)' }}
+              >
+                <img
+                  src={`/api/photos/thumb?id=${photo.id}`}
+                  alt={photo.caption || photo.author}
+                  loading="lazy"
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 50%)',
+                  display: 'flex', alignItems: 'flex-end', padding: '6px 6px',
+                }}>
+                  <span style={{ color: '#fff', fontSize: '.65rem', fontWeight: 600, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                    @{photo.author}
+                  </span>
+                </div>
+              </a>
             ))}
           </div>
         </div>

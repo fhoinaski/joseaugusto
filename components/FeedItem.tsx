@@ -5,6 +5,21 @@ import dynamic from 'next/dynamic'
 import { emitToast, vibrateSoft } from '@/lib/ui-feedback'
 import { REACTION_EMOJIS } from '@/lib/config'
 
+function getStarred(id: string): boolean {
+  try {
+    const f = JSON.parse(localStorage.getItem('cha_favorites') ?? '[]') as string[]
+    return f.includes(id)
+  } catch { return false }
+}
+
+function toggleFavorite(id: string, starred: boolean): void {
+  try {
+    const f = JSON.parse(localStorage.getItem('cha_favorites') ?? '[]') as string[]
+    const next = starred ? f.filter(x => x !== id) : [...f, id]
+    localStorage.setItem('cha_favorites', JSON.stringify(next))
+  } catch {}
+}
+
 const ShareStories = dynamic(() => import('./ShareStories'), { ssr: false })
 
 export interface FeedMediaItem {
@@ -60,6 +75,14 @@ export default function FeedItem({
   const [commentsLoaded, setCommentsLoaded] = useState(false)
   const [replyTo, setReplyTo] = useState<string | null>(null)
   const [showShareStories, setShowShareStories] = useState(false)
+  const [starred, setStarred] = useState(false)
+  const [tags, setTags] = useState<{ tagged_name: string; tagged_by: string }[]>([])
+  const [showTagInput, setShowTagInput] = useState(false)
+  const [tagInput, setTagInput] = useState('')
+  const [tagging, setTagging] = useState(false)
+
+  // Initialise starred from localStorage (after mount, client-only)
+  useEffect(() => { setStarred(getStarred(item.id)) }, [item.id])
   const lastTapRef = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -79,6 +102,18 @@ export default function FeedItem({
   }
 
   useEffect(() => { loadComments() }, [item.id])
+
+  const loadTags = async () => {
+    try {
+      const res = await fetch(`/api/tags?media_id=${encodeURIComponent(item.id)}`)
+      const data = await res.json() as { tags?: { tagged_name: string; tagged_by: string }[] }
+      setTags(data.tags ?? [])
+    } catch {
+      // Non-critical — ignore tag load errors
+    }
+  }
+
+  useEffect(() => { loadTags() }, [item.id])
 
   // Real-time comment updates when panel is open
   useEffect(() => {
@@ -257,6 +292,44 @@ export default function FeedItem({
     }
   }
 
+  const shareWhatsApp = () => {
+    const url = `${window.location.origin}/?foto=${item.id}`
+    const text = item.caption?.trim() || 'Confira essa foto do Chá do José Augusto!'
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}`
+    window.open(waUrl, '_blank')
+  }
+
+  const handleStarToggle = () => {
+    const next = !starred
+    toggleFavorite(item.id, starred)
+    setStarred(next)
+    emitToast(next ? 'Foto adicionada aos favoritos ⭐' : 'Foto removida dos favoritos')
+  }
+
+  const handleTag = async () => {
+    if (!tagInput.trim()) return
+    setTagging(true)
+    try {
+      const authorName = (() => { try { return localStorage.getItem('cha_author') ?? 'Convidado' } catch { return 'Convidado' } })()
+      const res = await fetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ media_id: item.id, tagged_name: tagInput.trim(), tagged_by: authorName }),
+      })
+      if (res.ok) {
+        setTags(prev => [...prev, { tagged_name: tagInput.trim(), tagged_by: authorName }])
+        setTagInput('')
+        setShowTagInput(false)
+        emitToast(`👤 ${tagInput.trim()} marcado(a) na foto!`)
+      } else {
+        const d = await res.json() as { error?: string }
+        emitToast(d.error ?? 'Erro ao marcar')
+      }
+    } finally {
+      setTagging(false)
+    }
+  }
+
   const topReactions = useMemo(() => {
     return Object.entries(item.reactions).sort((a, b) => b[1] - a[1]).slice(0, 3)
   }, [item.reactions])
@@ -351,6 +424,22 @@ export default function FeedItem({
             </p>
           )}
 
+          {/* Tags */}
+          {tags.length > 0 && (
+            <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {tags.map(t => (
+                <span key={t.tagged_name} style={{
+                  background: 'rgba(196,122,58,.15)', color: '#f5c78f',
+                  border: '1px solid rgba(196,122,58,.3)',
+                  borderRadius: 999, padding: '3px 10px',
+                  fontSize: '.75rem', fontWeight: 600,
+                }}>
+                  👤 {t.tagged_name}
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Action row */}
           <div style={{ marginTop: 10, display: 'flex', gap: 8, position: 'relative', flexWrap: 'wrap', alignItems: 'center' }}>
             <button
@@ -387,6 +476,35 @@ export default function FeedItem({
               ↗ Compartilhar
             </button>
 
+            {/* WhatsApp */}
+            <button
+              onClick={shareWhatsApp}
+              style={{ border: '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: 'rgba(255,255,255,.12)', color: '#fff', padding: '8px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+              aria-label="Compartilhar no WhatsApp"
+            >
+              📲 WhatsApp
+            </button>
+
+            {/* Favorite */}
+            <button
+              onClick={handleStarToggle}
+              style={{
+                border: starred ? '1px solid rgba(255,215,0,.6)' : '1px solid rgba(255,255,255,.5)',
+                borderRadius: 999,
+                background: starred ? 'rgba(255,215,0,.25)' : 'rgba(255,255,255,.12)',
+                color: starred ? '#ffd700' : '#fff',
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: 15,
+                lineHeight: 1,
+              }}
+              aria-label={starred ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+              title={starred ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+            >
+              {starred ? '⭐' : '☆'}
+            </button>
+
             {/* Download */}
             {item.type !== 'audio' && (
               <button
@@ -409,6 +527,36 @@ export default function FeedItem({
               >
                 📤 Stories
               </button>
+            )}
+
+            {/* Tag */}
+            <button
+              onClick={() => setShowTagInput(v => !v)}
+              style={{ border: showTagInput ? '1px solid rgba(196,122,58,.6)' : '1px solid rgba(255,255,255,.5)', borderRadius: 999, background: showTagInput ? 'rgba(196,122,58,.25)' : 'rgba(255,255,255,.12)', color: showTagInput ? '#f5c78f' : '#fff', padding: '8px 12px', cursor: 'pointer', fontSize: 15, lineHeight: 1 }}
+              aria-label="Marcar pessoa na foto"
+              title="Marcar pessoa na foto"
+            >
+              🏷
+            </button>
+
+            {showTagInput && (
+              <div style={{ width: '100%', marginTop: 8, display: 'flex', gap: 8 }}>
+                <input
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  placeholder="Nome de quem está na foto..."
+                  maxLength={60}
+                  style={{ flex: 1, border: '1px solid rgba(255,255,255,.3)', borderRadius: 8, padding: '6px 10px', background: 'rgba(0,0,0,.4)', color: '#fff', fontSize: '.85rem', outline: 'none' }}
+                  onKeyDown={e => { if (e.key === 'Enter') handleTag() }}
+                />
+                <button
+                  onClick={handleTag}
+                  disabled={tagging || !tagInput.trim()}
+                  style={{ background: '#c47a3a', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', cursor: tagging || !tagInput.trim() ? 'not-allowed' : 'pointer', fontSize: '.85rem', opacity: tagging || !tagInput.trim() ? 0.6 : 1 }}
+                >
+                  {tagging ? '...' : 'Marcar'}
+                </button>
+              </div>
             )}
 
             {showEmojiPicker && (

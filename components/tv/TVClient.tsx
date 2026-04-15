@@ -4,6 +4,12 @@ import dynamic from 'next/dynamic'
 
 const EnqueteCard = dynamic(() => import('../EnqueteCard'), { ssr: false })
 
+interface LiveReaction {
+  id: number
+  emoji: string
+  x: number
+}
+
 interface MediaItem {
   id: string
   thumbUrl: string
@@ -23,6 +29,8 @@ export default function TVClient() {
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [hideCursor, setHideCursor] = useState(false)
   const [isPresenting, setIsPresenting] = useState(false)
+
+  const [liveReactions, setLiveReactions] = useState<LiveReaction[]>([])
 
   const slideTimer = useRef<ReturnType<typeof setTimeout>>()
   const authorTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -48,6 +56,34 @@ export default function TVClient() {
     const t = setInterval(fetchPhotos, 10_000)
     return () => clearInterval(t)
   }, [fetchPhotos])
+
+  const addLiveReaction = useCallback((emoji: string) => {
+    const id = Date.now() + Math.random()
+    const x = 10 + Math.random() * 80
+    setLiveReactions(prev => [...prev, { id, emoji, x }])
+    setTimeout(() => setLiveReactions(prev => prev.filter(r => r.id !== id)), 3000)
+  }, [])
+
+  // SSE — listen for live reactions from /api/stream
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') return
+    const es = new EventSource('/api/stream')
+    es.addEventListener('reaction-update', (e: Event) => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data) as { emoji?: string }
+        if (data.emoji) addLiveReaction(data.emoji)
+      } catch {}
+    })
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data.emoji || data.type === 'reaction') {
+          addLiveReaction(data.emoji ?? '❤️')
+        }
+      } catch {}
+    }
+    return () => es.close()
+  }, [addLiveReaction])
 
   useEffect(() => {
     const siteUrl = window.location.origin
@@ -359,6 +395,37 @@ export default function TVClient() {
           </button>
         </div>
       )}
+
+      {/* ── AO VIVO badge ── */}
+      <div style={{
+        position: 'fixed', top: 20, right: 20, zIndex: 200,
+        background: 'rgba(192,57,43,.85)', color: '#fff',
+        padding: '6px 14px', borderRadius: 999, fontSize: '0.85rem',
+        fontWeight: 700, letterSpacing: '.1em',
+        display: 'flex', alignItems: 'center', gap: 6,
+        pointerEvents: 'none',
+      }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', animation: 'pulse 1.2s infinite', flexShrink: 0 }} />
+        AO VIVO
+      </div>
+
+      {/* ── Live reactions overlay ── */}
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 100 }}>
+        {liveReactions.map(r => (
+          <div key={r.id} style={{
+            position: 'absolute',
+            bottom: '15%',
+            left: `${r.x}%`,
+            fontSize: '3.5rem',
+            animation: 'tvReactionFloat 3s ease-out forwards',
+            pointerEvents: 'none',
+            lineHeight: 1,
+            filter: 'drop-shadow(0 2px 8px rgba(0,0,0,.5))',
+          }}>
+            {r.emoji}
+          </div>
+        ))}
+      </div>
     </>
   )
 }

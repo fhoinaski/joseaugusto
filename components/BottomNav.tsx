@@ -58,6 +58,7 @@ const EXPLORE_LINKS = [
   { href: '/diario',            emoji: '🧸', label: 'Diário' },
   { href: '/mosaico',           emoji: '🎨', label: 'Mosaico' },
   { href: '/ranking',           emoji: '🏆', label: 'Ranking' },
+  { href: '/melhores',          emoji: '✨', label: 'Melhores' },
   { href: '/timeline',          emoji: '⏱',  label: 'Timeline' },
   { href: '/marcos',            emoji: '👣', label: 'Marcos' },
   { href: '/video-mensagens',   emoji: '🎬', label: 'Vídeos' },

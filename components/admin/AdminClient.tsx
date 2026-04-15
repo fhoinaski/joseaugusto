@@ -1,5 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+
+const CartaoAgradecimento = lazy(() => import('@/components/CartaoAgradecimento'))
 
 interface MediaItem   { id: string; thumbUrl: string; fullUrl: string; author: string; type: 'image' | 'video' | 'audio'; createdAt: string }
 interface CapsuleItem { id: string; author: string; message: string; createdAt: string; imageUrl: string }
@@ -39,7 +41,7 @@ interface RsvpStats { total: number; confirmed: number; maybe: number; declined:
 interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -129,6 +131,12 @@ function AdminPanel() {
   interface MemoriaSubscriber { id: number; author: string; email: string; opted_in: number; created_at: string }
   const [memorias,       setMemorias]       = useState<MemoriaSubscriber[]>([])
   const [loadingMemorias, setLoadingMemorias] = useState(false)
+
+  // ── Cartões ───────────────────────────────────────────────────────────────────
+  const [cartaoTo,      setCartaoTo]      = useState('')
+  const [cartaoFrom,    setCartaoFrom]    = useState('Fernando & Mariana')
+  const [cartaoMsg,     setCartaoMsg]     = useState('Obrigado por estar com a gente neste dia tão especial! A sua presença tornou o nosso chá ainda mais bonito e inesquecível.')
+  const [cartaoAuthors, setCartaoAuthors] = useState<string[]>([])
 
   // ── Enquete ──────────────────────────────────────────────────────────────────
   const [enquete,       setEnquete]       = useState<{ id: number; question: string; options: string[]; active: boolean } | null>(null)
@@ -508,6 +516,11 @@ function AdminPanel() {
     if (tab === 'rsvp') fetchRsvp()
     if (tab === 'marcos') fetchMarcos()
     if (tab === 'memorias') fetchMemorias()
+    if (tab === 'cartoes') {
+      fetch('/api/photos?limit=50').then(r => r.json()).then((d: { topAuthors?: { author: string }[] }) => {
+        setCartaoAuthors(d.topAuthors?.map((a: { author: string }) => a.author) ?? [])
+      }).catch(() => {})
+    }
   }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias])
 
   useEffect(() => {
@@ -621,6 +634,7 @@ function AdminPanel() {
           { key: 'rsvp', label: '📋 RSVP', count: 0 },
           { key: 'marcos', label: '🧸 Marcos', count: 0 },
           { key: 'memorias', label: '📬 Memórias', count: 0 },
+          { key: 'cartoes', label: '💌 Cartões', count: 0 },
         ].map(t => (
           <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
@@ -1592,6 +1606,83 @@ function AdminPanel() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === 'cartoes' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={S.card}>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 16 }}>
+              💌 Gerar Cartão de Agradecimento
+            </h2>
+
+            {cartaoAuthors.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: '.85rem', color: 'var(--bl)', marginBottom: 8 }}>Selecionar convidado rapidamente:</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {cartaoAuthors.map(a => (
+                    <button
+                      key={a}
+                      onClick={() => setCartaoTo(a)}
+                      style={{
+                        padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
+                        border: cartaoTo === a ? '1px solid var(--bl)' : '1px solid var(--sand)',
+                        background: cartaoTo === a ? 'var(--beige)' : 'transparent',
+                        color: 'var(--b)', fontFamily: "'Cormorant Garamond',serif", fontSize: '.88rem',
+                      }}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: '.85rem', color: 'var(--bl)', display: 'block', marginBottom: 4 }}>Para (nome do convidado)</label>
+                <input
+                  value={cartaoTo}
+                  onChange={e => setCartaoTo(e.target.value)}
+                  placeholder="Ex: Maria Silva"
+                  style={{ width: '100%', border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '.85rem', color: 'var(--bl)', display: 'block', marginBottom: 4 }}>De (remetente)</label>
+                <input
+                  value={cartaoFrom}
+                  onChange={e => setCartaoFrom(e.target.value)}
+                  placeholder="Ex: Fernando & Mariana"
+                  style={{ width: '100%', border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '.85rem', color: 'var(--bl)', display: 'block', marginBottom: 4 }}>Mensagem</label>
+                <textarea
+                  value={cartaoMsg}
+                  onChange={e => setCartaoMsg(e.target.value)}
+                  rows={4}
+                  style={{ width: '100%', border: '1px solid var(--sand)', borderRadius: 10, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {cartaoTo.trim() && (
+            <div style={S.card}>
+              <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1rem', color: 'var(--bd)', marginBottom: 16 }}>
+                Pré-visualização
+              </h3>
+              <Suspense fallback={<p style={{ color: 'var(--bl)', fontStyle: 'italic' }}>Carregando…</p>}>
+                <CartaoAgradecimento
+                  toName={cartaoTo.trim()}
+                  fromName={cartaoFrom.trim() || 'Fernando & Mariana'}
+                  message={cartaoMsg.trim()}
+                />
+              </Suspense>
+            </div>
+          )}
         </div>
       )}
 
