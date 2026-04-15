@@ -43,86 +43,9 @@ html, body, * {
   min-height: 100svh;
 }
 
+/* Padding for fixed bottom nav (62px bar + safe area) */
 .ig-app-content {
-  padding-bottom: 86px;
-}
-
-.ig-shell-nav {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: max(10px, env(safe-area-inset-bottom));
-  z-index: 1800;
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-  padding: 6px 8px;
-  border-radius: 22px;
-  border: 1px solid rgba(122, 78, 40, .18);
-  background: rgba(250, 244, 236, .96);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 4px 32px rgba(39, 18, 0, .14), 0 1px 0 rgba(255,255,255,.6) inset;
-  transition: opacity .25s ease, transform .25s ease;
-}
-
-body.stories-open .ig-shell-nav {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(16px);
-}
-
-@media (min-width: 1024px) {
-  body.stories-open .ig-shell-nav {
-    transform: translateX(-16px);
-  }
-}
-
-.ig-shell-brand {
-  display: none;
-}
-
-.ig-shell-item {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: rgba(90, 52, 20, .38);
-  text-decoration: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  border-radius: 16px;
-  padding: 7px 4px 6px;
-  cursor: pointer;
-  font-family: 'Cormorant Garamond', serif;
-  transition: color .18s, background .18s;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.ig-shell-item svg {
-  flex-shrink: 0;
-}
-
-.ig-shell-item small {
-  font-size: .68rem;
-  letter-spacing: .03em;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.ig-shell-item.active {
-  color: #3e2408;
-}
-
-.ig-shell-item:not(.ig-shell-post):active {
-  background: rgba(122, 78, 40, .08);
-}
-
-.ig-shell-item:disabled {
-  opacity: .38;
-  cursor: not-allowed;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
 }
 
 .connection-pill {
@@ -155,32 +78,6 @@ body.stories-open .ig-shell-nav {
   animation: pulse 1.9s ease-in-out infinite;
 }
 
-/* ── Post button ── */
-.ig-shell-post {
-  background: linear-gradient(145deg, #7a4e28, #3e2408) !important;
-  color: #faf3ea !important;
-  border-radius: 18px !important;
-  box-shadow: 0 3px 14px rgba(60, 20, 0, .32);
-  transition: transform .16s, box-shadow .16s, opacity .16s !important;
-  position: relative;
-}
-.ig-shell-post::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 18px;
-  background: linear-gradient(145deg, rgba(255,255,255,.14), transparent);
-  pointer-events: none;
-}
-.ig-shell-post:not(:disabled):active {
-  transform: scale(.93);
-  box-shadow: 0 1px 8px rgba(60,20,0,.25);
-}
-.ig-shell-post:disabled {
-  opacity: .38;
-  cursor: not-allowed;
-}
-
 /* ── Stories strip: smooth scroll ── */
 .stories-strip {
   scroll-behavior: smooth;
@@ -195,46 +92,12 @@ body.stories-open .ig-shell-nav {
 }
 
 @media (min-width: 1024px) {
+  /* No sidebar — BottomNav is mobile-only; desktop gets full width */
   .ig-app-content {
-    padding-left: 104px;
     padding-bottom: 0;
+    max-width: 680px;
+    margin: 0 auto;
   }
-
-  .ig-shell-nav {
-    top: 14px;
-    bottom: 14px;
-    left: 14px;
-    right: auto;
-    width: 82px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    padding: 12px 8px;
-    border-radius: 24px;
-  }
-
-  .ig-shell-brand {
-    display: block;
-    text-align: center;
-    font-family: 'Playfair Display', serif;
-    font-size: .68rem;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: #a07040;
-    margin: 2px 0 10px;
-    flex-shrink: 0;
-  }
-
-  .ig-shell-item {
-    flex: 0 0 auto;
-    padding: 10px 4px;
-    border-radius: 16px;
-  }
-
-  .ig-shell-item small {
-    font-size: .72rem;
-  }
-
 }
 
 /* ── Event stats bar ── */
@@ -1020,8 +883,23 @@ footer { text-align:center; padding:56px 24px 72px; }
 
 /* ── Animations ── */
 @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+@keyframes pageEnter { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
 .reveal { opacity:0; transform:translateY(30px); transition:opacity .7s ease, transform .7s ease; }
 .reveal.visible { opacity:1; transform:translateY(0); }
+
+/* Page transition — triggered by app/template.tsx re-mount on each navigation */
+.page-transition {
+  animation: pageEnter 0.22s ease both;
+}
+
+/* Bottom nav tap feedback */
+.bottom-nav-btn:active {
+  opacity: 0.7;
+  transform: scale(0.92);
+}
+.bottom-nav-btn {
+  transition: opacity 0.12s, transform 0.12s;
+}
 
 /* ── Capsule do Tempo ── */
 .capsule-section {
@@ -1334,28 +1212,6 @@ footer { text-align:center; padding:56px 24px 72px; }
   --dk-green-hi:    rgba(106,158,122,.6);
 }
 
-/* ── Dark nav (frosted dark glass) ── */
-.ig-shell-nav.nav-dark {
-  background: rgba(18,9,0,.88);
-  border-color: rgba(255,255,255,.10);
-  box-shadow: 0 4px 32px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.06) inset;
-}
-
-.ig-shell-nav.nav-dark .ig-shell-item {
-  color: rgba(245,218,182,.38);
-}
-
-.ig-shell-nav.nav-dark .ig-shell-item.active {
-  color: #f5dab6;
-}
-
-.ig-shell-nav.nav-dark .ig-shell-item:not(.ig-shell-post):active {
-  background: rgba(245,218,182,.08);
-}
-
-.ig-shell-nav.nav-dark .ig-shell-brand {
-  color: rgba(213,144,86,.7);
-}
 
 /* ── Connection pill — slim & unobtrusive ── */
 .connection-pill {
@@ -1825,5 +1681,3 @@ footer { text-align:center; padding:56px 24px 72px; }
   margin-top: 2px;
 }
 
-/* Bottom nav clearance — prevents content hiding behind the fixed bar */
-body { padding-bottom: max(62px, calc(62px + env(safe-area-inset-bottom))); }

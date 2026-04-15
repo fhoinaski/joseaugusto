@@ -228,6 +228,20 @@ export default function BottomNav() {
     if (opening) closeUpload()
   }
 
+  // Prefetch main routes for instant tab switching
+  useEffect(() => {
+    router.prefetch('/')
+    router.prefetch('/feed')
+    // Prefetch explore routes after a short idle delay (don't block first paint)
+    const id = window.requestIdleCallback
+      ? window.requestIdleCallback(() => { EXPLORE_LINKS.forEach(l => router.prefetch(l.href)) })
+      : window.setTimeout(() => { EXPLORE_LINKS.forEach(l => router.prefetch(l.href)) }, 2000)
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(id as number)
+      else window.clearTimeout(id as number)
+    }
+  }, [router])
+
   // PWA tracking
   useEffect(() => {
     const trackPwa = (event: string) => {
@@ -275,6 +289,9 @@ export default function BottomNav() {
     cursor: 'pointer',
     WebkitTapHighlightColor: 'transparent',
   }
+
+  // className helper — add to every nav button for tap feedback via CSS
+  const tabCls = 'bottom-nav-btn'
 
   return (
     <>
@@ -453,7 +470,7 @@ export default function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
         {/* Tab 1 — Início */}
-        <button style={tabBase} onClick={() => { closeUpload(); setExploreOpen(false); setNotifOpen(false); router.push('/') }}>
+        <button className={tabCls} style={tabBase} onClick={() => { closeUpload(); setExploreOpen(false); setNotifOpen(false); router.push('/') }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill={isHome ? ACCENT : 'none'} stroke={isHome ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
@@ -462,7 +479,7 @@ export default function BottomNav() {
         </button>
 
         {/* Tab 2 — Feed */}
-        <button style={tabBase} onClick={() => { closeUpload(); setExploreOpen(false); setNotifOpen(false); router.push('/feed') }}>
+        <button className={tabCls} style={tabBase} onClick={() => { closeUpload(); setExploreOpen(false); setNotifOpen(false); router.push('/feed') }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill={isFeed ? ACCENT : 'none'} stroke={isFeed ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
             <circle cx="8.5" cy="8.5" r="1.5" />
@@ -473,6 +490,7 @@ export default function BottomNav() {
 
         {/* Tab 3 — Postar (upload, raised center) */}
         <button
+          className={tabCls}
           style={{ ...tabBase, paddingTop: 0, justifyContent: 'center' }}
           onClick={() => { setExploreOpen(false); setNotifOpen(false); openUpload() }}
         >
@@ -497,7 +515,7 @@ export default function BottomNav() {
         </button>
 
         {/* Tab 4 — Explorar */}
-        <button style={{ ...tabBase }} onClick={handleExploreOpen}>
+        <button className={tabCls} style={tabBase} onClick={handleExploreOpen}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill={isExploreActive ? ACCENT : 'none'} stroke={isExploreActive ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
@@ -506,7 +524,7 @@ export default function BottomNav() {
         </button>
 
         {/* Tab 5 — Notificações */}
-        <button style={{ ...tabBase, position: 'relative' }} onClick={handleNotifOpen}>
+        <button className={tabCls} style={{ ...tabBase, position: 'relative' }} onClick={handleNotifOpen}>
           <div style={{ position: 'relative' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill={notifOpen ? ACCENT : 'none'} stroke={notifOpen ? ACCENT : MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
