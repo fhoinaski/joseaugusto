@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import MemoriasOptIn from '@/components/MemoriasOptIn'
 
 interface CartaItem {
   id: number
@@ -493,6 +494,9 @@ export default function CartaPage() {
               ))}
             </div>
           )}
+        </div>
+        <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 20px' }}>
+          <MemoriasOptIn />
         </div>
       </div>
     </div>

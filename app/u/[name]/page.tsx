@@ -170,6 +170,7 @@ export default function GuestProfilePage() {
   const [photos, setPhotos] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   const fetchPhotos = useCallback(async () => {
     try {
@@ -199,6 +200,32 @@ export default function GuestProfilePage() {
   useEffect(() => { fetchPhotos() }, [fetchPhotos])
 
   const reactions = photos.reduce((acc, p) => acc + totalReactions(p.reactions), 0)
+
+  const downloadMyPhotos = async () => {
+    if (downloading || !name) return
+    setDownloading(true)
+    try {
+      const res = await fetch(`/api/download/minhas-fotos?author=${encodeURIComponent(name)}`)
+      if (!res.ok) {
+        const err = await res.json() as { error?: string }
+        alert(err.error ?? 'Erro ao baixar fotos.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'minhas-fotos-cha-jose-augusto.zip'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } catch {
+      alert('Não foi possível baixar. Tente novamente.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const openLightbox = (i: number) => setLightboxIndex(i)
   const closeLightbox = () => setLightboxIndex(null)
@@ -269,8 +296,33 @@ export default function GuestProfilePage() {
         )}
       </div>
 
+      {/* Download button */}
+      {!loading && photos.filter(p => p.type === 'image').length > 0 && (
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
+          <button
+            onClick={downloadMyPhotos}
+            disabled={downloading}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: downloading ? 'rgba(62,36,8,.08)' : 'linear-gradient(135deg,#c47a3a,#7a4e28)',
+              color: downloading ? 'var(--bd)' : '#fdf6ee',
+              fontFamily: "'Cormorant Garamond',serif",
+              fontSize: '1rem', fontWeight: 600,
+              border: downloading ? '1.5px solid var(--sand)' : 'none',
+              borderRadius: 999,
+              padding: '12px 24px',
+              cursor: downloading ? 'wait' : 'pointer',
+              boxShadow: downloading ? 'none' : '0 4px 14px rgba(196,122,58,.3)',
+              transition: 'all .2s',
+            }}
+          >
+            {downloading ? '⏳ Preparando ZIP...' : '⬇️ Baixar minhas fotos'}
+          </button>
+        </div>
+      )}
+
       {/* Divider */}
-      <div style={{ height: 1, background: 'var(--beige)', margin: '0 16px 20px' }} />
+      <div style={{ height: 1, background: 'var(--beige)', margin: '16px 16px 20px' }} />
 
       {/* Loading skeleton */}
       {loading && (

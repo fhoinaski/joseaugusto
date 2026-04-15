@@ -48,17 +48,21 @@ function urlBase64ToUint8Array(b64: string): Uint8Array<ArrayBuffer> {
 // ── Explore links ─────────────────────────────────────────────────────────────
 
 const EXPLORE_LINKS = [
-  { href: '/bingo',     emoji: '🎯', label: 'Bingo' },
-  { href: '/desafios',  emoji: '📸', label: 'Desafios' },
-  { href: '/musicas',   emoji: '🎵', label: 'Músicas' },
-  { href: '/palpites',  emoji: '🎲', label: 'Palpites' },
-  { href: '/carta',     emoji: '💌', label: 'Carta ao José' },
-  { href: '/mural',     emoji: '🖼️', label: 'Mural' },
-  { href: '/livro',     emoji: '📖', label: 'Livro' },
-  { href: '/diario',    emoji: '🧸', label: 'Diário' },
-  { href: '/mosaico',   emoji: '🎨', label: 'Mosaico' },
-  { href: '/ranking',   emoji: '🏆', label: 'Ranking' },
-  { href: '/timeline',  emoji: '⏱',  label: 'Timeline' },
+  { href: '/bingo',             emoji: '🎯', label: 'Bingo' },
+  { href: '/desafios',          emoji: '📸', label: 'Desafios' },
+  { href: '/musicas',           emoji: '🎵', label: 'Músicas' },
+  { href: '/palpites',          emoji: '🎲', label: 'Palpites' },
+  { href: '/carta',             emoji: '💌', label: 'Carta ao José' },
+  { href: '/mural',             emoji: '🖼️', label: 'Mural' },
+  { href: '/livro',             emoji: '📖', label: 'Livro' },
+  { href: '/diario',            emoji: '🧸', label: 'Diário' },
+  { href: '/mosaico',           emoji: '🎨', label: 'Mosaico' },
+  { href: '/ranking',           emoji: '🏆', label: 'Ranking' },
+  { href: '/timeline',          emoji: '⏱',  label: 'Timeline' },
+  { href: '/convite',           emoji: '📩', label: 'Convite' },
+  { href: '/rsvp',              emoji: '📋', label: 'RSVP' },
+  { href: '/marcos',            emoji: '👣', label: 'Marcos' },
+  { href: '/video-mensagens',   emoji: '🎬', label: 'Vídeos' },
 ]
 
 const EXPLORE_PATHS = EXPLORE_LINKS.map(l => l.href)
