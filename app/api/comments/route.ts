@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { dbGetComments, dbInsertComment, dbGetMediaAuthor, dbCreateNotification } from '@/lib/db'
+import { dbGetComments, dbInsertComment, dbGetMediaAuthor, dbCreateNotification, dbGetLatestCommentPerMedia } from '@/lib/db'
 import { pingCommentR2 } from '@/lib/r2'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
+    // Batch mode: ?ids=id1,id2,... returns latest comment per media
+    const idsParam = req.nextUrl.searchParams.get('ids')
+    if (idsParam) {
+      const ids = idsParam.split(',').map(decodeURIComponent).filter(Boolean).slice(0, 20)
+      const results = await dbGetLatestCommentPerMedia(ids)
+      return NextResponse.json({ comments: results })
+    }
+
     const mediaId = req.nextUrl.searchParams.get('media_id')
     if (!mediaId) return NextResponse.json({ error: 'media_id obrigatório' }, { status: 400 })
     const comments = await dbGetComments(mediaId)

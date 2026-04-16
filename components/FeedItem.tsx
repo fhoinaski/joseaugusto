@@ -101,8 +101,6 @@ export default function FeedItem({
     }
   }
 
-  useEffect(() => { loadComments() }, [item.id])
-
   const loadTags = async () => {
     try {
       const res = await fetch(`/api/tags?media_id=${encodeURIComponent(item.id)}`)
@@ -113,7 +111,13 @@ export default function FeedItem({
     }
   }
 
-  useEffect(() => { loadTags() }, [item.id])
+  // Only fetch comments + tags when the user opens the panel for the first time
+  useEffect(() => {
+    if (commentsOpen && !commentsLoaded) {
+      loadComments()
+      loadTags()
+    }
+  }, [commentsOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time comment updates when panel is open
   useEffect(() => {
@@ -454,7 +458,6 @@ export default function FeedItem({
             <button
               onClick={() => {
                 setCommentsOpen(v => !v)
-                if (!commentsLoaded) loadComments()
               }}
               style={{
                 border: '1px solid rgba(255,255,255,.5)', borderRadius: 999,

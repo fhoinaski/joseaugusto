@@ -1,4 +1,3 @@
-export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { dbGetAvaliacaoStats, dbGetAvaliacoes, dbInsertAvaliacao } from '@/lib/db'
 
@@ -7,7 +6,9 @@ export async function GET() {
     dbGetAvaliacaoStats(),
     dbGetAvaliacoes(50),
   ])
-  return NextResponse.json({ stats, ratings })
+  return NextResponse.json({ stats, ratings }, {
+    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' }
+  })
 }
 
 export async function POST(req: NextRequest) {

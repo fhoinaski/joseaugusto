@@ -350,15 +350,11 @@ export default function Home() {
     const ids = media.slice(0, 6).map(m => m.id)
     if (ids.length === 0) { setRecentComments([]); return }
     try {
-      const groups = await Promise.all(ids.map(async mediaId => {
-        const res = await fetch(`/api/comments?media_id=${encodeURIComponent(mediaId)}`)
-        const data = await res.json() as { comments?: Array<{ id: number; author: string; text: string; createdAt: string }> }
-        const comments = Array.isArray(data.comments) ? data.comments : []
-        const latest = comments[comments.length - 1]
-        if (!latest) return null
-        return { mediaId, author: latest.author, text: latest.text, createdAt: latest.createdAt }
-      }))
-      const sorted = groups.filter(Boolean).sort((a, b) => +new Date((b as EventComment).createdAt) - +new Date((a as EventComment).createdAt))
+      const idsParam = ids.map(encodeURIComponent).join(',')
+      const res = await fetch(`/api/comments?ids=${idsParam}`)
+      const data = await res.json() as { comments?: Array<{ mediaId: string; author: string; text: string; createdAt: string }> }
+      const sorted = (data.comments ?? [])
+        .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
       setRecentComments(sorted.slice(0, 6) as EventComment[])
     } catch {
       setRecentComments([])
