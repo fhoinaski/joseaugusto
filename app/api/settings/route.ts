@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import { dbGetConfig } from '@/lib/db'
 
-export const dynamic = 'force-dynamic'
-
 export async function GET() {
   try {
     const [geoGate, babyBorn, babyDueDate, babyBornWeight, babyBornHora, babyBornCabelo] = await Promise.all([
@@ -20,6 +18,8 @@ export async function GET() {
       babyBornWeight: babyBornWeight ? parseInt(babyBornWeight, 10) : null,
       babyBornHora: babyBornHora || null,
       babyBornCabelo: babyBornCabelo || null,
+    }, {
+      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' }
     })
   } catch {
     return NextResponse.json({ geoGateEnabled: false, babyBorn: false, babyDueDate: null, babyBornWeight: null, babyBornHora: null, babyBornCabelo: null })

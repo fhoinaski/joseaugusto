@@ -464,6 +464,30 @@ export async function dbGetCommentCount(mediaId: string): Promise<number> {
   return rows[0]?.n ?? 0
 }
 
+/** Returns the latest comment for each of the given media IDs in a single query. */
+export async function dbGetLatestCommentPerMedia(
+  mediaIds: string[],
+): Promise<Array<{ mediaId: string; author: string; text: string; createdAt: string }>> {
+  if (mediaIds.length === 0) return []
+  const placeholders = mediaIds.map(() => '?').join(',')
+  try {
+    const rows = await d1Query<{ media_id: string; author: string; text: string; created_at: string }>(
+      `SELECT c.media_id, c.author, c.text, c.created_at
+         FROM comments c
+        INNER JOIN (
+          SELECT media_id, MAX(id) AS max_id
+            FROM comments
+           WHERE media_id IN (${placeholders})
+           GROUP BY media_id
+        ) latest ON c.media_id = latest.media_id AND c.id = latest.max_id`,
+      mediaIds,
+    )
+    return rows.map(r => ({ mediaId: r.media_id, author: r.author, text: r.text, createdAt: r.created_at }))
+  } catch {
+    return []
+  }
+}
+
 // ── Stories Seen ──────────────────────────────────────────────────────────────
 
 export async function dbGetSeenStoryIds(userId: string): Promise<string[]> {
