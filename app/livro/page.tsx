@@ -126,6 +126,7 @@ export default function LivroPage() {
   }
 
   const charsLeft = 500 - message.length
+  const canSubmit = author.trim().length > 0 && message.trim().length > 0 && !sending
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--warm)', paddingBottom: 100 }}>
@@ -219,12 +220,12 @@ export default function LivroPage() {
 
           <button
             type="submit"
-            disabled={sending}
+            disabled={!canSubmit}
             style={{
               width: '100%', padding: '13px 20px',
-              background: sending ? 'var(--beige)' : 'var(--bd)',
-              color: sending ? 'var(--text-lo)' : '#f5dab6',
-              border: 'none', borderRadius: 14, cursor: sending ? 'not-allowed' : 'pointer',
+              background: !canSubmit ? 'var(--beige)' : 'var(--bd)',
+              color: !canSubmit ? 'var(--text-lo)' : '#f5dab6',
+              border: 'none', borderRadius: 14, cursor: !canSubmit ? 'not-allowed' : 'pointer',
               fontFamily: "'Playfair Display',serif", fontSize: '1rem', fontWeight: 600,
               letterSpacing: '.03em', transition: 'background .2s',
             }}
@@ -244,6 +245,12 @@ export default function LivroPage() {
             <p style={{ fontSize: '.9rem', color: 'var(--text-md)', fontStyle: 'italic' }}>
               Não foi possível carregar as mensagens. Verifique sua conexão.
             </p>
+            <button
+              onClick={loadMessages}
+              style={{ marginTop: 12, border: '1px solid rgba(122,78,40,.28)', borderRadius: 999, background: '#fff', color: 'var(--bd)', padding: '8px 16px', fontWeight: 700, cursor: 'pointer' }}
+            >
+              Tentar novamente
+            </button>
           </div>
         )}
 

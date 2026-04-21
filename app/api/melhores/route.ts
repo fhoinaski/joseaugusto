@@ -35,6 +35,11 @@ async function d1Query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
   return json.result[0]?.results ?? []
 }
 
+function isMissingCaptionColumnError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /no such column:\s*(m\.)?caption/i.test(message) || /has no column named\s+caption/i.test(message)
+}
+
 // ── Row types ──────────────────────────────────────────────────────────────────
 
 interface TopRow {
@@ -42,6 +47,32 @@ interface TopRow {
   author: string
   caption: string | null
   total_reactions: number
+}
+
+type LegacyTopRow = Omit<TopRow, 'caption'>
+let mediaCaptionColumnSupported: boolean | null = null
+
+async function queryRowsWithCaptionFallback(
+  captionSql: string,
+  legacySql: string,
+  params: unknown[] = [],
+): Promise<TopRow[]> {
+  if (mediaCaptionColumnSupported === false) {
+    const legacyRows = await d1Query<LegacyTopRow>(legacySql, params)
+    return legacyRows.map(row => ({ ...row, caption: '' }))
+  }
+
+  try {
+    const rows = await d1Query<TopRow>(captionSql, params)
+    mediaCaptionColumnSupported = true
+    return rows
+  } catch (err) {
+    if (!isMissingCaptionColumnError(err)) throw err
+
+    mediaCaptionColumnSupported = false
+    const legacyRows = await d1Query<LegacyTopRow>(legacySql, params)
+    return legacyRows.map(row => ({ ...row, caption: '' }))
+  }
 }
 
 // ── GET /api/melhores ─────────────────────────────────────────────────────────
@@ -55,12 +86,19 @@ export async function GET(req: NextRequest) {
 
     if (mode === 'top') {
       // Top 20 photos by total reaction count
-      rows = await d1Query<TopRow>(
+      rows = await queryRowsWithCaptionFallback(
         `SELECT m.id, m.author, m.caption, COALESCE(SUM(r.count), 0) AS total_reactions
            FROM media m
            LEFT JOIN reactions r ON r.media_id = m.id
           WHERE m.status = 'approved' AND m.type = 'image'
           GROUP BY m.id, m.author, m.caption
+          ORDER BY total_reactions DESC
+          LIMIT 20`,
+        `SELECT m.id, m.author, COALESCE(SUM(r.count), 0) AS total_reactions
+           FROM media m
+           LEFT JOIN reactions r ON r.media_id = m.id
+          WHERE m.status = 'approved' AND m.type = 'image'
+          GROUP BY m.id, m.author
           ORDER BY total_reactions DESC
           LIMIT 20`,
       )
@@ -73,12 +111,18 @@ export async function GET(req: NextRequest) {
 
       if (ids.length > 0) {
         const placeholders = ids.map(() => '?').join(',')
-        rows = await d1Query<TopRow>(
+        rows = await queryRowsWithCaptionFallback(
           `SELECT m.id, m.author, m.caption, COALESCE(SUM(r.count), 0) AS total_reactions
              FROM media m
              LEFT JOIN reactions r ON r.media_id = m.id
             WHERE m.id IN (${placeholders}) AND m.status = 'approved'
             GROUP BY m.id, m.author, m.caption
+            ORDER BY m.created_at DESC`,
+          `SELECT m.id, m.author, COALESCE(SUM(r.count), 0) AS total_reactions
+             FROM media m
+             LEFT JOIN reactions r ON r.media_id = m.id
+            WHERE m.id IN (${placeholders}) AND m.status = 'approved'
+            GROUP BY m.id, m.author
             ORDER BY m.created_at DESC`,
           ids,
         )

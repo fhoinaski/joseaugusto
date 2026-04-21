@@ -14,6 +14,8 @@ interface VideoMensagem {
   created_at: string
 }
 
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024
+
 function formatDate(iso: string): string {
   try {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -35,7 +37,8 @@ export default function VideoMensagensPage() {
   const [progress, setProgress]     = useState(0)
   const [sent, setSent]             = useState(false)
   const [error, setError]           = useState('')
-  const fileInputRef                = useRef<HTMLInputElement>(null)
+  const recordInputRef              = useRef<HTMLInputElement>(null)
+  const uploadInputRef              = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try { setAuthor(localStorage.getItem('cha_author') ?? '') } catch {}
@@ -55,12 +58,27 @@ export default function VideoMensagensPage() {
 
   useEffect(() => { loadItems() }, [])
 
+  const handleVideoSelected = (selected: File | null, input?: HTMLInputElement | null) => {
+    if (selected && selected.size > MAX_VIDEO_SIZE) {
+      setFile(null)
+      setError('O video precisa ter no maximo 100 MB.')
+      if (input) input.value = ''
+      return
+    }
+    setError('')
+    setFile(selected)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     if (!author.trim()) { setError('Informe seu nome.'); return }
     if (!file)          { setError('Selecione um arquivo de vídeo.'); return }
+    if (file.size > MAX_VIDEO_SIZE) {
+      setError('O vídeo precisa ter no máximo 100 MB.')
+      return
+    }
 
     setSending(true)
     setProgress(10)
@@ -343,8 +361,47 @@ export default function VideoMensagensPage() {
                   <span style={{ fontSize: '.8rem', color: 'rgba(62,36,8,.6)', letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 6 }}>
                     Arquivo de vídeo * (máx 100 MB)
                   </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => recordInputRef.current?.click()}
+                      style={{
+                        border: 'none',
+                        borderRadius: 12,
+                        padding: '13px 10px',
+                        background: 'linear-gradient(135deg,#c47a3a,#7a4e28)',
+                        color: '#fff',
+                        fontFamily: "'Cormorant Garamond',serif",
+                        fontSize: '.95rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Gravar agora
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => uploadInputRef.current?.click()}
+                      style={{
+                        border: '1.5px solid #c9a87c',
+                        borderRadius: 12,
+                        padding: '13px 10px',
+                        background: '#fffaf3',
+                        color: '#3e2408',
+                        fontFamily: "'Cormorant Garamond',serif",
+                        fontSize: '.95rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Escolher video
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '.78rem', color: 'rgba(62,36,8,.55)', lineHeight: 1.4, margin: '0 0 10px', textAlign: 'center' }}>
+                    No celular, "Gravar agora" abre a camera quando o navegador permitir.
+                  </p>
                   <div
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => uploadInputRef.current?.click()}
                     style={{
                       border: '2px dashed #c9a87c', borderRadius: 12,
                       padding: '20px', textAlign: 'center', cursor: 'pointer',
@@ -362,11 +419,29 @@ export default function VideoMensagensPage() {
                     )}
                   </div>
                   <input
-                    ref={fileInputRef}
+                    ref={recordInputRef}
+                    type="file"
+                    accept="video/*"
+                    capture="user"
+                    style={{ display: 'none' }}
+                    onChange={e => handleVideoSelected(e.target.files?.[0] ?? null, e.currentTarget)}
+                  />
+                  <input
+                    ref={uploadInputRef}
                     type="file"
                     accept="video/*"
                     style={{ display: 'none' }}
-                    onChange={e => setFile(e.target.files?.[0] ?? null)}
+                    onChange={e => {
+                      const selected = e.target.files?.[0] ?? null
+                      if (selected && selected.size > MAX_VIDEO_SIZE) {
+                        setFile(null)
+                        setError('O vídeo precisa ter no máximo 100 MB.')
+                        e.target.value = ''
+                        return
+                      }
+                      setError('')
+                      setFile(selected)
+                    }}
                   />
                 </label>
 

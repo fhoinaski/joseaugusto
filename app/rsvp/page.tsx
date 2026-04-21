@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type RsvpStatus = 'confirmed' | 'maybe' | 'declined'
 
@@ -42,6 +42,13 @@ export default function RsvpPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('cha_author') ?? ''
+      if (saved.trim()) setName(saved.trim())
+    } catch {}
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -62,6 +69,7 @@ export default function RsvpPage() {
       })
       const data = await res.json() as { error?: string }
       if (!res.ok) { setError(data.error ?? 'Erro ao confirmar presença.'); return }
+      try { localStorage.setItem('cha_author', name.trim()) } catch {}
       setSuccess(true)
     } catch {
       setError('Sem conexão. Tente novamente.')

@@ -196,7 +196,19 @@ function FeedPageInner() {
   if (media.length === 0) {
     return (
       <div style={{ minHeight: '100dvh', background: '#0f0d0b', color: '#e8d9c4', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24, fontFamily: "'Cormorant Garamond', serif" }}>
-        <div><p style={{ fontSize: 54, margin: 0 }}>📷</p><p>Nenhum conteúdo no feed ainda.</p></div>
+        <div style={{ maxWidth: 360 }}>
+          <p style={{ fontSize: 54, margin: 0 }}>📷</p>
+          <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.35rem', margin: '10px 0 8px', color: '#f5dab6' }}>O feed ainda está vazio</h1>
+          <p style={{ margin: '0 0 18px', color: 'rgba(245,218,182,.68)', lineHeight: 1.5 }}>
+            Seja a primeira pessoa a enviar uma foto do chá.
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            style={{ border: 'none', borderRadius: 999, background: 'linear-gradient(135deg,#d59056,#7a4e28)', color: '#fff', padding: '12px 22px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem' }}
+          >
+            Ir para enviar foto
+          </button>
+        </div>
       </div>
     )
   }

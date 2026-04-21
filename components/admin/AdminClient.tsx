@@ -1809,7 +1809,11 @@ function AdminPanel() {
 
 export default function AdminClient() {
   const [auth, setAuth] = useState<boolean | null>(null)
-  useEffect(() => { fetch('/api/admin/approve').then(r => setAuth(r.ok)) }, [])
+  useEffect(() => {
+    fetch('/api/admin/approve')
+      .then(r => setAuth(r.ok))
+      .catch(() => setAuth(false))
+  }, [])
   if (auth === null) return (
     <div style={{ minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm)' }}>
       <span style={{ fontFamily: 'serif', color: 'var(--bl)', fontStyle: 'italic' }}>Carregando…</span>

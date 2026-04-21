@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function MemoriasOptIn() {
   const [author, setAuthor]     = useState('')
@@ -9,12 +9,23 @@ export default function MemoriasOptIn() {
   const [success, setSuccess]   = useState(false)
   const [error, setError]       = useState('')
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('cha_author') ?? ''
+      if (saved.trim()) setAuthor(saved.trim())
+    } catch {}
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     if (!author.trim()) { setError('Informe seu nome.'); return }
     if (!email.trim())  { setError('Informe seu e-mail.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Informe um e-mail válido.')
+      return
+    }
 
     setSending(true)
     try {
@@ -28,6 +39,7 @@ export default function MemoriasOptIn() {
         setError(data.error ?? 'Erro ao inscrever.')
         return
       }
+      try { localStorage.setItem('cha_author', author.trim()) } catch {}
       setSuccess(true)
     } catch {
       setError('Sem conexão. Tente novamente.')

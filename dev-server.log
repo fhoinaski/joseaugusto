@@ -8,8 +8,15 @@
   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 2.2s
+ ✓ Ready in 1845ms
  ○ Compiling / ...
- ✓ Compiled / in 5.3s (1360 modules)
- GET / 200 in 5624ms
- ✓ Compiled in 423ms (672 modules)
+ ✓ Compiled / in 5.8s (1360 modules)
+ GET / 200 in 6157ms
+ ✓ Compiled /api/melhores in 461ms (58 modules)
+ GET /api/melhores?mode=top 200 in 1235ms
+ ✓ Compiled in 33ms
+ ○ Compiling /melhores ...
+ ✓ Compiled /melhores in 695ms (58 modules)
+ ✓ Compiled in 815ms (674 modules)
+ GET /melhores 200 in 1704ms
+ GET /api/melhores?mode=top 200 in 2207ms

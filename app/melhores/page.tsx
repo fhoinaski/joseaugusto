@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { emitToast } from '@/lib/ui-feedback'
 
@@ -23,6 +23,8 @@ export default function MelhoresPage() {
   const [loadingTop, setLoadingTop] = useState(false)
   const [loadingFav, setLoadingFav] = useState(false)
   const [downloadingZip, setDownloadingZip] = useState(false)
+  const [topError, setTopError] = useState('')
+  const [favError, setFavError] = useState('')
 
   // Load favorites IDs from localStorage
   useEffect(() => {
@@ -34,33 +36,55 @@ export default function MelhoresPage() {
     }
   }, [])
 
-  // Fetch top photos
-  useEffect(() => {
+  const loadTopPhotos = useCallback(() => {
     setLoadingTop(true)
+    setTopError('')
     fetch('/api/melhores?mode=top')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('top_failed')
+        return r.json()
+      })
       .then(data => {
         const d = data as { photos?: Photo[] }
         setTopPhotos(Array.isArray(d.photos) ? d.photos : [])
       })
-      .catch(() => {})
+      .catch(() => {
+        setTopPhotos([])
+        setTopError('Nao foi possivel carregar as melhores fotos agora.')
+      })
       .finally(() => setLoadingTop(false))
+  }, [])
+
+  // Fetch top photos
+  useEffect(() => {
+    loadTopPhotos()
+  }, [loadTopPhotos])
+
+  const loadFavoritePhotos = useCallback((ids: string[]) => {
+    if (ids.length === 0) { setFavPhotos([]); setFavError(''); return }
+    setLoadingFav(true)
+    setFavError('')
+    fetch(`/api/melhores?ids=${encodeURIComponent(ids.join(','))}`)
+      .then(r => {
+        if (!r.ok) throw new Error('favorites_failed')
+        return r.json()
+      })
+      .then(data => {
+        const d = data as { photos?: Photo[] }
+        setFavPhotos(Array.isArray(d.photos) ? d.photos : [])
+      })
+      .catch(() => {
+        setFavPhotos([])
+        setFavError('Nao foi possivel carregar suas favoritas agora.')
+      })
+      .finally(() => setLoadingFav(false))
   }, [])
 
   // Fetch favorite photos when tab switches to favorites or favIds change
   useEffect(() => {
     if (tab !== 'favorites') return
-    if (favIds.length === 0) { setFavPhotos([]); return }
-    setLoadingFav(true)
-    fetch(`/api/melhores?ids=${encodeURIComponent(favIds.join(','))}`)
-      .then(r => r.json())
-      .then(data => {
-        const d = data as { photos?: Photo[] }
-        setFavPhotos(Array.isArray(d.photos) ? d.photos : [])
-      })
-      .catch(() => {})
-      .finally(() => setLoadingFav(false))
-  }, [tab, favIds])
+    loadFavoritePhotos(favIds)
+  }, [tab, favIds, loadFavoritePhotos])
 
   const downloadFavoritesZip = async () => {
     if (favIds.length === 0) { emitToast('Nenhum favorito para baixar.'); return }
@@ -88,6 +112,11 @@ export default function MelhoresPage() {
 
   const activePhotos = tab === 'top' ? topPhotos : favPhotos
   const loading = tab === 'top' ? loadingTop : loadingFav
+  const activeError = tab === 'top' ? topError : favError
+  const retryActive = () => {
+    if (tab === 'top') loadTopPhotos()
+    else loadFavoritePhotos(favIds)
+  }
 
   // ── Styles ──────────────────────────────────────────────────────────────────
 
@@ -215,8 +244,44 @@ export default function MelhoresPage() {
         </div>
       )}
 
+      {/* Error */}
+      {!loading && activeError && (
+        <div style={{
+          margin: '28px 20px 0',
+          padding: '22px 18px',
+          textAlign: 'center',
+          background: '#fff',
+          border: `1.5px solid ${BORDER}`,
+          borderRadius: 14,
+          boxShadow: '0 8px 24px rgba(62,36,8,.08)',
+        }}>
+          <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.05rem', color: DARK, margin: '0 0 8px', fontWeight: 700 }}>
+            Fotos indisponiveis
+          </p>
+          <p style={{ fontSize: '.86rem', lineHeight: 1.45, color: 'rgba(62,36,8,.58)', margin: '0 0 16px' }}>
+            {activeError}
+          </p>
+          <button
+            onClick={retryActive}
+            style={{
+              padding: '10px 18px',
+              borderRadius: 999,
+              border: 'none',
+              background: ACCENT,
+              color: '#fff',
+              fontFamily: "'Cormorant Garamond',serif",
+              fontWeight: 700,
+              fontSize: '.98rem',
+              cursor: 'pointer',
+            }}
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       {/* Grid */}
-      {!loading && activePhotos.length > 0 && (
+      {!loading && !activeError && activePhotos.length > 0 && (
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(2, 1fr)',
@@ -261,6 +326,7 @@ export default function MelhoresPage() {
                   src={photo.thumbUrl}
                   alt={photo.author}
                   loading="lazy"
+                  decoding="async"
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   onError={e => { (e.currentTarget as HTMLImageElement).src = photo.fullUrl }}
                 />
@@ -292,7 +358,7 @@ export default function MelhoresPage() {
       )}
 
       {/* No results (top tab) */}
-      {!loading && tab === 'top' && topPhotos.length === 0 && (
+      {!loading && !topError && tab === 'top' && topPhotos.length === 0 && (
         <div style={{ padding: '48px 20px', textAlign: 'center' }}>
           <p style={{ fontSize: '.9rem', color: 'rgba(62,36,8,.45)', fontStyle: 'italic' }}>
             Nenhuma foto encontrada.

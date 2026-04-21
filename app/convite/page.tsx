@@ -73,6 +73,13 @@ function RsvpSection() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('cha_author') ?? ''
+      if (saved.trim()) setName(saved.trim())
+    } catch {}
+  }, [])
+
   const inputStyle: React.CSSProperties = {
     width: '100%',
     border: '1px solid #e8d4b8',
@@ -116,6 +123,7 @@ function RsvpSection() {
       })
       const data = await res.json() as { error?: string }
       if (!res.ok) { setError(data.error ?? 'Erro ao confirmar presença.'); return }
+      try { localStorage.setItem('cha_author', name.trim()) } catch {}
       setSuccess(true)
     } catch {
       setError('Sem conexão. Tente novamente.')
