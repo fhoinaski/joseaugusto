@@ -35,6 +35,7 @@ export default function UiFeedbackLayer() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [pendingUploads, setPendingUploads] = useState(0)
+  const [enableAmbientEffects, setEnableAmbientEffects] = useState(false)
 
   // Read pending count on mount and after each upload-related event
   useEffect(() => {
@@ -52,6 +53,17 @@ export default function UiFeedbackLayer() {
       window.removeEventListener('online', refresh)
       window.removeEventListener('offline', refresh)
       window.clearInterval(interval)
+    }
+  }, [])
+
+  useEffect(() => {
+    const enable = () => setEnableAmbientEffects(true)
+    const id = window.requestIdleCallback
+      ? window.requestIdleCallback(enable, { timeout: 3500 })
+      : window.setTimeout(enable, 2500)
+    return () => {
+      if (window.cancelIdleCallback) window.cancelIdleCallback(id as number)
+      else window.clearTimeout(id as number)
     }
   }, [])
 
@@ -134,8 +146,8 @@ export default function UiFeedbackLayer() {
       </div>
 
       <PWAInstallPrompt />
-      <ReactionStorm />
-      <ConfettiCelebration />
+      {enableAmbientEffects && <ReactionStorm />}
+      {enableAmbientEffects && <ConfettiCelebration />}
       <BottomNav />
 
       <div className="toast-container">

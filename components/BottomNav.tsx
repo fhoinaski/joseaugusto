@@ -166,6 +166,7 @@ export default function BottomNav() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unread, setUnread] = useState(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const prefetchedExploreRef = useRef(false)
 
   // Read author from localStorage and listen for upload success
   useEffect(() => {
@@ -229,20 +230,16 @@ export default function BottomNav() {
     setExploreOpen(opening)
     setNotifOpen(false)
     if (opening) closeUpload()
+    if (opening && !prefetchedExploreRef.current) {
+      prefetchedExploreRef.current = true
+      EXPLORE_LINKS.forEach(l => router.prefetch(l.href))
+    }
   }
 
-  // Prefetch main routes for instant tab switching
+  // Prefetch only the primary routes on first paint; secondary pages wait for "Explorar".
   useEffect(() => {
     router.prefetch('/')
     router.prefetch('/feed')
-    // Prefetch explore routes after a short idle delay (don't block first paint)
-    const id = window.requestIdleCallback
-      ? window.requestIdleCallback(() => { EXPLORE_LINKS.forEach(l => router.prefetch(l.href)) })
-      : window.setTimeout(() => { EXPLORE_LINKS.forEach(l => router.prefetch(l.href)) }, 2000)
-    return () => {
-      if (window.cancelIdleCallback) window.cancelIdleCallback(id as number)
-      else window.clearTimeout(id as number)
-    }
   }, [router])
 
   // PWA tracking

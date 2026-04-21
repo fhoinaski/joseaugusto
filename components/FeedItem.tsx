@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { emitToast, vibrateSoft } from '@/lib/ui-feedback'
 import { REACTION_EMOJIS } from '@/lib/config'
@@ -53,7 +53,7 @@ function timeAgo(iso: string): string {
 
 const REACTION_OPTIONS = REACTION_EMOJIS
 
-export default function FeedItem({
+function FeedItem({
   item,
   canWrite,
   onLike,
@@ -648,3 +648,5 @@ export default function FeedItem({
     </article>
   )
 }
+
+export default memo(FeedItem)

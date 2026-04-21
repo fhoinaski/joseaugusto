@@ -209,7 +209,7 @@ export default function UploadModal({
       setQueue(processed)
       setSelectedFilter('none')
       setSelectedFrame('none')
-      setTimeout(() => setStep('filter'), 120)
+      setTimeout(() => setStep(processed.length > 1 ? 'queue' : 'filter'), 120)
     } catch {
       clearInterval(pct)
       setRawPreview('')
@@ -715,7 +715,7 @@ export default function UploadModal({
                   {selectedFrame === 'cha' && (
                     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(15,6,0,.85))', borderRadius: '0 0 8px 8px', padding: '20px 12px 10px', textAlign: 'center' }}>
                       <p style={{ color: '#f5dab6', fontFamily: 'serif', fontSize: '.75rem', marginBottom: 2 }}>Chá · José Augusto</p>
-                      <p style={{ color: 'rgba(245,218,182,.6)', fontFamily: 'serif', fontSize: '.65rem' }}>25 de Abril · 2025</p>
+                      <p style={{ color: 'rgba(245,218,182,.6)', fontFamily: 'serif', fontSize: '.65rem' }}>25 de Abril · 2026</p>
                     </div>
                   )}
                 </div>

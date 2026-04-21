@@ -13,7 +13,7 @@ export default function GlobalError({
         <p style={{ fontSize: 42, margin: 0 }}>⚠️</p>
         <h1 style={{ margin: '10px 0 8px', fontFamily: "'Playfair Display', serif" }}>Algo deu errado</h1>
         <p style={{ margin: '0 0 16px', opacity: 0.85 }}>
-          Ocorreu uma falha inesperada. Tente recarregar este trecho da aplicacao.
+          Ocorreu uma falha inesperada. Tente recarregar este trecho da aplicação.
         </p>
         <button
           onClick={reset}

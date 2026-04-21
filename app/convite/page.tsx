@@ -426,9 +426,11 @@ export default function ConvitePage() {
           <div>
             <span style={{ fontSize: '.72rem', textTransform: 'uppercase' as const, letterSpacing: '.1em', color: '#a0713e', fontWeight: 600, display: 'block' }}>Local</span>
             <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: '#3e2408', display: 'block', fontStyle: 'italic' }}>
-              Endereço a ser confirmado
+              Salão Alto dos Ingleses
+              <br />
+              Rod. João Gualberto, 1836 · Florianópolis
             </span>
-            <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer"
+            <a href="https://www.google.com/maps/search/?api=1&query=Rod.%20Jo%C3%A3o%20Gualberto%2C%201836%20Florian%C3%B3polis" target="_blank" rel="noopener noreferrer"
               style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '.88rem', color: '#c47a3a', textDecoration: 'none', fontWeight: 700 }}>
               Ver no Maps →
             </a>

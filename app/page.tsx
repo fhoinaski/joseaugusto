@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { GeoStatus, useGeoAccess } from '@/components/GeoAccessProvider'
@@ -304,6 +304,7 @@ export default function Home() {
   const recentFetchAtRef = useRef(0)
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
+  const recentMediaIds = useMemo(() => media.slice(0, 6).map(m => m.id).join(','), [media])
 
   useEffect(()=>{
     if(typeof window==='undefined')return
@@ -347,7 +348,7 @@ export default function Home() {
   }, [fetchMedia])
 
   const fetchRecentComments = useCallback(async () => {
-    const ids = media.slice(0, 6).map(m => m.id)
+    const ids = recentMediaIds ? recentMediaIds.split(',') : []
     if (ids.length === 0) { setRecentComments([]); return }
     try {
       const idsParam = ids.map(encodeURIComponent).join(',')
@@ -359,7 +360,7 @@ export default function Home() {
     } catch {
       setRecentComments([])
     }
-  }, [media])
+  }, [recentMediaIds])
 
   useEffect(() => {
     fetchRecentComments()
@@ -514,24 +515,10 @@ export default function Home() {
       <HeroSection media={media} />
 
       {/* ── Ações principais ── */}
-      <div style={{ padding: '0 16px 20px', maxWidth: 560, margin: '0 auto', display: 'flex', gap: 10 }}>
+      <div className="home-action-strip">
         <button
           onClick={openUpload}
-          style={{
-            flex: 2,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            padding: '16px 20px',
-            background: 'linear-gradient(135deg, #c47a3a, #7a4e28)',
-            border: 'none',
-            borderRadius: 16,
-            cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(196,122,58,.30)',
-            fontFamily: "'Cormorant Garamond',serif",
-            color: '#fff',
-          }}
+          className="home-primary-action"
         >
           <span style={{ fontSize: '1.6rem', lineHeight: 1 }}>📷</span>
           <div style={{ textAlign: 'left' }}>
@@ -541,21 +528,7 @@ export default function Home() {
         </button>
         <a
           href="#galeria"
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 4,
-            padding: '14px 10px',
-            background: 'var(--cream)',
-            border: '1.5px solid var(--beige)',
-            borderRadius: 16,
-            textDecoration: 'none',
-            color: 'var(--bd)',
-            boxShadow: '0 2px 8px rgba(139,98,66,.08)',
-          }}
+          className="home-secondary-action"
         >
           <span style={{ fontSize: '1.5rem' }}>🖼️</span>
           <span style={{ fontSize: '.78rem', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: 'var(--b)' }}>Álbum ao vivo</span>
@@ -564,7 +537,7 @@ export default function Home() {
 
       {/* Stories bar */}
       {media.length > 0 && (
-        <Stories items={media as StoryMediaItem[]} />
+        <Stories items={media.slice(0, 30) as StoryMediaItem[]} />
       )}
 
       <div className="leaves">🌿 🌸 🌿 🌸 🌿</div>

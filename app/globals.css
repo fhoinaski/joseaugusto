@@ -166,9 +166,9 @@ html, body, * {
 
 /* ── Hero ── */
 .hero {
-  min-height:100svh;
+  min-height:calc(100svh - 112px);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  text-align:center; padding:60px 24px 40px; position:relative; overflow:hidden;
+  text-align:center; padding:54px 24px 34px; position:relative; overflow:hidden;
   background:
     radial-gradient(ellipse 80% 60% at 50% 0%, rgba(196,122,58,.22) 0%, transparent 65%),
     radial-gradient(ellipse 60% 40% at 15% 80%, rgba(107,158,122,.18) 0%, transparent 55%),
@@ -188,6 +188,64 @@ html, body, * {
 .hero-date { font-family:'Playfair Display',serif; font-size:clamp(1rem,3vw,1.35rem); letter-spacing:.22em; text-transform:uppercase; color:var(--b); font-weight:500; }
 .hero-sub  { font-size:1rem; font-weight:400; font-style:italic; color:var(--text-md); margin-top:6px; }
 .hero-cta  { margin-top:48px; display:flex; flex-direction:column; align-items:center; gap:14px; }
+
+.home-action-strip {
+  padding: 0 16px 22px;
+  max-width: 560px;
+  margin: -10px auto 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(112px, .85fr);
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.home-primary-action,
+.home-secondary-action {
+  min-height: 70px;
+  border-radius: 16px;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.home-primary-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px 18px;
+  background: linear-gradient(135deg, #c47a3a, #7a4e28);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(196,122,58,.26);
+  font-family: 'Cormorant Garamond',serif;
+  color: #fff;
+}
+
+.home-secondary-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 10px;
+  background: rgba(255, 250, 244, .92);
+  border: 1.5px solid rgba(201,168,124,.72);
+  text-decoration: none;
+  color: var(--bd);
+  box-shadow: 0 3px 12px rgba(139,98,66,.08);
+}
+
+.home-primary-action:active,
+.home-secondary-action:active {
+  transform: scale(.98);
+}
+
+@media(max-width:380px) {
+  .home-action-strip {
+    grid-template-columns: 1fr;
+  }
+}
 
 .hero-preview-card {
   margin-top: 18px;
@@ -440,7 +498,7 @@ html, body, * {
   outline:2px solid transparent;
 }
 @media(max-width:600px) {
-  .c-card { width:180px; height:240px; margin-left:-90px; margin-top:-120px; }
+  .c-card { width:176px; height:232px; margin-left:-88px; margin-top:-116px; }
 }
 .c-card.active-card {
   box-shadow:0 28px 80px rgba(60,20,0,.45), 0 0 0 2px var(--accent);
@@ -502,6 +560,7 @@ html, body, * {
   background:var(--beige); border:2px solid transparent;
   transition:transform .3s cubic-bezier(.34,1.2,.64,1), border-color .2s;
   animation:fadeUp .45s ease both;
+  contain: content;
 }
 .gallery-card:hover { transform:translateY(-4px) scale(1.02); border-color:var(--sand); }
 .gallery-card img, .gallery-card video { width:100%; aspect-ratio:1; object-fit:cover; display:block; }
@@ -1272,6 +1331,20 @@ footer { text-align:center; padding:56px 24px 72px; }
 
 .page-enter {
   animation: pageEnter .35s cubic-bezier(.25,.46,.45,.94) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+  .balloon,
+  .leaves {
+    display: none !important;
+  }
 }
 
 /* ── Dark utility card ── */

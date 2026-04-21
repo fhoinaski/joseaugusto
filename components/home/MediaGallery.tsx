@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { REACTION_EMOJIS } from '@/lib/config'
 
 interface MediaItem {
@@ -161,6 +160,8 @@ export default function MediaGallery({
   handleReact: (id: string, emoji: string) => void
   sentinelRef: React.RefObject<HTMLDivElement>
 }) {
+  const carouselItems = useMemo(() => media.slice(0, 12), [media])
+
   return (
     <section className="carousel-section reveal" id="galeria">
       <div className="carousel-header">
@@ -183,7 +184,7 @@ export default function MediaGallery({
 
       {!loading && media.length > 0 && !showAll && (
         <>
-          <Carousel3D items={media} onOpenLightbox={setLbIdx}/>
+          <Carousel3D items={carouselItems} onOpenLightbox={setLbIdx}/>
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <button className="view-all-btn" onClick={() => setShowAll(true)}>
               ⊞ Ver todas as {media.length} fotos
@@ -201,12 +202,10 @@ export default function MediaGallery({
           </div>
           <div className="gallery-grid">
             {media.map((item, i) => (
-              <motion.div
+              <div
                 key={item.id}
                 className="gallery-card"
-                initial={{ opacity: 0, scale: 0.92, y: 16 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: Math.min(i, 7) * 0.05, ease: [0.25, 0.46, 0.45, 0.94] }}
+                style={{ animationDelay: `${Math.min(i, 7) * 35}ms` }}
                 onClick={() => setLbIdx(i)}
               >
                 <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden' }}>
@@ -227,7 +226,7 @@ export default function MediaGallery({
                   <Link className="gallery-inline-btn" href="/feed">💬 Comentar</Link>
                 </div>
                 <ReactionBar item={item} onReact={handleReact}/>
-              </motion.div>
+              </div>
             ))}
           </div>
           <div ref={sentinelRef} style={{ height: 40 }}/>

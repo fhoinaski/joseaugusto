@@ -182,18 +182,28 @@ function AdminPanel() {
 
   const fetchPending = useCallback(async () => {
     setLoadingP(true)
-    const res = await fetch('/api/admin/approve?type=pending')
-    const data = await res.json()
-    setPending(data.media ?? [])
-    setLoadingP(false)
+    try {
+      const res = await fetch('/api/admin/approve?type=pending')
+      const data = await res.json()
+      setPending(data.media ?? [])
+    } catch {
+      showToast('Nao foi possivel carregar pendentes.')
+    } finally {
+      setLoadingP(false)
+    }
   }, [])
 
   const fetchApproved = useCallback(async () => {
     setLoadingA(true)
-    const res = await fetch('/api/admin/approve?type=approved')
-    const data = await res.json()
-    setApproved(data.media ?? [])
-    setLoadingA(false)
+    try {
+      const res = await fetch('/api/admin/approve?type=approved')
+      const data = await res.json()
+      setApproved(data.media ?? [])
+    } catch {
+      showToast('Nao foi possivel carregar aprovadas.')
+    } finally {
+      setLoadingA(false)
+    }
   }, [])
 
   const fetchCapsules = useCallback(async () => {
