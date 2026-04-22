@@ -10,7 +10,7 @@ export default function MosaicoPage() {
   const [lbItem, setLbItem] = useState<MediaItem | null>(null)
 
   useEffect(() => {
-    fetch('/api/photos').then(r => r.json()).then((d: { media?: MediaItem[] }) => {
+    fetch('/api/photos?limit=50').then(r => r.json()).then((d: { media?: MediaItem[] }) => {
       setMedia((d.media ?? []).filter(m => m.type === 'image'))
       setLoading(false)
     })
@@ -58,6 +58,7 @@ export default function MosaicoPage() {
               <img
                 src={item.thumbUrl}
                 alt={item.author}
+                onError={e => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }}
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform .3s, opacity .3s' }}
                 loading="lazy"
                 onMouseEnter={e => { (e.currentTarget as HTMLImageElement).style.transform = 'scale(1.06)'; (e.currentTarget as HTMLImageElement).style.opacity = '.85' }}

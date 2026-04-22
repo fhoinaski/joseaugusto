@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { objectUrl } from '@/lib/r2'
+import { imageUrls } from '@/lib/r2'
 
 export const dynamic = 'force-dynamic'
 
@@ -133,8 +133,7 @@ export async function GET(req: NextRequest) {
 
     const photos = rows.map(row => ({
       id: row.id,
-      thumbUrl: objectUrl(row.id),
-      fullUrl: objectUrl(row.id),
+      ...imageUrls(row.id, 'image'),
       author: row.author,
       caption: row.caption ?? '',
       totalReactions: row.total_reactions,

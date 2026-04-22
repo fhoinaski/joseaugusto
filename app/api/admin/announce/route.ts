@@ -1,28 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isAuthenticated } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-guard'
 import { dbSetConfig } from '@/lib/db'
 import { sendPushToAll } from '@/lib/push'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  void req
-  if (!isAuthenticated()) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const blocked = requireAdmin(req)
+  if (blocked) return blocked
+
   try {
     const { message, sendPush = true } = await req.json() as { message?: string; sendPush?: boolean }
-    if (!message?.trim()) {
+    const safeMessage = (message ?? '').trim().slice(0, 240)
+
+    if (!safeMessage) {
       await dbSetConfig('live_announce', '')
       return NextResponse.json({ ok: true, cleared: true })
     }
-    const payload = JSON.stringify({ message: message.trim(), ts: Date.now() })
+
+    const payload = JSON.stringify({ message: safeMessage, ts: Date.now() })
     await dbSetConfig('live_announce', payload)
+
     if (sendPush) {
       try {
-        await sendPushToAll({ title: '📣 Anúncio', body: message.trim(), icon: '/icon-192.png', url: '/' })
-      } catch (e) {
-        console.warn('[announce] push failed:', e)
+        await sendPushToAll({ title: 'Anuncio', body: safeMessage, icon: '/icon-192.png', url: '/' })
+      } catch (err) {
+        console.warn('[announce] push failed:', err)
       }
     }
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[announce]', err)

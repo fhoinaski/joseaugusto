@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-guard'
 import { dbGetConfig, dbSetConfig, dbGetAccessKeys, dbInsertAccessKey, dbDeleteAccessKey } from '@/lib/db'
 import { sendPushToAll } from '@/lib/push'
 
@@ -11,7 +12,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthenticated()) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const blocked = requireAdmin(req)
+  if (blocked) return blocked
   const body = await req.json()
 
   if ('geoGateEnabled' in body) {
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   if (body.action === 'change_password') {
     const pw = body.password?.toString().trim()
-    if (!pw || pw.length < 6) return NextResponse.json({ error: 'Senha deve ter ao menos 6 caracteres' }, { status: 400 })
+    if (!pw || pw.length < 10) return NextResponse.json({ error: 'Senha deve ter ao menos 10 caracteres' }, { status: 400 })
     await dbSetConfig('admin_password', pw)
     return NextResponse.json({ ok: true })
   }

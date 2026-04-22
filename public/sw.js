@@ -1,5 +1,5 @@
 // Service Worker — Chá · José Augusto
-const CACHE     = 'cha-jose-v3'
+const CACHE     = 'cha-jose-v4'
 const STATIC    = ['/', '/manifest.json']
 const SYNC_TAG  = 'upload-sync'
 const IDB_DB    = 'cha-pending'
@@ -35,6 +35,24 @@ self.addEventListener('fetch', e => {
     return
   }
   if (e.request.url.includes('/api/')) return
+
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request, { cache: 'no-store' })
+        .then(res => {
+          if (res.ok && res.type === 'basic') {
+            const clone = res.clone()
+            caches.open(CACHE).then(c => c.put(e.request, clone))
+          }
+          return res
+        })
+        .catch(async () => {
+          const cached = await caches.match(e.request)
+          return cached || caches.match('/') || new Response('Offline', { status: 503 })
+        })
+    )
+    return
+  }
 
   // Google Fonts + R2 media — cache-first
   if (e.request.url.includes('fonts.googleapis') ||

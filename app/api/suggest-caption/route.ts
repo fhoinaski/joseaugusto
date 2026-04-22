@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireRateLimit } from '@/lib/api-helpers'
 
 // Uses Cloudflare AI (LLaVA) to suggest a creative Portuguese caption for a baby shower photo.
 // Fails open: if AI is unavailable, returns null so the UI degrades gracefully.
+const POST_LIMIT = 30
+const POST_WINDOW_MS = 60 * 60 * 1000
+const MAX_IMAGE = 6 * 1024 * 1024
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = requireRateLimit(req, 'suggest-caption', {
+      limit: POST_LIMIT,
+      windowMs: POST_WINDOW_MS,
+      message: 'Muitas sugestoes em pouco tempo. Tente novamente mais tarde.',
+    })
+    if (limited) return limited
+
     const formData = await req.formData()
     const file = formData.get('image') as File | null
     if (!file) return NextResponse.json({ caption: null })
+    if (!file.type.startsWith('image/') || file.size > MAX_IMAGE) return NextResponse.json({ caption: null })
 
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
     const token     = process.env.CLOUDFLARE_API_TOKEN

@@ -4,10 +4,14 @@ import { uploadBuffer, objectUrl, pingRealtimeR2, imageVariantKey, imageThumb400
 import { dbInsertMedia } from '@/lib/db'
 import { isD1AuthError } from '@/lib/db'
 import { sendPushToAll } from '@/lib/push'
+import { getClientIp, rateLimit } from '@/lib/rate-limit'
 
 const MAX_IMAGE = 20 * 1024 * 1024  // 20 MB
 const MAX_VIDEO = 100 * 1024 * 1024 // 100 MB
 const MAX_AUDIO = 30 * 1024 * 1024  //  30 MB
+const MAX_ACTIVE_UPLOADS = 4
+
+let activeUploads = 0
 
 // ── Cloudflare AI image moderation (resnet-50 via REST API) ──────────────────
 // Returns 'rejected' if the top label matches a known suspicious category.
@@ -44,6 +48,17 @@ async function moderateImage(imageBuffer: Buffer): Promise<'approved' | 'rejecte
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const limited = rateLimit(`upload:${ip}`, { limit: 60, windowMs: 60 * 60 * 1000 })
+  if (!limited.allowed) {
+    return NextResponse.json({ error: 'Muitos envios em pouco tempo. Aguarde um instante e tente novamente.' }, { status: 429 })
+  }
+
+  if (activeUploads >= MAX_ACTIVE_UPLOADS) {
+    return NextResponse.json({ error: 'Muitos envios ao mesmo tempo. Tente novamente em alguns segundos.' }, { status: 503 })
+  }
+
+  activeUploads += 1
   try {
     const r2AccessKeyId = (process.env.R2_ACCESS_KEY_ID ?? '').trim()
     const r2Secret      = (process.env.R2_SECRET_ACCESS_KEY ?? '').trim()
@@ -227,5 +242,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'R2 access key inválida. Gere uma nova chave no Cloudflare e atualize o .env.local.' }, { status: 500 })
     }
     return NextResponse.json({ error: 'Erro ao enviar. Tente novamente.' }, { status: 500 })
+  } finally {
+    activeUploads = Math.max(0, activeUploads - 1)
   }
 }

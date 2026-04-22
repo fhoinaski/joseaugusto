@@ -9,6 +9,7 @@ interface MediaItem {
   thumbUrl: string
   fullUrl: string
   imageSources?: {
+    thumb400?: string
     w320?: string
     w640?: string
     w1080?: string
@@ -114,7 +115,7 @@ function Carousel3D({ items, onOpenLightbox }: { items: MediaItem[]; onOpenLight
                     <span style={{ fontSize: '2.5rem' }}>🎙️</span>
                     <audio src={item.fullUrl} controls style={{ width: '90%', maxWidth: 200 }}/>
                   </div>
-                : <img src={item.thumbUrl || item.imageSources?.w640 || item.fullUrl} alt={item.author} loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+                : <img src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl} alt={item.author} loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
               }
               {item.type === 'video' && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -209,7 +210,7 @@ export default function MediaGallery({
                 onClick={() => setLbIdx(i)}
               >
                 <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden' }}>
-                  <img src={item.thumbUrl || item.imageSources?.w640 || item.fullUrl} alt={item.author} loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+                  <img src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl} alt={item.author} loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
                   {item.type === 'video' && (
                     <>
                       <div className="gallery-card-type">▶ Video</div>

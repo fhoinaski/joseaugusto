@@ -3,7 +3,7 @@ import { dbGetMediaPage, dbGetMediaById } from '@/lib/db'
 import { dbGetTopAuthors } from '@/lib/db'
 import { dbGetConfig } from '@/lib/db'
 import { isD1AuthError } from '@/lib/db'
-import { objectUrl } from '@/lib/r2'
+import { imageUrls } from '@/lib/r2'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
       const item = await dbGetMediaById(singleId)
       if (!item) return NextResponse.json({ media: [] })
       return NextResponse.json({
-        media: [{ ...item, thumbUrl: objectUrl(item.id), fullUrl: objectUrl(item.id) }],
+        media: [{ ...item, ...imageUrls(item.id, item.type) }],
       })
     }
 
@@ -26,9 +26,7 @@ export async function GET(req: NextRequest) {
 
     const media = items.map(row => ({
       ...row,
-      // Keep base URL as default to avoid 404 on legacy uploads without generated variants.
-      thumbUrl: objectUrl(row.id),
-      fullUrl: objectUrl(row.id),
+      ...imageUrls(row.id, row.type),
     }))
 
     if (cursor) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAuthenticated } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-guard'
 import { dbGetMedia, dbUpdateStatus, dbDeleteMedia, dbGetConfig, dbSetConfig, dbApproveAllPending } from '@/lib/db'
 import { objectUrl, deleteObject } from '@/lib/r2'
 
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthenticated()) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const blocked = requireAdmin(req)
+  if (blocked) return blocked
 
   const body = await req.json()
 

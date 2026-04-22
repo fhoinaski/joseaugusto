@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getClientIp, rateLimit } from '@/lib/rate-limit'
 
 const MAX_IMAGE = 6 * 1024 * 1024
+const CAPTION_LIMIT = 30
+const CAPTION_WINDOW_MS = 60 * 60 * 1000
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req)
+    const { allowed, resetAt } = rateLimit(`upload-caption:${ip}`, { limit: CAPTION_LIMIT, windowMs: CAPTION_WINDOW_MS })
+    if (!allowed) {
+      const retryAfterSec = Math.ceil((resetAt - Date.now()) / 1000)
+      return NextResponse.json(
+        { error: 'Muitas sugestoes em pouco tempo. Tente novamente mais tarde.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
+      )
+    }
+
     const formData = await req.formData()
     const file = formData.get('media') as File | null
 

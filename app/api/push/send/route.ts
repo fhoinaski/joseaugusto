@@ -1,29 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isAuthenticated } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-guard'
 import { sendPushToAll } from '@/lib/push'
+import { cleanText, jsonError, jsonServerError, readJsonBody } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 
 /** Admin-only: send a manual push notification to all subscribers */
 export async function POST(req: NextRequest) {
-  if (!isAuthenticated()) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const blocked = requireAdmin(req)
+  if (blocked) return blocked
 
   try {
-    const { title, body, url } = await req.json() as { title?: string; body?: string; url?: string }
-    if (!title?.trim() || !body?.trim()) {
-      return NextResponse.json({ error: 'Título e mensagem são obrigatórios' }, { status: 400 })
+    const body = await readJsonBody<Record<string, unknown>>(req)
+    if (!body) return jsonError('Requisicao invalida.', 400)
+
+    const title = cleanText(body.title, 80)
+    const message = cleanText(body.body, 240)
+    const url = cleanText(body.url, 300) || '/'
+
+    if (!title || !message) {
+      return jsonError('Titulo e mensagem sao obrigatorios.', 400)
     }
 
     await sendPushToAll({
-      title: title.trim(),
-      body: body.trim(),
+      title,
+      body: message,
       icon: '/icon-192.png',
-      url: url?.trim() || '/',
+      url,
     })
 
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('[push/send]', err)
-    return NextResponse.json({ error: 'Erro ao enviar notificação' }, { status: 500 })
+    return jsonServerError('[push/send]', err, 'Erro ao enviar notificacao.')
   }
 }

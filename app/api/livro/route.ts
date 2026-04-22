@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dbGetLivroMessages, dbInsertLivroMessage } from '@/lib/db'
-import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import { cleanText, jsonError, jsonServerError, readJsonBody, requireRateLimit } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,25 +15,27 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const ip = getClientIp(req)
-  const { allowed } = rateLimit(`livro-post:${ip}`, { limit: 3, windowMs: 60 * 60 * 1000 })
-  if (!allowed) {
-    return NextResponse.json({ error: 'Muitas mensagens enviadas. Aguarde um momento.' }, { status: 429 })
-  }
+  const limited = requireRateLimit(req, 'livro-post', {
+    limit: 3,
+    windowMs: 60 * 60 * 1000,
+    message: 'Muitas mensagens enviadas. Aguarde um momento.',
+  })
+  if (limited) return limited
 
   try {
-    const body = await req.json()
-    const author  = (body.author  ?? '').toString().trim().slice(0, 60)
-    const message = (body.message ?? '').toString().trim().slice(0, 500)
+    const body = await readJsonBody<Record<string, unknown>>(req)
+    if (!body) return jsonError('Requisicao invalida.', 400)
+
+    const author = cleanText(body.author, 60)
+    const message = cleanText(body.message, 500)
 
     if (!author || !message) {
-      return NextResponse.json({ error: 'Nome e mensagem são obrigatórios.' }, { status: 400 })
+      return jsonError('Nome e mensagem sao obrigatorios.', 400)
     }
 
     const inserted = await dbInsertLivroMessage(author, message)
     return NextResponse.json({ ok: true, message: inserted }, { status: 201 })
   } catch (err) {
-    console.error('[livro POST]', err)
-    return NextResponse.json({ error: 'Erro ao salvar mensagem.' }, { status: 500 })
+    return jsonServerError('[livro POST]', err, 'Erro ao salvar mensagem.')
   }
 }

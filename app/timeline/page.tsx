@@ -8,6 +8,7 @@ interface TimelineEvent {
   title: string
   subtitle?: string
   imageUrl?: string
+  fullUrl?: string
 }
 
 function fmt(d: string): string {
@@ -37,10 +38,10 @@ export default function TimelinePage() {
     all.push({ date: '2026-04-25', type: 'marco', title: '🎀 Chá de Bebê', subtitle: 'Sábado, 25 de Abril · 17h' })
 
     Promise.all([
-      fetch('/api/photos').then(r => r.json()).catch(() => ({ media: [] })),
+      fetch('/api/photos?limit=50').then(r => r.json()).catch(() => ({ media: [] })),
       fetch('/api/diario').then(r => r.json()).catch(() => ({ entries: [] })),
     ]).then(([photosData, diarioData]) => {
-      const photos = (photosData.media ?? []) as Array<{ id: string; author: string; thumbUrl: string; createdAt: string }>
+      const photos = (photosData.media ?? []) as Array<{ id: string; author: string; thumbUrl: string; fullUrl: string; createdAt: string }>
       photos.slice(0, 50).forEach(p => all.push({ date: p.createdAt, type: 'foto', title: `📷 Foto de ${p.author}`, imageUrl: p.thumbUrl }))
 
       const diario = (diarioData.entries ?? []) as Array<{ id: number; title: string; content: string; milestoneDate: string | null; createdAt: string }>
@@ -85,7 +86,7 @@ export default function TimelinePage() {
                       {cfg.icon}
                     </div>
                     <div style={{ flex: 1, background: 'var(--cream)', border: '1px solid var(--beige)', borderRadius: 16, padding: '14px 16px', overflow: 'hidden' }}>
-                      {ev.imageUrl && <img src={ev.imageUrl} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 10, marginBottom: 10, display: 'block' }} />}
+                      {ev.imageUrl && <img src={ev.imageUrl} alt="" onError={e => { if (ev.fullUrl) (e.currentTarget as HTMLImageElement).src = ev.fullUrl }} style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 10, marginBottom: 10, display: 'block' }} />}
                       <p style={{ fontWeight: 700, color: 'var(--bd)', fontSize: '1rem', marginBottom: ev.subtitle ? 4 : 0 }}>{ev.title}</p>
                       {ev.subtitle && <p style={{ fontSize: '.88rem', color: 'var(--bl)', fontStyle: 'italic', lineHeight: 1.5 }}>{ev.subtitle}</p>}
                       <p style={{ fontSize: '.72rem', color: 'var(--bl)', marginTop: 8 }}>{fmt(ev.date)}</p>

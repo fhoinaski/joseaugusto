@@ -41,6 +41,26 @@ export function imageThumb400Key(key: string): string {
   return `${base}_thumb400.webp`
 }
 
+export function imageUrls(key: string, type: 'image' | 'video' | 'audio') {
+  const fullUrl = objectUrl(key)
+  if (type !== 'image') {
+    return { thumbUrl: fullUrl, fullUrl }
+  }
+
+  return {
+    // Keep thumbUrl on the original object for legacy uploads and callers without
+    // an onError fallback. Components that support variants can use imageSources.
+    thumbUrl: fullUrl,
+    fullUrl,
+    imageSources: {
+      thumb400: objectUrl(imageThumb400Key(key)),
+      w320:  objectUrl(imageVariantKey(key, 320)),
+      w640:  objectUrl(imageVariantKey(key, 640)),
+      w1080: objectUrl(imageVariantKey(key, 1080)),
+    },
+  }
+}
+
 // ── File operations ───────────────────────────────────────────────────────────
 
 export async function uploadBuffer(

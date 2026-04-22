@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { dbGetRsvpList, dbCreateRsvp, dbGetRsvpStats } from '@/lib/db'
+import { getClientIp, rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
+const POST_LIMIT = 12
+const POST_WINDOW_MS = 60 * 60 * 1000
 
 export async function GET() {
   try {
@@ -14,6 +17,16 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const ip = getClientIp(req)
+    const { allowed, resetAt } = rateLimit(`rsvp:${ip}`, { limit: POST_LIMIT, windowMs: POST_WINDOW_MS })
+    if (!allowed) {
+      const retryAfterSec = Math.ceil((resetAt - Date.now()) / 1000)
+      return NextResponse.json(
+        { error: 'Muitas confirmacoes em pouco tempo. Tente novamente mais tarde.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
+      )
+    }
+
     const body = await req.json() as {
       name?: unknown; status?: unknown; guests_count?: unknown; message?: unknown; contact?: unknown
     }

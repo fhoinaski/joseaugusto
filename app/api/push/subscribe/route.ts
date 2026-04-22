@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dbSavePushSubscription, dbDeletePushSubscription } from '@/lib/db'
 import { getVapidPublicKey } from '@/lib/push'
+import { cleanText, jsonError, jsonServerError, readJsonBody, requireRateLimit } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
+
+const POST_LIMIT = 30
+const POST_WINDOW_MS = 60 * 60 * 1000
 
 export async function GET() {
   const publicKey = getVapidPublicKey()
@@ -11,27 +15,37 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json() as {
-      action?: 'subscribe' | 'unsubscribe'
-      endpoint?: string
-      keys?: { auth?: string; p256dh?: string }
-    }
+  const limited = requireRateLimit(req, 'push-subscribe', {
+    limit: POST_LIMIT,
+    windowMs: POST_WINDOW_MS,
+    message: 'Muitas tentativas de notificacao em pouco tempo.',
+  })
+  if (limited) return limited
 
-    if (body.action === 'unsubscribe' && body.endpoint) {
-      await dbDeletePushSubscription(body.endpoint)
+  try {
+    const body = await readJsonBody<{
+      action?: unknown
+      endpoint?: unknown
+      keys?: { auth?: unknown; p256dh?: unknown }
+    }>(req)
+    if (!body) return jsonError('Requisicao invalida.', 400)
+
+    const endpoint = cleanText(body.endpoint, 2048)
+
+    if (body.action === 'unsubscribe' && endpoint) {
+      await dbDeletePushSubscription(endpoint)
       return NextResponse.json({ ok: true })
     }
 
-    const { endpoint, keys } = body
-    if (!endpoint || !keys?.auth || !keys?.p256dh) {
-      return NextResponse.json({ error: 'Dados de subscription inválidos' }, { status: 400 })
+    const auth = cleanText(body.keys?.auth, 512)
+    const p256dh = cleanText(body.keys?.p256dh, 512)
+    if (!endpoint || !auth || !p256dh) {
+      return jsonError('Dados de subscription invalidos.', 400)
     }
 
-    await dbSavePushSubscription(endpoint, keys.auth, keys.p256dh)
+    await dbSavePushSubscription(endpoint, auth, p256dh)
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('[push/subscribe]', err)
-    return NextResponse.json({ error: 'Erro ao salvar subscription' }, { status: 500 })
+    return jsonServerError('[push/subscribe]', err, 'Erro ao salvar subscription.')
   }
 }

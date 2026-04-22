@@ -58,10 +58,11 @@ export default function TVClient() {
 
   const fetchPhotos = useCallback(async () => {
     try {
-      const res = await fetch('/api/photos')
+      const res = await fetch('/api/photos?limit=20')
       const data = await res.json() as { media?: MediaItem[]; topAuthors?: TopAuthor[] }
       if (data.media?.length) {
-        setPhotos(prev => prev.length !== data.media!.length ? data.media! : prev)
+        const nextIds = data.media.map(item => item.id).join(',')
+        setPhotos(prev => prev.map(item => item.id).join(',') !== nextIds ? data.media! : prev)
         setMosaicPhotos(prev => prev.length === 0 ? data.media!.slice(0, MAX_MOSAIC) : prev)
       }
       if (data.topAuthors?.length) setTopAuthors(data.topAuthors)
@@ -70,8 +71,6 @@ export default function TVClient() {
 
   useEffect(() => {
     fetchPhotos()
-    const t = setInterval(fetchPhotos, 10_000)
-    return () => clearInterval(t)
   }, [fetchPhotos])
 
   const addLiveReaction = useCallback((emoji: string) => {
@@ -89,7 +88,17 @@ export default function TVClient() {
 
   // SSE
   useEffect(() => {
-    if (typeof EventSource === 'undefined') return
+    let fallback: ReturnType<typeof setInterval> | null = null
+    const startFallback = () => {
+      if (fallback) return
+      fallback = setInterval(fetchPhotos, 30_000)
+    }
+
+    if (typeof EventSource === 'undefined') {
+      startFallback()
+      return () => { if (fallback) clearInterval(fallback) }
+    }
+
     const es = new EventSource('/api/stream')
 
     es.addEventListener('reaction-update', (e: Event) => {
@@ -126,7 +135,12 @@ export default function TVClient() {
       } catch {}
     }
 
-    return () => es.close()
+    es.onerror = () => startFallback()
+
+    return () => {
+      es.close()
+      if (fallback) clearInterval(fallback)
+    }
   }, [addLiveReaction, fetchPhotos, triggerAnnounce])
 
   useEffect(() => {
@@ -277,7 +291,12 @@ export default function TVClient() {
                         {photo.type === 'video' ? (
                           <video src={photo.thumbUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} muted playsInline loop autoPlay />
                         ) : (
-                          <img src={photo.thumbUrl} alt={photo.author} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          <img
+                            src={photo.thumbUrl}
+                            alt={photo.author}
+                            onError={e => { (e.currentTarget as HTMLImageElement).src = photo.fullUrl }}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          />
                         )}
                         {/* Author strip */}
                         <div style={{

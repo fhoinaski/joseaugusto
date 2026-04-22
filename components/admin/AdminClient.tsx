@@ -1,50 +1,26 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { AdminLoginForm } from '@/components/admin/AdminLoginForm'
 
 const CartaoAgradecimento = lazy(() => import('@/components/CartaoAgradecimento'))
 
 interface MediaItem   { id: string; thumbUrl: string; fullUrl: string; author: string; type: 'image' | 'video' | 'audio'; createdAt: string }
 interface CapsuleItem { id: string; author: string; message: string; createdAt: string; imageUrl: string }
 
-function LoginForm({ onLogin }: { onLogin: () => void }) {
-  const [pw, setPw] = useState('')
-  const [err, setErr] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const submit = async () => {
-    setLoading(true); setErr('')
-    const res = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) })
-    if (res.ok) onLogin()
-    else { setErr('Senha incorreta'); setLoading(false) }
-  }
-
-  return (
-    <div style={{ minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'var(--warm)' }}>
-      <div style={{ background: 'var(--warm)', border: '1px solid var(--beige)', borderRadius: 24, padding: '48px 36px', maxWidth: 360, width: '100%', textAlign: 'center', boxShadow: '0 8px 48px rgba(139,98,66,.12)' }}>
-        <div style={{ fontSize: '3rem', marginBottom: 8 }}>🐻</div>
-        <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.8rem', color: 'var(--bd)', marginBottom: 6 }}>Área Admin</h1>
-        <p style={{ fontSize: '.95rem', fontStyle: 'italic', color: 'var(--bl)', marginBottom: 32 }}>Chá do José Augusto</p>
-        {err && <p style={{ color: '#c0392b', fontSize: '.9rem', fontStyle: 'italic', marginBottom: 12 }}>{err}</p>}
-        <input style={{ width: '100%', border: '1px solid var(--sand)', borderRadius: 12, padding: '13px 16px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', color: 'var(--bd)', background: 'var(--cream)', outline: 'none', marginBottom: 14 }}
-          type="password" placeholder="Senha" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} autoFocus />
-        <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={submit} disabled={loading}>
-          {loading ? 'Entrando…' : '🔑 Entrar'}
-        </button>
-      </div>
-    </div>
-  )
-}
 
 interface StoreItemAdmin { id: number; name: string; description: string; image_url: string; link: string; price_brl: number | null; claimed_by: string | null; claimed_at: string | null; sort_order: number; created_at: string }
 interface RsvpItem { id: number; name: string; status: string; guests_count: number; contact: string | null; message: string | null; created_at: string }
 interface RsvpStats { total: number; confirmed: number; maybe: number; declined: number; total_guests: number }
 interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
+interface VideoMensagemAdmin { id: number; author: string; video_url: string; thumb_url: string | null; duration_s: number | null; message: string | null; approved: number; created_at: string }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes' | 'anunciar'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'videos' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes' | 'anunciar'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
+  const [videoMensagens, setVideoMensagens] = useState<VideoMensagemAdmin[]>([])
+  const [loadingVideos, setLoadingVideos] = useState(false)
   const [capsuleOpenDate, setCapsuleOpenDate] = useState('18 anos')
   const [editingOpenDate, setEditingOpenDate] = useState('')
   const [msg, setMsg] = useState('')
@@ -216,6 +192,18 @@ function AdminPanel() {
     setLoadingC(false)
   }, [])
 
+  const fetchVideoMensagens = useCallback(async () => {
+    setLoadingVideos(true)
+    try {
+      const data = await fetch('/api/video-mensagens?admin=1').then(r => r.json()) as { items?: VideoMensagemAdmin[] }
+      setVideoMensagens(data.items ?? [])
+    } catch {
+      showToast('Nao foi possivel carregar video-mensagens.')
+    } finally {
+      setLoadingVideos(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchPending(); fetchApproved()
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_message' }) })
@@ -279,7 +267,7 @@ function AdminPanel() {
   }
 
   const changePw = async () => {
-    if (newPw.length < 6) { setPwError('Senha deve ter ao menos 6 caracteres'); return }
+    if (newPw.length < 10) { setPwError('Senha deve ter ao menos 10 caracteres'); return }
     setSavingPw(true); setPwError('')
     const res = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change_password', password: newPw }) })
     if (res.ok) { setNewPw(''); showToast('🔒 Senha atualizada!') }
@@ -304,6 +292,23 @@ function AdminPanel() {
     if (!confirm(`Excluir mensagem de ${author}?`)) return
     await fetch('/api/admin/capsule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id }) })
     setCapsules(prev => prev.filter(c => c.id !== id)); showToast('🗑 Mensagem excluída.')
+  }
+
+  const setVideoApproved = async (id: number, approved: number) => {
+    await fetch('/api/video-mensagens', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, approved }),
+    })
+    setVideoMensagens(prev => prev.map(v => v.id === id ? { ...v, approved } : v))
+    showToast(approved ? 'Video aprovado!' : 'Video ocultado.')
+  }
+
+  const deleteVideoMensagem = async (id: number, author: string) => {
+    if (!confirm(`Excluir video-mensagem de ${author}?`)) return
+    await fetch(`/api/video-mensagens?id=${id}`, { method: 'DELETE' })
+    setVideoMensagens(prev => prev.filter(v => v.id !== id))
+    showToast('Video-mensagem excluida.')
   }
 
   const saveMsg = async () => {
@@ -547,6 +552,7 @@ function AdminPanel() {
 
   useEffect(() => {
     if (tab === 'settings') refreshCdnStats()
+    if (tab === 'videos') fetchVideoMensagens()
     if (tab === 'store') fetchStore()
     if (tab === 'avaliacao') fetchAvaliacao()
     if (tab === 'enquete') fetchEnquete()
@@ -563,7 +569,7 @@ function AdminPanel() {
         setCartaoAuthors(d.topAuthors?.map((a: { author: string }) => a.author) ?? [])
       }).catch(() => {})
     }
-  }, [tab, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias])
+  }, [tab, fetchVideoMensagens, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias])
 
   useEffect(() => {
     if (tab !== 'settings') return
@@ -662,6 +668,7 @@ function AdminPanel() {
           { key: 'approved', label: 'Aprovadas', count: 0 },
           { key: 'message', label: 'Mensagem', count: 0 },
           { key: 'capsule', label: '💌 Cápsula', count: 0 },
+          { key: 'videos', label: 'Videos', count: videoMensagens.filter(v => !v.approved).length },
           { key: 'store', label: '🎁 Loja', count: 0 },
           { key: 'baby', label: '👶 Bebê', count: 0 },
           { key: 'avaliacao', label: '⭐ Avaliações', count: 0 },
@@ -756,6 +763,52 @@ function AdminPanel() {
                       </p>
                       <div style={S.actionRow}>
                         <button style={S.btnDelete} onClick={() => deleteCapsule(c.id, c.author)}>🗑 Excluir</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </div>
+      )}
+
+      {tab === 'videos' && (
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const, marginBottom: 18 }}>
+            <div>
+              <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>Video-mensagens</h2>
+              <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic' }}>Veja, aprove, oculte ou exclua mensagens em video enviadas pelos convidados.</p>
+            </div>
+            <button style={{ ...S.btnApprove, flex: '0 0 auto', padding: '8px 18px' }} onClick={fetchVideoMensagens} disabled={loadingVideos}>
+              Atualizar
+            </button>
+          </div>
+
+          {loadingVideos ? <p style={S.empty}>Carregando videos...</p> : videoMensagens.length === 0
+            ? <p style={S.empty}>Nenhuma video-mensagem enviada ainda.</p>
+            : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
+                {videoMensagens.map(item => (
+                  <div key={item.id} style={{ ...S.photoCard, overflow: 'hidden' }}>
+                    <div style={{ background: '#000' }}>
+                      <video src={item.video_url} controls preload="metadata" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'contain', display: 'block', background: '#000' }} />
+                    </div>
+                    <div style={S.photoInfo}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                        <p style={S.photoAuthor}>{item.author}</p>
+                        <span style={{ fontSize: '.72rem', borderRadius: 99, padding: '2px 8px', background: item.approved ? '#e8f5e0' : '#fff1d6', color: item.approved ? '#3a6d10' : '#8a5a00', flexShrink: 0 }}>
+                          {item.approved ? 'Aprovado' : 'Pendente'}
+                        </span>
+                      </div>
+                      <p style={S.photoDate}>{new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                      {item.message && <p style={{ fontSize: '.84rem', color: 'var(--bd)', fontStyle: 'italic', lineHeight: 1.45, marginBottom: 10 }}>"{item.message}"</p>}
+                      <div style={S.actionRow}>
+                        {item.approved
+                          ? <button style={S.btnApprove} onClick={() => setVideoApproved(item.id, 0)}>Ocultar</button>
+                          : <button style={S.btnApprove} onClick={() => setVideoApproved(item.id, 1)}>Aprovar</button>
+                        }
+                        <button style={S.btnDelete} onClick={() => deleteVideoMensagem(item.id, item.author)}>Excluir</button>
                       </div>
                     </div>
                   </div>
@@ -1293,9 +1346,9 @@ function AdminPanel() {
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🔒 Senha do Painel Admin</h2>
             <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Altere a senha de acesso ao painel. A senha atual é exibida abaixo.</p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
-              <input style={{ flex: 1, minWidth: 160, border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} type={showNewPw ? 'text' : 'password'} placeholder="Nova senha (mín. 6 caracteres)" value={newPw} onChange={e => setNewPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && changePw()} />
+              <input style={{ flex: 1, minWidth: 160, border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} type={showNewPw ? 'text' : 'password'} placeholder="Nova senha (min. 10 caracteres)" value={newPw} onChange={e => setNewPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && changePw()} />
               <button style={{ ...S.btnApprove, minWidth: 40 }} onClick={() => setShowNewPw(p => !p)}>{showNewPw ? '🙈' : '👁'}</button>
-              <button style={S.btnApprove} onClick={changePw} disabled={savingPw || newPw.length < 6}>{savingPw ? 'Salvando…' : '✓ Trocar senha'}</button>
+              <button style={S.btnApprove} onClick={changePw} disabled={savingPw || newPw.length < 10}>{savingPw ? 'Salvando…' : '✓ Trocar senha'}</button>
             </div>
             {pwError && <p style={{ fontSize: '.82rem', color: '#a33', marginTop: 8 }}>{pwError}</p>}
           </div>
@@ -1819,5 +1872,5 @@ export default function AdminClient() {
       <span style={{ fontFamily: 'serif', color: 'var(--bl)', fontStyle: 'italic' }}>Carregando…</span>
     </div>
   )
-  return auth ? <AdminPanel /> : <LoginForm onLogin={() => setAuth(true)} />
+  return auth ? <AdminPanel /> : <AdminLoginForm onLogin={() => setAuth(true)} />
 }

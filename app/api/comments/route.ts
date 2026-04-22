@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dbGetComments, dbInsertComment, dbGetMediaAuthor, dbCreateNotification, dbGetLatestCommentPerMedia } from '@/lib/db'
 import { pingCommentR2 } from '@/lib/r2'
+import { getClientIp, rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
+const POST_LIMIT = 30
+const POST_WINDOW_MS = 10 * 60 * 1000
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,6 +28,16 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req)
+    const { allowed, resetAt } = rateLimit(`comments:${ip}`, { limit: POST_LIMIT, windowMs: POST_WINDOW_MS })
+    if (!allowed) {
+      const retryAfterSec = Math.ceil((resetAt - Date.now()) / 1000)
+      return NextResponse.json(
+        { error: 'Muitos comentarios em pouco tempo. Tente novamente mais tarde.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
+      )
+    }
+
     const { media_id, author, text } = await req.json()
 
     if (!media_id || !text?.trim()) {

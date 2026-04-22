@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { dbGetMarcos, dbCreateMarco, dbDeleteMarco } from '@/lib/db'
+import { isAuthenticated } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    if (!isAuthenticated()) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
     const body = await req.json() as {
       title?: unknown; emoji?: unknown; description?: unknown; marco_date?: unknown; photo_url?: unknown
     }
@@ -35,6 +39,9 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    if (!isAuthenticated()) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
     const body = await req.json() as { id?: unknown }
     const id = Number(body.id)
     if (!id || isNaN(id)) return NextResponse.json({ error: 'ID inválido' }, { status: 400 })

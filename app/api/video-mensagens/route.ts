@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { uploadBuffer, objectUrl } from '@/lib/r2'
+import { isAuthenticated } from '@/lib/auth'
+import { getClientIp, rateLimit } from '@/lib/rate-limit'
 import {
   dbGetVideoMensagens,
   dbCreateVideoMensagem,
@@ -10,11 +12,16 @@ import {
 export const dynamic = 'force-dynamic'
 
 const MAX_VIDEO = 100 * 1024 * 1024 // 100 MB
+const POST_LIMIT = 8
+const POST_WINDOW_MS = 60 * 60 * 1000
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const adminMode = searchParams.get('admin') === '1'
+    if (adminMode && !isAuthenticated()) {
+      return NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 })
+    }
     const items = await dbGetVideoMensagens(!adminMode)
     return NextResponse.json({ items })
   } catch (err) {
@@ -25,6 +32,16 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req)
+    const { allowed, resetAt } = rateLimit(`video-mensagens:${ip}`, { limit: POST_LIMIT, windowMs: POST_WINDOW_MS })
+    if (!allowed) {
+      const retryAfterSec = Math.ceil((resetAt - Date.now()) / 1000)
+      return NextResponse.json(
+        { error: 'Muitos envios em pouco tempo. Tente novamente mais tarde.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
+      )
+    }
+
     const r2AccessKeyId = (process.env.R2_ACCESS_KEY_ID ?? '').trim()
     const r2Secret      = (process.env.R2_SECRET_ACCESS_KEY ?? '').trim()
     const r2Endpoint    = (process.env.R2_ENDPOINT ?? '').trim()
@@ -65,7 +82,8 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer()
     const body        = Buffer.from(arrayBuffer)
     const suffix      = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-    const ext         = file.name.split('.').pop() ?? 'mp4'
+    const rawExt      = file.name.split('.').pop()?.toLowerCase() ?? 'mp4'
+    const ext         = /^[a-z0-9]{2,5}$/.test(rawExt) ? rawExt : 'mp4'
     const key         = `video-mensagens/video_${suffix}.${ext}`
 
     await uploadBuffer(key, body, file.type, { author })
@@ -87,9 +105,12 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    if (!isAuthenticated()) {
+      return NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 })
+    }
     const body = await req.json() as { id?: number; approved?: number }
     const { id, approved } = body
-    if (typeof id !== 'number' || typeof approved !== 'number') {
+    if (typeof id !== 'number' || !Number.isInteger(id) || typeof approved !== 'number' || ![0, 1].includes(approved)) {
       return NextResponse.json({ error: 'Parâmetros inválidos.' }, { status: 400 })
     }
     await dbApproveVideoMensagem(id, approved)
@@ -102,6 +123,9 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    if (!isAuthenticated()) {
+      return NextResponse.json({ error: 'Nao autorizado.' }, { status: 401 })
+    }
     const { searchParams } = new URL(req.url)
     const id = parseInt(searchParams.get('id') ?? '', 10)
     if (!id || isNaN(id)) {

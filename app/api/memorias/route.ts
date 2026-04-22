@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dbGetMemoriasSubscribers, dbCreateMemoriaSubscriber } from '@/lib/db'
+import { cleanText, jsonError, jsonServerError, readJsonBody, requireRateLimit } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
+
+const POST_LIMIT = 8
+const POST_WINDOW_MS = 60 * 60 * 1000
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function GET() {
   try {
@@ -14,24 +19,26 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = requireRateLimit(req, 'memorias-post', {
+    limit: POST_LIMIT,
+    windowMs: POST_WINDOW_MS,
+    message: 'Muitas inscricoes em pouco tempo. Tente novamente mais tarde.',
+  })
+  if (limited) return limited
+
   try {
-    const body = await req.json() as { author?: string; email?: string }
-    const author = (body.author ?? '').toString().trim().slice(0, 60)
-    const email  = (body.email  ?? '').toString().trim().toLowerCase().slice(0, 120)
+    const body = await readJsonBody<Record<string, unknown>>(req)
+    if (!body) return jsonError('Requisicao invalida.', 400)
 
-    if (!author || !email) {
-      return NextResponse.json({ error: 'Nome e e-mail são obrigatórios.' }, { status: 400 })
-    }
+    const author = cleanText(body.author, 60)
+    const email = cleanText(body.email, 120).toLowerCase()
 
-    // Basic email validation
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: 'E-mail inválido.' }, { status: 400 })
-    }
+    if (!author || !email) return jsonError('Nome e e-mail sao obrigatorios.', 400)
+    if (!EMAIL_RE.test(email)) return jsonError('E-mail invalido.', 400)
 
     await dbCreateMemoriaSubscriber({ author, email })
     return NextResponse.json({ ok: true }, { status: 201 })
   } catch (err) {
-    console.error('[memorias POST]', err)
-    return NextResponse.json({ error: 'Erro ao inscrever. Tente novamente.' }, { status: 500 })
+    return jsonServerError('[memorias POST]', err, 'Erro ao inscrever. Tente novamente.')
   }
 }
