@@ -52,6 +52,7 @@ function avatarBg(name: string): string {
 }
 
 export default function LivroPage() {
+  const draftStorageKey = 'cha_livro_draft'
   const [messages, setMessages] = useState<LivroMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [offline, setOffline] = useState(false)
@@ -73,8 +74,16 @@ export default function LivroPage() {
   useEffect(() => {
     try {
       setAuthor(localStorage.getItem('cha_author') ?? '')
+      setMessage(localStorage.getItem(draftStorageKey) ?? '')
     } catch {}
   }, [])
+
+  useEffect(() => {
+    try {
+      if (message.trim()) localStorage.setItem(draftStorageKey, message)
+      else localStorage.removeItem(draftStorageKey)
+    } catch {}
+  }, [draftStorageKey, message])
 
   const loadMessages = async () => {
     setLoading(true)
@@ -115,7 +124,10 @@ export default function LivroPage() {
         setSendError(data.error ?? 'Erro ao enviar mensagem.')
         return
       }
-      try { localStorage.setItem('cha_author', trimmedAuthor) } catch {}
+      try {
+        localStorage.setItem('cha_author', trimmedAuthor)
+        localStorage.removeItem(draftStorageKey)
+      } catch {}
       setMessage('')
       showToast('💌 Mensagem enviada com carinho!')
       await loadMessages()
@@ -229,6 +241,11 @@ export default function LivroPage() {
               {charsLeft} caracteres restantes
             </span>
           </div>
+          {message.trim().length > 0 && (
+            <p style={{ margin: '0 0 14px', fontSize: '.76rem', color: 'var(--text-lo)', fontStyle: 'italic' }}>
+              Seu texto fica salvo neste aparelho ate o envio.
+            </p>
+          )}
 
           {sendError && (
             <p style={{ color: '#c0392b', fontSize: '.88rem', fontStyle: 'italic', marginBottom: 12 }}>

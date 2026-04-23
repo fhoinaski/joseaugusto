@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUpload } from '@/components/UploadProvider'
+import { fetchPushPublicKey, savePushSubscription, deletePushSubscription, urlBase64ToUint8Array } from '@/lib/push-client'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,16 +36,6 @@ function typeLabel(type: string, actor: string): string {
   return `${actor} interagiu com você`
 }
 
-function urlBase64ToUint8Array(b64: string): Uint8Array<ArrayBuffer> {
-  const padding = '='.repeat((4 - (b64.length % 4)) % 4)
-  const base64 = (b64 + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = atob(base64)
-  const buf = new ArrayBuffer(raw.length)
-  const output = new Uint8Array(buf)
-  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i)
-  return output
-}
-
 // ── Explore links ─────────────────────────────────────────────────────────────
 
 const EXPLORE_LINKS = [
@@ -74,15 +65,22 @@ function PushSubscribeInline() {
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) { setStatus('unsupported'); return }
-    fetch('/api/push/subscribe')
-      .then(r => r.json())
-      .then((d: { publicKey?: string }) => {
-        if (!d.publicKey) { setStatus('unsupported'); return }
-        setVapidKey(d.publicKey)
+    fetchPushPublicKey()
+      .then(async key => {
+        if (!key) { setStatus('unsupported'); return }
+        setVapidKey(key)
         if (Notification.permission === 'denied') { setStatus('denied'); return }
-        navigator.serviceWorker.ready
-          .then(reg => reg.pushManager.getSubscription().then(sub => setStatus(sub ? 'subscribed' : 'idle')))
-          .catch(() => setStatus('idle'))
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.getSubscription()
+          if (!sub) {
+            setStatus('idle')
+            return
+          }
+          setStatus(await savePushSubscription(sub) ? 'subscribed' : 'idle')
+        } catch {
+          setStatus('idle')
+        }
       }).catch(() => setStatus('unsupported'))
   }, [])
 
@@ -96,12 +94,7 @@ function PushSubscribeInline() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       })
-      const json = sub.toJSON()
-      await fetch('/api/push/subscribe', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: json.endpoint, keys: { auth: json.keys?.auth, p256dh: json.keys?.p256dh } }),
-      })
-      setStatus('subscribed')
+      setStatus(await savePushSubscription(sub) ? 'subscribed' : 'idle')
     } catch { setStatus('idle') }
   }
 
@@ -111,10 +104,7 @@ function PushSubscribeInline() {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
-        await fetch('/api/push/subscribe', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'unsubscribe', endpoint: sub.endpoint }),
-        })
+        await deletePushSubscription(sub.endpoint)
         await sub.unsubscribe()
       }
       setStatus('idle')

@@ -21,15 +21,17 @@ export async function POST(req: NextRequest) {
     const payload = JSON.stringify({ message: safeMessage, ts: Date.now() })
     await dbSetConfig('live_announce', payload)
 
+    let push = null
+
     if (sendPush) {
       try {
-        await sendPushToAll({ title: 'Anuncio', body: safeMessage, icon: '/icon-192.png', url: '/' })
+        push = await sendPushToAll({ title: 'Anuncio', body: safeMessage, icon: '/icon-192.png', url: '/' })
       } catch (err) {
         console.warn('[announce] push failed:', err)
       }
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, push })
   } catch (err) {
     console.error('[announce]', err)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })

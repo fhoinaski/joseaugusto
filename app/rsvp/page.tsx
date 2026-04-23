@@ -33,6 +33,10 @@ const labelTextStyle: React.CSSProperties = {
 }
 
 export default function RsvpPage() {
+  const contactDraftKey = 'cha_rsvp_contact_draft'
+  const messageDraftKey = 'cha_rsvp_message_draft'
+  const statusDraftKey = 'cha_rsvp_status_draft'
+  const guestsDraftKey = 'cha_rsvp_guests_draft'
   const [name, setName] = useState('')
   const [status, setStatus] = useState<RsvpStatus>('confirmed')
   const [guestsCount, setGuestsCount] = useState(1)
@@ -41,14 +45,46 @@ export default function RsvpPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const canSubmit = name.trim().length > 0 && !sending
   const submitLabel = status === 'confirmed' ? 'Confirmar presença' : status === 'maybe' ? 'Registrar resposta' : 'Avisar que não poderei ir'
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('cha_author') ?? ''
       if (saved.trim()) setName(saved.trim())
+      setContact(localStorage.getItem(contactDraftKey) ?? '')
+      setMessage(localStorage.getItem(messageDraftKey) ?? '')
+      const savedStatus = localStorage.getItem(statusDraftKey)
+      if (savedStatus === 'confirmed' || savedStatus === 'maybe' || savedStatus === 'declined') {
+        setStatus(savedStatus)
+      }
+      const savedGuests = Number(localStorage.getItem(guestsDraftKey) ?? '')
+      if (Number.isFinite(savedGuests) && savedGuests >= 1 && savedGuests <= 10) {
+        setGuestsCount(savedGuests)
+      }
     } catch {}
   }, [])
+
+  useEffect(() => {
+    try {
+      if (contact.trim()) localStorage.setItem(contactDraftKey, contact)
+      else localStorage.removeItem(contactDraftKey)
+    } catch {}
+  }, [contact, contactDraftKey])
+
+  useEffect(() => {
+    try {
+      if (message.trim()) localStorage.setItem(messageDraftKey, message)
+      else localStorage.removeItem(messageDraftKey)
+    } catch {}
+  }, [message, messageDraftKey])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(statusDraftKey, status)
+      localStorage.setItem(guestsDraftKey, String(guestsCount))
+    } catch {}
+  }, [guestsCount, status, guestsDraftKey, statusDraftKey])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -74,7 +110,13 @@ export default function RsvpPage() {
         return
       }
       if (!res.ok) { setError(data.error ?? 'Erro ao confirmar presença.'); return }
-      try { localStorage.setItem('cha_author', name.trim()) } catch {}
+      try {
+        localStorage.setItem('cha_author', name.trim())
+        localStorage.removeItem(contactDraftKey)
+        localStorage.removeItem(messageDraftKey)
+        localStorage.removeItem(statusDraftKey)
+        localStorage.removeItem(guestsDraftKey)
+      } catch {}
       setSuccess(true)
     } catch {
       setError('Sem conexão. Tente novamente.')
@@ -184,8 +226,13 @@ export default function RsvpPage() {
               placeholder="Seu nome completo"
               maxLength={80}
               style={inputStyle}
-            />
-          </label>
+        />
+        {contact.trim().length === 0 && (
+          <span style={{ fontSize: '.72rem', color: 'var(--text-lo)', display: 'block', marginTop: 6 }}>
+            Preencha apenas se quiser receber contato sobre sua resposta.
+          </span>
+        )}
+      </label>
 
           {/* Status toggle */}
           <div style={{ marginBottom: 20 }}>
@@ -259,7 +306,18 @@ export default function RsvpPage() {
 
           {/* Message */}
           <label style={{ ...labelStyle, marginBottom: 20 }}>
-            <span style={labelTextStyle}>Uma mensagem especial (opcional)</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+              <span style={labelTextStyle}>Uma mensagem especial (opcional)</span>
+              {message.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMessage('')}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--text-lo)', fontSize: '.78rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
             <textarea
               value={message}
               onChange={e => setMessage(e.target.value.slice(0, 300))}
@@ -271,6 +329,11 @@ export default function RsvpPage() {
               {300 - message.length} caracteres restantes
             </span>
           </label>
+          {(contact.trim().length > 0 || message.trim().length > 0 || status !== 'confirmed' || guestsCount !== 1) && (
+            <p style={{ margin: '0 0 14px', fontSize: '.76rem', color: 'var(--text-lo)', fontStyle: 'italic' }}>
+              Seus dados ficam salvos neste aparelho ate o envio.
+            </p>
+          )}
 
           {error && (
             <p style={{ color: '#c0392b', fontSize: '.88rem', fontStyle: 'italic', marginBottom: 14 }}>
@@ -280,15 +343,15 @@ export default function RsvpPage() {
 
           <button
             type="submit"
-            disabled={sending}
+            disabled={!canSubmit}
             style={{
               width: '100%',
               padding: '14px 20px',
-              background: sending ? 'var(--beige)' : 'var(--bd)',
-              color: sending ? 'var(--text-lo)' : '#f5dab6',
+              background: canSubmit ? 'var(--bd)' : 'var(--beige)',
+              color: canSubmit ? '#f5dab6' : 'var(--text-lo)',
               border: 'none',
               borderRadius: 14,
-              cursor: sending ? 'not-allowed' : 'pointer',
+              cursor: canSubmit ? 'pointer' : 'not-allowed',
               fontFamily: "'Playfair Display',serif",
               fontSize: '1.05rem',
               fontWeight: 600,

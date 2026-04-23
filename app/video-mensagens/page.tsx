@@ -27,6 +27,8 @@ function formatDate(iso: string): string {
 }
 
 export default function VideoMensagensPage() {
+  const authorDraftKey                = 'cha_video_author_draft'
+  const messageDraftKey               = 'cha_video_message_draft'
   const [items, setItems]           = useState<VideoMensagem[]>([])
   const [loading, setLoading]       = useState(true)
   const [loadError, setLoadError]   = useState('')
@@ -43,8 +45,25 @@ export default function VideoMensagensPage() {
   const canSubmit                   = !!author.trim() && !!file && !sending
 
   useEffect(() => {
-    try { setAuthor(localStorage.getItem('cha_author') ?? '') } catch {}
+    try {
+      setAuthor(localStorage.getItem(authorDraftKey) ?? localStorage.getItem('cha_author') ?? '')
+      setMessage(localStorage.getItem(messageDraftKey) ?? '')
+    } catch {}
   }, [])
+
+  useEffect(() => {
+    try {
+      if (author.trim()) localStorage.setItem(authorDraftKey, author)
+      else localStorage.removeItem(authorDraftKey)
+    } catch {}
+  }, [author, authorDraftKey])
+
+  useEffect(() => {
+    try {
+      if (message.trim()) localStorage.setItem(messageDraftKey, message)
+      else localStorage.removeItem(messageDraftKey)
+    } catch {}
+  }, [message, messageDraftKey])
 
   const loadItems = async () => {
     setLoading(true)
@@ -112,7 +131,11 @@ export default function VideoMensagensPage() {
         return
       }
 
-      try { localStorage.setItem('cha_author', author.trim()) } catch {}
+      try {
+        localStorage.setItem('cha_author', author.trim())
+        localStorage.removeItem(authorDraftKey)
+        localStorage.removeItem(messageDraftKey)
+      } catch {}
       setSent(true)
       setFile(null)
       setMessage('')
@@ -129,7 +152,6 @@ export default function VideoMensagensPage() {
     setError('')
     setProgress(0)
     setFile(null)
-    setMessage('')
     if (recordInputRef.current) recordInputRef.current.value = ''
     if (uploadInputRef.current) uploadInputRef.current.value = ''
   }
@@ -572,6 +594,11 @@ export default function VideoMensagensPage() {
                     }}
                   />
                 </label>
+                {(author.trim().length > 0 || message.trim().length > 0) && (
+                  <p style={{ margin: '-4px 0 0', fontSize: '.76rem', color: 'rgba(62,36,8,.55)', fontStyle: 'italic', textAlign: 'center' }}>
+                    Seu nome e recado ficam salvos neste aparelho ate o envio.
+                  </p>
+                )}
 
                 {error && (
                   <p style={{ color: '#c0392b', fontSize: '.88rem', fontStyle: 'italic' }}>{error}</p>

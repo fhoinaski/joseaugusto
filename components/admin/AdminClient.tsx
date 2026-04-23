@@ -139,7 +139,18 @@ function AdminPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: announceMsg.trim() }),
       })
-      if (res.ok) { setAnnounceSuccess(true); setTimeout(() => setAnnounceSuccess(false), 5000) }
+      const data = await res.json().catch(() => null) as { push?: { configured?: boolean; total?: number; sent?: number }; error?: string } | null
+      if (res.ok) {
+        setAnnounceSuccess(true)
+        setTimeout(() => setAnnounceSuccess(false), 5000)
+        const push = data?.push
+        if (!push) showToast('Aviso ao vivo salvo.')
+        else if (!push.configured) showToast('Aviso ao vivo salvo. Push desativado por falta de configuracao.')
+        else if ((push.total ?? 0) === 0) showToast('Aviso ao vivo salvo. Nenhum aparelho inscrito para push.')
+        else showToast(`Aviso ao vivo salvo. Push: ${push.sent ?? 0}/${push.total ?? 0}.`)
+      } else {
+        showToast(data?.error || 'Erro ao enviar aviso ao vivo.')
+      }
     } finally {
       setSendingAnnounce(false)
     }
@@ -391,6 +402,18 @@ function AdminPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: pushMsg.title.trim(), body: pushMsg.body.trim() }),
       })
+      const data = await res.json().catch(() => null) as { push?: { configured?: boolean; total?: number; sent?: number }; error?: string } | null
+      if (res.ok) {
+        setPushMsg({ title: '', body: '' })
+        const push = data?.push
+        if (!push) showToast('Notificacao enviada.')
+        else if (!push.configured) showToast('Push nao enviado: configuracao ausente.')
+        else if ((push.total ?? 0) === 0) showToast('Push nao enviado: nenhum aparelho inscrito.')
+        else showToast(`Push enviado para ${push.sent ?? 0} de ${push.total ?? 0} aparelho(s).`)
+        return
+      }
+      showToast(data?.error || 'Erro ao enviar notificacao.')
+      return
       if (res.ok) {
         setPushMsg({ title: '', body: '' })
         showToast('🔔 Notificação enviada!')

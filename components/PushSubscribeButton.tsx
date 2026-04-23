@@ -1,18 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { fetchPushPublicKey, savePushSubscription, deletePushSubscription, urlBase64ToUint8Array } from '@/lib/push-client'
 
 type PushStatus = 'idle' | 'unsupported' | 'denied' | 'subscribed' | 'subscribing'
-
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = atob(base64)
-  const buf = new ArrayBuffer(raw.length)
-  const output = new Uint8Array(buf)
-  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i)
-  return output
-}
 
 export default function PushSubscribeButton() {
   const [status, setStatus] = useState<PushStatus>('idle')
@@ -25,11 +16,10 @@ export default function PushSubscribeButton() {
     }
 
     // Fetch VAPID public key
-    fetch('/api/push/subscribe', { method: 'GET' })
-      .then(r => r.json())
-      .then((data: { publicKey?: string }) => {
-        if (data.publicKey) setVapidKey(data.publicKey)
-        else setStatus('unsupported') // VAPID keys not configured
+    fetchPushPublicKey()
+      .then(key => {
+        if (key) setVapidKey(key)
+        else setStatus('unsupported')
       })
       .catch(() => setStatus('unsupported'))
 
@@ -37,10 +27,15 @@ export default function PushSubscribeButton() {
     const perm = Notification.permission
     if (perm === 'denied') { setStatus('denied'); return }
     if (perm === 'granted') {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.pushManager.getSubscription().then(sub => {
-          setStatus(sub ? 'subscribed' : 'idle')
-        }).catch(() => {})
+      navigator.serviceWorker.ready.then(async reg => {
+        try {
+          const sub = await reg.pushManager.getSubscription()
+          if (!sub) {
+            setStatus('idle')
+            return
+          }
+          setStatus(await savePushSubscription(sub) ? 'subscribed' : 'idle')
+        } catch {}
       })
     }
   }, [])
@@ -58,17 +53,7 @@ export default function PushSubscribeButton() {
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
       })
 
-      const json = sub.toJSON()
-      await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: json.endpoint,
-          keys: { auth: json.keys?.auth, p256dh: json.keys?.p256dh },
-        }),
-      })
-
-      setStatus('subscribed')
+      setStatus(await savePushSubscription(sub) ? 'subscribed' : 'idle')
     } catch {
       setStatus('idle')
     }
@@ -79,11 +64,7 @@ export default function PushSubscribeButton() {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
-        await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'unsubscribe', endpoint: sub.endpoint }),
-        })
+        await deletePushSubscription(sub.endpoint)
         await sub.unsubscribe()
       }
       setStatus('idle')

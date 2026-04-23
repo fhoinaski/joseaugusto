@@ -22,14 +22,14 @@ export async function POST(req: NextRequest) {
       return jsonError('Titulo e mensagem sao obrigatorios.', 400)
     }
 
-    await sendPushToAll({
+    const push = await sendPushToAll({
       title,
       body: message,
       icon: '/icon-192.png',
       url,
     })
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, push })
   } catch (err) {
     return jsonServerError('[push/send]', err, 'Erro ao enviar notificacao.')
   }

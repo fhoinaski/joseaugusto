@@ -119,6 +119,13 @@ export default function UploadModal({
   const uploadingRef = useRef(false)
   const uploadAllRef = useRef<() => Promise<void>>(async () => {})
   const allDone = queue.length > 0 && queue.every(q => q.status === 'done' || q.status === 'error')
+  const singleQueueLabel = queue.length === 1
+    ? queue[0]?.type === 'video'
+      ? 'Enviar video'
+      : queue[0]?.type === 'audio'
+        ? 'Enviar audio'
+        : 'Enviar foto'
+    : `Enviar ${queue.length} arquivos`
 
   useEffect(() => {
     if (authorDefault.trim()) {
@@ -468,6 +475,9 @@ export default function UploadModal({
                     {suggestingCaption ? '⏳' : '✨'}
                   </button>
                 </div>
+                <p style={{ margin: '8px 2px 10px', fontSize: '.76rem', color: 'var(--text-lo)', lineHeight: 1.4 }}>
+                  A legenda aparece junto da midia. Para foto, voce pode gerar uma sugestao automatica.
+                </p>
                 {!!mediaError && <p style={{ margin: '0 2px 10px', fontSize: '.82rem', color: '#c0392b', fontStyle: 'italic' }}>{mediaError}</p>}
               </>
             )}
@@ -550,6 +560,9 @@ export default function UploadModal({
 
             {/* Hidden file inputs — positioned off-screen (not display:none) so
                 label-click works on every browser, including restrictive WebViews */}
+            <p style={{ margin: '10px 2px 0', fontSize: '.76rem', color: 'var(--text-lo)', lineHeight: 1.45, textAlign: 'center' }}>
+              Fotos podem ser enviadas em lote. Video e audio entram como um arquivo por vez.
+            </p>
             <input
               id="cha-input-cam"
               ref={camRef}
@@ -807,6 +820,14 @@ export default function UploadModal({
             <p className="modal-label">✦ {allDone ? 'Concluido' : 'Enviando'} ✦</p>
             <h2 className="modal-title" style={{ marginBottom: 16 }}>{allDone ? '🌸 Tudo enviado!' : `${queue.length} arquivo${queue.length > 1 ? 's' : ''}`}</h2>
 
+            <p style={{ margin: '-8px 0 14px', fontSize: '.82rem', color: 'var(--text-lo)', textAlign: 'center', lineHeight: 1.4 }}>
+              {allDone
+                ? 'Revise o resultado abaixo antes de fechar.'
+                : queue.length === 1
+                  ? 'Confira o arquivo selecionado antes de enviar.'
+                  : 'Confira os arquivos selecionados antes de enviar.'}
+            </p>
+
             {!isOnline && (
               <div className="offline-banner">
                 <span className="offline-banner-icon">📶</span>
@@ -841,15 +862,43 @@ export default function UploadModal({
                         {q.note}
                       </p>
                     )}
+                    {!q.note && q.status === 'waiting' && (
+                      <p style={{ fontSize: '.72rem', color: 'var(--text-lo)', lineHeight: 1.35, marginTop: 4 }}>
+                        {q.type === 'image' ? 'Foto pronta para envio.' : q.type === 'video' ? 'Video pronto para envio.' : 'Audio pronto para envio.'}
+                      </p>
+                    )}
                     {q.status === 'error' && !q.isOfflineError && q.file.size > MAX_LS_SIZE && (
                       <p style={{ fontSize: '.7rem', color: 'var(--text-lo)', fontStyle: 'italic' }}>arquivo grande - nao salvo localmente</p>
                     )}
                   </div>
+                  {!uploading && !allDone && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQueue(prev => prev.filter((_, idx) => idx !== i))
+                        setMediaError('')
+                        if (queue.length <= 1) setStep('source')
+                      }}
+                      style={{
+                        alignSelf: 'flex-start',
+                        border: '1px solid rgba(122,78,40,.18)',
+                        background: '#fff',
+                        color: 'var(--text-lo)',
+                        borderRadius: 999,
+                        padding: '6px 10px',
+                        fontSize: '.74rem',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Remover
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
             <div className="queue-actions">
-              {!uploading && !allDone && <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={uploadAll}>📤 Enviar {queue.length > 1 ? `${queue.length} arquivos` : 'agora'}</button>}
+              {!uploading && !allDone && <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={uploadAll}>📤 {singleQueueLabel}</button>}
               {uploading && <p style={{ textAlign: 'center', color: 'var(--text-md)', fontStyle: 'italic', fontSize: '.92rem' }}>Nao feche enquanto envia...</p>}
               {allDone && (
                 <div style={{ display: 'flex', gap: 10 }}>
