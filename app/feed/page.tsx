@@ -204,13 +204,13 @@ function FeedPageInner() {
           <p style={{ fontSize: 54, margin: 0 }}>📷</p>
           <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.35rem', margin: '10px 0 8px', color: '#f5dab6' }}>O feed ainda está vazio</h1>
           <p style={{ margin: '0 0 18px', color: 'rgba(245,218,182,.68)', lineHeight: 1.5 }}>
-            Seja a primeira pessoa a enviar uma foto do chá.
+            Seja a primeira pessoa a enviar uma mídia do chá.
           </p>
           <button
             onClick={() => router.push('/')}
             style={{ border: 'none', borderRadius: 999, background: 'linear-gradient(135deg,#d59056,#7a4e28)', color: '#fff', padding: '12px 22px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem' }}
           >
-            Ir para enviar foto
+            Ir para enviar mídia
           </button>
         </div>
       </div>
@@ -285,10 +285,10 @@ function FeedPageInner() {
               letterSpacing: '.04em',
               whiteSpace: 'nowrap',
             }}
-            aria-label={`Ver ${newCount} nova${newCount !== 1 ? 's' : ''} foto${newCount !== 1 ? 's' : ''}`}
+            aria-label={`Ver ${newCount} nova${newCount !== 1 ? 's' : ''} mídia${newCount !== 1 ? 's' : ''}`}
           >
             <span style={{ fontSize: 15 }}>▲</span>
-            {newCount === 1 ? '1 nova foto' : `${newCount} novas fotos`}
+            {newCount === 1 ? '1 nova mídia' : `${newCount} novas mídias`}
           </motion.button>
         )}
       </AnimatePresence>
@@ -310,7 +310,7 @@ function FeedPageInner() {
         {authorFilter && (
           <div style={{ margin: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ background: 'rgba(212,160,86,.25)', border: '1px solid rgba(212,160,86,.5)', borderRadius: 999, padding: '6px 14px', fontSize: 13, color: '#f5c78f', display: 'flex', alignItems: 'center', gap: 8 }}>
-              📷 Fotos de <strong>{authorFilter}</strong>
+              📷 Mídias de <strong>{authorFilter}</strong>
               <button
                 onClick={() => router.push('/feed')}
                 style={{ background: 'none', border: 'none', color: '#f5c78f', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 2px' }}
@@ -318,7 +318,7 @@ function FeedPageInner() {
               >×</button>
             </span>
             {filteredMedia.length === 0 && !loading && (
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', fontStyle: 'italic' }}>Nenhuma foto encontrada</span>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,.4)', fontStyle: 'italic' }}>Nenhuma mídia encontrada</span>
             )}
           </div>
         )}
@@ -356,8 +356,8 @@ function FeedPageInner() {
           {searchQuery.trim() && (
             <p style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.35)', margin: '6px 4px 0', fontStyle: 'italic' }}>
               {filteredMedia.length === 0
-                ? 'Nenhuma foto encontrada'
-                : `${filteredMedia.length} foto${filteredMedia.length !== 1 ? 's' : ''} encontrada${filteredMedia.length !== 1 ? 's' : ''}`}
+                ? 'Nenhuma mídia encontrada'
+                : `${filteredMedia.length} mídia${filteredMedia.length !== 1 ? 's' : ''} encontrada${filteredMedia.length !== 1 ? 's' : ''}`}
             </p>
           )}
         </div>
@@ -392,7 +392,7 @@ function FeedPageInner() {
         <div ref={sentinelRef} style={{ height: 12 }} />
         {loadingMore && (
           <p style={{ textAlign: 'center', color: 'rgba(255,255,255,.5)', fontSize: 12, padding: '10px 0 14px' }}>
-            Carregando mais fotos...
+            Carregando mais mídias...
           </p>
         )}
       </main>

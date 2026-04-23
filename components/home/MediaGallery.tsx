@@ -19,8 +19,6 @@ interface MediaItem {
   reactions: Record<string, number>
 }
 
-// REACTION_EMOJIS imported from @/lib/config
-
 function ReactionBar({ item, onReact }: { item: MediaItem; onReact: (id: string, emoji: string) => void }) {
   const hasAny = REACTION_EMOJIS.some(e => (item.reactions[e] ?? 0) > 0)
   if (!hasAny) return null
@@ -111,12 +109,21 @@ function Carousel3D({ items, onOpenLightbox }: { items: MediaItem[]; onOpenLight
               }}
             >
               {item.type === 'audio'
-                ? <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#f5ede0,#e8d4b8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 }}>
-                    <span style={{ fontSize: '2.5rem' }}>🎙️</span>
-                    <audio src={item.fullUrl} controls style={{ width: '90%', maxWidth: 200 }}/>
-                  </div>
-                : <img src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl} alt={item.author} loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
-              }
+                ? (
+                    <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#f5ede0,#e8d4b8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 }}>
+                      <span style={{ fontSize: '2.5rem' }}>🎙️</span>
+                      <audio src={item.fullUrl} controls style={{ width: '90%', maxWidth: 200 }} />
+                    </div>
+                  )
+                : (
+                    <img
+                      src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl}
+                      alt={item.author}
+                      loading="lazy"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  )}
               {item.type === 'video' && (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', boxShadow: '0 4px 16px rgba(0,0,0,.3)' }}>▶</div>
@@ -134,7 +141,7 @@ function Carousel3D({ items, onOpenLightbox }: { items: MediaItem[]; onOpenLight
         <button className="c-nav" onClick={() => go(-1)} aria-label="Anterior">‹</button>
         <div className="c-dots">
           {Array.from({ length: maxDots }, (_, i) => dotStart + i).map(i => (
-            <button key={i} className={`c-dot${i === current ? ' active' : ''}`} onClick={() => { setCurrent(i); setAutoplay(false); setTimeout(() => setAutoplay(true), 8000) }}/>
+            <button key={i} className={`c-dot${i === current ? ' active' : ''}`} onClick={() => { setCurrent(i); setAutoplay(false); setTimeout(() => setAutoplay(true), 8000) }} />
           ))}
         </div>
         <button className="c-nav" onClick={() => go(1)} aria-label="Proximo">›</button>
@@ -166,29 +173,29 @@ export default function MediaGallery({
   return (
     <section className="carousel-section reveal" id="galeria">
       <div className="carousel-header">
-        <p className="section-label">✦ Album ao vivo ✦</p>
+        <p className="section-label">Album ao vivo</p>
         <h2 className="section-title">Momentos <em>especiais</em></h2>
       </div>
 
       {loading && (
         <div style={{ padding: '0 16px' }}>
-          <div className="skel-grid">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skel-item"/>)}</div>
+          <div className="skel-grid">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skel-item" />)}</div>
         </div>
       )}
 
       {!loading && media.length === 0 && (
         <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-md)', fontStyle: 'italic' }}>
           <div style={{ fontSize: '3rem', marginBottom: 16 }}>📷</div>
-          <p style={{ fontWeight: 600 }}>As fotos aparecerao aqui assim que forem enviadas.</p>
+          <p style={{ fontWeight: 600 }}>As midias aparecerao aqui assim que forem enviadas.</p>
         </div>
       )}
 
       {!loading && media.length > 0 && !showAll && (
         <>
-          <Carousel3D items={carouselItems} onOpenLightbox={setLbIdx}/>
+          <Carousel3D items={carouselItems} onOpenLightbox={setLbIdx} />
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <button className="view-all-btn" onClick={() => setShowAll(true)}>
-              ⊞ Ver todas as {media.length} fotos
+              Ver todas as {media.length} midias
             </button>
           </div>
         </>
@@ -198,7 +205,7 @@ export default function MediaGallery({
         <div className="grid-section">
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
             <button className="view-all-btn" onClick={() => setShowAll(false)}>
-              ↩ Voltar ao carrossel
+              Voltar ao carrossel
             </button>
           </div>
           <div className="gallery-grid">
@@ -211,12 +218,22 @@ export default function MediaGallery({
               >
                 <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden' }}>
                   {item.type === 'audio'
-                    ? <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#f5ede0,#e8d4b8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 }}>
-                        <span style={{ fontSize: '2.2rem' }}>🎙️</span>
-                        <span style={{ fontSize: '.8rem', fontWeight: 700, color: '#7a4e28', textAlign: 'center' }}>Mensagem de áudio</span>
-                      </div>
-                    : <img src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl} alt={item.author} loading="lazy" decoding="async" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
-                  }
+                    ? (
+                        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#f5ede0,#e8d4b8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 }}>
+                          <span style={{ fontSize: '2.2rem' }}>🎙️</span>
+                          <span style={{ fontSize: '.8rem', fontWeight: 700, color: '#7a4e28', textAlign: 'center' }}>Mensagem de audio</span>
+                        </div>
+                      )
+                    : (
+                        <img
+                          src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl}
+                          alt={item.author}
+                          loading="lazy"
+                          decoding="async"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        />
+                      )}
                   {item.type === 'video' && (
                     <>
                       <div className="gallery-card-type">▶ Video</div>
@@ -232,11 +249,11 @@ export default function MediaGallery({
                   <button className="gallery-inline-btn" onClick={() => handleReact(item.id, '♥')}>👍 Curtir</button>
                   <Link className="gallery-inline-btn" href="/feed">💬 Comentar</Link>
                 </div>
-                <ReactionBar item={item} onReact={handleReact}/>
+                <ReactionBar item={item} onReact={handleReact} />
               </div>
             ))}
           </div>
-          <div ref={sentinelRef} style={{ height: 40 }}/>
+          <div ref={sentinelRef} style={{ height: 40 }} />
         </div>
       )}
     </section>

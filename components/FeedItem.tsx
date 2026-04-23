@@ -254,11 +254,11 @@ function FeedItem({
     const filename = `cha-jose-${item.author.replace(/\s+/g, '-')}.${ext}`
 
     // iOS Safari: a.download on blob URLs is not supported and can't display WebP
-    // blobs — open the CDN URL directly so user can long-press → "Salvar foto"
+    // blobs — open the CDN URL directly so user can use the device UI to save the media
     const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent)
     if (isIOS) {
       window.open(item.fullUrl, '_blank')
-      emitToast('Toque e segure na imagem → "Salvar foto" 📲')
+      emitToast(item.type === 'video' ? 'Abra o video e use o menu do aparelho para salvar 📲' : 'Toque e segure na midia para salvar 📲')
       return
     }
 
@@ -287,8 +287,8 @@ function FeedItem({
 
   const sharePost = async () => {
     const shareData = {
-      title: `Foto de ${item.author} — Chá do José Augusto`,
-      text: item.caption?.trim() || `Confira esta foto de ${item.author} no chá do José Augusto!`,
+      title: `Midia de ${item.author} — Cha do Jose Augusto`,
+      text: item.caption?.trim() || `Confira esta midia de ${item.author} no cha do Jose Augusto!`,
       url: `${window.location.origin}/?foto=${item.id}`,
     }
     try {
@@ -305,10 +305,10 @@ function FeedItem({
 
   const shareWhatsApp = () => {
     // /foto/<slug> is a server-rendered page with OG tags so WhatsApp
-    // shows the photo preview in the chat before the recipient clicks.
+    // shows the media preview in the chat before the recipient clicks.
     const slugPath = item.id.split('/').map(encodeURIComponent).join('/')
     const url  = `${window.location.origin}/foto/${slugPath}`
-    const text = item.caption?.trim() || 'Confira essa foto do Chá do José Augusto! 🧸'
+    const text = item.caption?.trim() || 'Confira essa midia do Cha do Jose Augusto! 🧸'
     const waUrl = `https://wa.me/?text=${encodeURIComponent(text + '\n' + url)}`
     window.open(waUrl, '_blank')
   }
@@ -317,7 +317,7 @@ function FeedItem({
     const next = !starred
     toggleFavorite(item.id, starred)
     setStarred(next)
-    emitToast(next ? 'Foto adicionada aos favoritos ⭐' : 'Foto removida dos favoritos')
+    emitToast(next ? 'Midia adicionada aos favoritos ⭐' : 'Midia removida dos favoritos')
   }
 
   const handleTag = async () => {
@@ -334,7 +334,7 @@ function FeedItem({
         setTags(prev => [...prev, { tagged_name: tagInput.trim(), tagged_by: authorName }])
         setTagInput('')
         setShowTagInput(false)
-        emitToast(`👤 ${tagInput.trim()} marcado(a) na foto!`)
+        emitToast(`👤 ${tagInput.trim()} marcado(a) nesta midia!`)
       } else {
         const d = await res.json() as { error?: string }
         emitToast(d.error ?? 'Erro ao marcar')

@@ -92,7 +92,7 @@ export default function UploadModal({
   onOpenBooth,
 }: {
   onClose: () => void
-  onSuccess: (author: string, thumb: string) => void
+  onSuccess: (author: string, thumb: string, type: 'image' | 'video' | 'audio') => void
   authorDefault: string
   initialFile?: File
   onOpenBooth?: () => void
@@ -270,6 +270,7 @@ export default function UploadModal({
     uploadingRef.current = true
     setUploading(true)
     let lastThumb = ''
+    let lastType: 'image' | 'video' | 'audio' = 'image'
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       let queuedCount = 0
@@ -327,6 +328,7 @@ export default function UploadModal({
           if (note) setMediaError(note)
           else setMediaError('')
           lastThumb = qi.preview
+          lastType = qi.type
           setQueue(p => p.map((q, idx) => idx === i ? { ...q, status: 'done', progress: 100, note, error: undefined, isOfflineError: false } : q))
           removeFromLS(qi.name)
         } else {
@@ -355,7 +357,7 @@ export default function UploadModal({
 
     uploadingRef.current = false
     setUploading(false)
-    if (lastThumb) onSuccess(safeAuthor, lastThumb)
+    if (lastThumb) onSuccess(safeAuthor, lastThumb, lastType)
   }
   uploadAllRef.current = uploadAll
 

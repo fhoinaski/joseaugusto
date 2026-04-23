@@ -77,6 +77,7 @@ export default function LivroPage() {
   }, [])
 
   const loadMessages = async () => {
+    setLoading(true)
     try {
       const res = await fetch('/api/livro')
       if (!res.ok) throw new Error('server error')
@@ -118,6 +119,7 @@ export default function LivroPage() {
       setMessage('')
       showToast('💌 Mensagem enviada com carinho!')
       await loadMessages()
+      setTimeout(() => textareaRef.current?.focus(), 60)
     } catch {
       setSendError('Sem conexão. Tente novamente.')
     } finally {
@@ -182,13 +184,29 @@ export default function LivroPage() {
                 outline: 'none',
               }}
             />
+            {author.trim() && (
+              <span style={{ display: 'block', marginTop: 6, fontSize: '.78rem', color: 'var(--text-lo)', fontStyle: 'italic' }}>
+                Seu nome aparecera junto da mensagem publicada.
+              </span>
+            )}
           </label>
 
           {/* Message textarea */}
           <label style={{ display: 'block', marginBottom: 8 }}>
-            <span style={{ fontSize: '.8rem', color: 'var(--text-lo)', letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 6 }}>
-              Mensagem
-            </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+              <span style={{ fontSize: '.8rem', color: 'var(--text-lo)', letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 600, display: 'block' }}>
+                Mensagem
+              </span>
+              {message.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setMessage(''); setSendError(''); textareaRef.current?.focus() }}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--sand)', fontSize: '.8rem', cursor: 'pointer', padding: 0, fontWeight: 700 }}
+                >
+                  Limpar texto
+                </button>
+              )}
+            </div>
             <textarea
               ref={textareaRef}
               value={message}

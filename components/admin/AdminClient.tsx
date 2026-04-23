@@ -207,16 +207,16 @@ function AdminPanel() {
   useEffect(() => {
     fetchPending(); fetchApproved()
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_message' }) })
-      .then(r => r.json()).then(d => setMsg(d.message ?? ''))
+      .then(r => r.json()).then(d => setMsg(d.message ?? '')).catch(() => showToast('Nao foi possivel carregar a mensagem dos pais.'))
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_pinned_text' }) })
-      .then(r => r.json()).then(d => setPinnedText(d.pinnedText ?? ''))
+      .then(r => r.json()).then(d => setPinnedText(d.pinnedText ?? '')).catch(() => showToast('Nao foi possivel carregar o texto fixado.'))
     fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_pinned_media' }) })
-      .then(r => r.json()).then(d => setPinnedMediaId(d.pinnedMediaId ?? ''))
+      .then(r => r.json()).then(d => setPinnedMediaId(d.pinnedMediaId ?? '')).catch(() => showToast('Nao foi possivel carregar a midia fixada.'))
     fetch('/api/admin/settings')
       .then(r => r.json()).then(d => {
         setGeoGateEnabled(d.geoGateEnabled ?? false)
         setAccessKeys(d.keys ?? [])
-      })
+      }).catch(() => showToast('Nao foi possivel carregar as configuracoes admin.'))
     // Load baby status from public settings endpoint
     fetch('/api/settings')
       .then(r => r.json()).then((d: { babyBorn?: boolean; babyDueDate?: string | null; babyBornWeight?: number | null; babyBornHora?: string | null; babyBornCabelo?: string | null }) => {
@@ -225,7 +225,7 @@ function AdminPanel() {
         setBabyWeightKg(d.babyBornWeight ? (d.babyBornWeight / 1000).toFixed(2) : '')
         setBabyHora(d.babyBornHora ?? '')
         setBabyCabelo(d.babyBornCabelo ?? '')
-      })
+      }).catch(() => showToast('Nao foi possivel carregar os dados publicos do bebe.'))
   }, [fetchPending, fetchApproved])
 
   const togglePin = async (id: string) => {
@@ -1862,15 +1862,44 @@ function AdminPanel() {
 
 export default function AdminClient() {
   const [auth, setAuth] = useState<boolean | null>(null)
-  useEffect(() => {
+  const [authError, setAuthError] = useState('')
+  const checkAuth = useCallback(() => {
+    setAuth(null)
+    setAuthError('')
     fetch('/api/admin/approve')
-      .then(r => setAuth(r.ok))
-      .catch(() => setAuth(false))
+      .then(r => {
+        setAuth(r.ok)
+        if (!r.ok && r.status >= 500) setAuthError('Nao foi possivel verificar o acesso ao painel agora.')
+      })
+      .catch(() => {
+        setAuth(false)
+        setAuthError('Falha de conexao ao abrir o painel admin.')
+      })
   }, [])
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
   if (auth === null) return (
     <div style={{ minHeight: '100svh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--warm)' }}>
       <span style={{ fontFamily: 'serif', color: 'var(--bl)', fontStyle: 'italic' }}>Carregando…</span>
     </div>
   )
-  return auth ? <AdminPanel /> : <AdminLoginForm onLogin={() => setAuth(true)} />
+  return auth ? <AdminPanel /> : (
+    <div>
+      <AdminLoginForm onLogin={() => { setAuthError(''); setAuth(true) }} />
+      {authError && (
+        <div style={{ maxWidth: 420, margin: '12px auto 0', padding: '0 20px' }}>
+          <div style={{ background: 'rgba(192,57,43,.08)', border: '1px solid rgba(192,57,43,.18)', color: '#8b3a2f', borderRadius: 12, padding: '12px 14px', fontSize: '.9rem' }}>
+            <p style={{ margin: '0 0 8px' }}>{authError}</p>
+            <button
+              onClick={checkAuth}
+              style={{ background: '#fff', border: '1px solid rgba(139,58,47,.25)', color: '#8b3a2f', borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontSize: '.82rem', fontWeight: 600 }}
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

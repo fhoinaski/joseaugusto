@@ -187,6 +187,13 @@ html, body, * {
 .hero-divider { width:140px; height:1.5px; margin:22px auto; background:linear-gradient(to right,transparent,var(--accent),transparent); }
 .hero-date { font-family:'Playfair Display',serif; font-size:clamp(1rem,3vw,1.35rem); letter-spacing:.22em; text-transform:uppercase; color:var(--b); font-weight:500; }
 .hero-sub  { font-size:1rem; font-weight:400; font-style:italic; color:var(--text-md); margin-top:6px; }
+.hero-helper {
+  width: min(92vw, 430px);
+  margin: 14px auto 0;
+  font-size: .96rem;
+  line-height: 1.5;
+  color: var(--text-md);
+}
 .hero-cta  { margin-top:48px; display:flex; flex-direction:column; align-items:center; gap:14px; }
 
 .home-action-strip {
@@ -239,6 +246,28 @@ html, body, * {
 .home-primary-action:active,
 .home-secondary-action:active {
   transform: scale(.98);
+}
+
+.home-quick-note {
+  max-width: 560px;
+  margin: 0 auto 16px;
+  padding: 0 16px;
+}
+
+.home-quick-note-title {
+  margin: 0 0 4px;
+  color: var(--bd);
+  font-size: .92rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.home-quick-note-text {
+  margin: 0;
+  color: var(--text-md);
+  font-size: .88rem;
+  line-height: 1.45;
+  text-align: center;
 }
 
 @media(max-width:380px) {
@@ -378,6 +407,7 @@ html, body, * {
 
 /* ── Online badge ── */
 .online-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(74,122,88,.12); border:1px solid var(--sl); border-radius:50px; padding:5px 14px; font-size:.8rem; color:var(--sd); letter-spacing:.06em; font-weight:600; }
+.hero-live-badge { margin-top: 20px; max-width: min(92vw, 360px); justify-content: center; text-align: center; }
 .online-dot   { width:7px; height:7px; border-radius:50%; background:var(--sd); animation:pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
 

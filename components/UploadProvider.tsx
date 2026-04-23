@@ -12,7 +12,14 @@ interface UploadContextValue {
   closeUpload: () => void
 }
 
-const UploadContext = createContext<UploadContextValue>({ openUpload: () => {}, openBooth: () => {}, openUploadWithFile: () => {}, closeUpload: () => {} })
+type UploadSuccessType = 'image' | 'video' | 'audio'
+
+const UploadContext = createContext<UploadContextValue>({
+  openUpload: () => {},
+  openBooth: () => {},
+  openUploadWithFile: () => {},
+  closeUpload: () => {},
+})
 
 export function UploadProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -45,17 +52,28 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   const closeUpload = useCallback(() => { setOpen(false); setBoothOpen(false) }, [])
   const handleClose = useCallback(() => setOpen(false), [])
 
-  const handleSuccess = useCallback((author: string, thumb: string) => {
+  const handleSuccess = useCallback((author: string, thumb: string, type: UploadSuccessType) => {
     if (author && author !== 'Convidado') {
       try { localStorage.setItem('cha_author', author) } catch {}
     }
-    window.dispatchEvent(new CustomEvent('cha:upload-success', { detail: { author, thumb } }))
-    emitToast('Foto enviada ao álbum! 🌸')
+    window.dispatchEvent(new CustomEvent('cha:upload-success', { detail: { author, thumb, type } }))
+    emitToast(
+      type === 'video'
+        ? 'Video enviado para o album!'
+        : type === 'audio'
+          ? 'Mensagem em audio enviada!'
+          : 'Foto enviada para o album!',
+    )
     setOpen(false)
     setInitialFile(null)
   }, [])
 
-  const value = useMemo<UploadContextValue>(() => ({ openUpload, openBooth, openUploadWithFile, closeUpload }), [openUpload, openBooth, openUploadWithFile, closeUpload])
+  const value = useMemo<UploadContextValue>(() => ({
+    openUpload,
+    openBooth,
+    openUploadWithFile,
+    closeUpload,
+  }), [openUpload, openBooth, openUploadWithFile, closeUpload])
 
   return (
     <UploadContext.Provider value={value}>

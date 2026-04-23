@@ -18,6 +18,7 @@ interface ToastMsg  { id:string; text:string; thumb?:string }
 interface TopAuthor { author:string; score:number }
 interface EventComment { mediaId:string; author:string; text:string; createdAt:string }
 interface PinnedPayload { pinnedPost?: MediaItem | null; pinnedMediaId?: string; pinnedText?: string }
+interface UploadSuccessDetail { author?: string; thumb?: string; type?: 'image' | 'video' | 'audio' }
 
 function getReacted(id:string):string[] { try{ return JSON.parse(localStorage.getItem(`cha_reacted_${id}`)??'[]') }catch{return[]} }
 function markReacted(id:string,emoji:string){ const r=getReacted(id); if(!r.includes(emoji))localStorage.setItem(`cha_reacted_${id}`,JSON.stringify([...r,emoji])) }
@@ -47,7 +48,7 @@ function GeoBanner({ geoStatus, unlockWithKey }: { geoStatus: GeoStatus; unlockW
   return (
     <div className="geo-banner key-input">
       <span className="geo-banner-icon">🔑</span>
-      <p className="geo-banner-text">Digite a chave de acesso para enviar fotos:</p>
+      <p className="geo-banner-text">Digite a chave de acesso para enviar midias:</p>
       <div className="geo-banner-row">
         <input className="geo-banner-input" type="text" value={key} onChange={e => setKey(e.target.value)}
           placeholder="Chave de acesso…" onKeyDown={e => e.key === 'Enter' && tryKey()}/>
@@ -79,11 +80,11 @@ function Onboarding({ onDone }: { onDone:()=>void }) {
       <h1 className="onboard-name">José Augusto</h1>
       <p className="onboard-sub">25 de Abril · Chá de Bebê</p>
       <div className="onboard-steps">
-        {[['📷','Veja as fotos em tempo real'],['✨','Edite e compartilhe as suas'],['🎉','Acompanhe o evento ao vivo']].map(([icon,text])=>(
+        {[['📷','Veja as midias em tempo real'],['✨','Envie fotos, videos e audios'],['🎉','Acompanhe o evento ao vivo']].map(([icon,text])=>(
           <div key={text} className="onboard-step"><span className="onboard-step-icon">{icon}</span><p className="onboard-step-text">{text}</p></div>
         ))}
       </div>
-      <button className="onboard-btn" onClick={finish}>Entrar no álbum</button>
+      <button className="onboard-btn" onClick={finish}>Entrar no album</button>
       <p className="onboard-pwa">📲 Adicione à tela inicial para acesso rápido</p>
     </div>
   )
@@ -197,7 +198,7 @@ function Lightbox({ items, index, onClose, onNav, onReact, simpleMode }:{ items:
                 <button
                   onClick={e=>{
                     e.stopPropagation()
-                    navigator.share({title:`Foto de ${item.author} — Chá do José Augusto`,url:item.fullUrl}).catch(()=>{})
+                    navigator.share({title:`Midia de ${item.author} — Cha do Jose Augusto`,url:item.fullUrl}).catch(()=>{})
                   }}
                   style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.12)',border:'1.5px solid rgba(255,255,255,.22)',borderRadius:50,color:'#fff',padding:'8px 18px',fontSize:'.84rem',fontWeight:600,cursor:'pointer',letterSpacing:'.02em'}}
                 >
@@ -335,10 +336,11 @@ export default function Home() {
   // Refresh gallery when an upload completes anywhere in the app
   useEffect(() => {
     const onUploadSuccess = (e: Event) => {
-      const { author, thumb } = (e as CustomEvent<{ author: string; thumb: string }>).detail ?? {}
+      const { author, thumb, type } = (e as CustomEvent<UploadSuccessDetail>).detail ?? {}
       if (author && author !== 'Convidado') setSavedAuthor(author)
       const id = Math.random().toString(36).slice(2)
-      const text = author && author !== 'Convidado' ? `${author} enviou uma foto! 🌸` : 'Nova foto no álbum! 🌸'
+      const mediaLabel = type === 'video' ? 'um video' : type === 'audio' ? 'um audio' : 'uma foto'
+      const text = author && author !== 'Convidado' ? `${author} enviou ${mediaLabel}!` : 'Nova midia no album!'
       setToasts(prev => [...prev.slice(-2), { id, text, thumb }])
       setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500)
       setTimeout(() => fetchMedia(), 2000)
@@ -389,7 +391,7 @@ export default function Home() {
       if(!data?.ts||data.ts<=lastRtTs.current||data.ts<=Date.now()-30000)return
       lastRtTs.current=data.ts
       const id=Math.random().toString(36).slice(2)
-      const text=data.author!=='Convidado'?`${data.author} adicionou uma foto! 📷`:'Nova foto adicionada! 📷'
+      const text=data.author!=='Convidado'?`${data.author} adicionou uma nova midia! 📷`:'Nova midia adicionada! 📷'
       setToasts(prev=>[...prev.slice(-2),{id,text,thumb:data.thumbUrl}])
       setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4500)
       setTimeout(()=>fetchMedia(),2000)
@@ -441,7 +443,7 @@ export default function Home() {
         if (!authorRef.current) return
         const target = mediaRef.current.find(m => m.id === event.mediaId)
         if (target && target.author === authorRef.current) {
-          addToast(`Sua foto recebeu ${event.emoji ?? 'uma reação'} 💛`, target.thumbUrl)
+          addToast(`Sua midia recebeu ${event.emoji ?? 'uma reacao'} 💛`, target.thumbUrl)
         }
       } catch {}
     })
@@ -512,7 +514,7 @@ export default function Home() {
       {showOnboard&&<Onboarding onDone={()=>{localStorage.setItem('cha_visited','1');setShowOnboard(false)}}/>}
       <GeoBanner geoStatus={geoStatus} unlockWithKey={unlockWithKey}/>
 
-      <HeroSection media={media} />
+      <HeroSection media={media} savedAuthor={savedAuthor} canWrite={canWrite} />
 
       {/* ── Ações principais ── */}
       <div className="home-action-strip">
@@ -522,8 +524,8 @@ export default function Home() {
         >
           <span style={{ fontSize: '1.6rem', lineHeight: 1 }}>📷</span>
           <div style={{ textAlign: 'left' }}>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Enviar foto</p>
-            <p style={{ margin: 0, fontSize: '.76rem', opacity: .82, marginTop: 1 }}>ou vídeo</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem', lineHeight: 1.2 }}>Enviar midia</p>
+            <p style={{ margin: 0, fontSize: '.76rem', opacity: .82, marginTop: 1 }}>foto, video ou audio</p>
           </div>
         </button>
         <a
@@ -533,6 +535,15 @@ export default function Home() {
           <span style={{ fontSize: '1.5rem' }}>🖼️</span>
           <span style={{ fontSize: '.78rem', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600, color: 'var(--b)' }}>Álbum ao vivo</span>
         </a>
+      </div>
+
+      <div className="home-quick-note reveal">
+        <p className="home-quick-note-title">{savedAuthor ? `Entrando como ${savedAuthor}` : 'Envio rapido no evento'}</p>
+        <p className="home-quick-note-text">
+          {canWrite
+            ? 'Fotos, videos curtos e mensagens de voz aparecem aqui com aprovacao normal do sistema.'
+            : 'Voce ja pode acompanhar o album. Para publicar durante o evento, use a chave informada no local.'}
+        </p>
       </div>
 
       {/* Stories bar */}

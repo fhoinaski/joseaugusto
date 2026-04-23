@@ -29,6 +29,7 @@ function formatDate(iso: string): string {
 export default function VideoMensagensPage() {
   const [items, setItems]           = useState<VideoMensagem[]>([])
   const [loading, setLoading]       = useState(true)
+  const [loadError, setLoadError]   = useState('')
   const [modalOpen, setModalOpen]   = useState(false)
   const [author, setAuthor]         = useState('')
   const [message, setMessage]       = useState('')
@@ -39,18 +40,23 @@ export default function VideoMensagensPage() {
   const [error, setError]           = useState('')
   const recordInputRef              = useRef<HTMLInputElement>(null)
   const uploadInputRef              = useRef<HTMLInputElement>(null)
+  const canSubmit                   = !!author.trim() && !!file && !sending
 
   useEffect(() => {
     try { setAuthor(localStorage.getItem('cha_author') ?? '') } catch {}
   }, [])
 
   const loadItems = async () => {
+    setLoading(true)
+    setLoadError('')
     try {
       const res  = await fetch('/api/video-mensagens')
+      if (!res.ok) throw new Error('load_failed')
       const data = await res.json() as { items?: VideoMensagem[] }
       setItems(Array.isArray(data.items) ? data.items : [])
     } catch {
       setItems([])
+      setLoadError('Nao foi possivel carregar as mensagens em video agora.')
     } finally {
       setLoading(false)
     }
@@ -124,6 +130,18 @@ export default function VideoMensagensPage() {
     setProgress(0)
     setFile(null)
     setMessage('')
+    if (recordInputRef.current) recordInputRef.current.value = ''
+    if (uploadInputRef.current) uploadInputRef.current.value = ''
+  }
+
+  const resetFormForAnother = () => {
+    setSent(false)
+    setError('')
+    setProgress(0)
+    setFile(null)
+    setMessage('')
+    if (recordInputRef.current) recordInputRef.current.value = ''
+    if (uploadInputRef.current) uploadInputRef.current.value = ''
   }
 
   return (
@@ -198,6 +216,50 @@ export default function VideoMensagensPage() {
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'rgba(90,62,40,.7)' }}>
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>⏳</div>
               <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.1rem' }}>Carregando vídeos...</p>
+            </div>
+          ) : loadError ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'rgba(90,62,40,.78)', maxWidth: 420, margin: '0 auto' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>⚠️</div>
+              <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.1rem', marginBottom: 8 }}>
+                Mensagens indisponiveis no momento
+              </p>
+              <p style={{ fontSize: '.92rem', fontStyle: 'italic', marginBottom: 18 }}>
+                {loadError}
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button
+                  onClick={loadItems}
+                  style={{
+                    background: 'linear-gradient(135deg,#c47a3a,#7a4e28)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 999,
+                    padding: '11px 22px',
+                    fontFamily: "'Cormorant Garamond',serif",
+                    fontSize: '.98rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Tentar novamente
+                </button>
+                <button
+                  onClick={() => setModalOpen(true)}
+                  style={{
+                    background: '#fffaf3',
+                    color: '#3e2408',
+                    border: '1.5px solid #c9a87c',
+                    borderRadius: 999,
+                    padding: '11px 22px',
+                    fontFamily: "'Cormorant Garamond',serif",
+                    fontSize: '.98rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Enviar mensagem
+                </button>
+              </div>
             </div>
           ) : items.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'rgba(90,62,40,.7)' }}>
@@ -324,6 +386,24 @@ export default function VideoMensagensPage() {
                   Aguarda aprovação para aparecer na página.
                 </p>
                 <button
+                  type="button"
+                  onClick={resetFormForAnother}
+                  style={{
+                    marginTop: 10,
+                    background: '#fffaf3',
+                    color: '#3e2408',
+                    border: '1.5px solid #c9a87c',
+                    borderRadius: 14,
+                    padding: '11px 24px',
+                    fontFamily: "'Cormorant Garamond',serif",
+                    fontSize: '1rem',
+                    cursor: 'pointer',
+                    marginRight: 10,
+                  }}
+                >
+                  Enviar outra mensagem
+                </button>
+                <button
                   onClick={closeModal}
                   style={{
                     marginTop: 20,
@@ -418,6 +498,31 @@ export default function VideoMensagensPage() {
                       </p>
                     )}
                   </div>
+                  {file && (
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFile(null)
+                          setError('')
+                          if (recordInputRef.current) recordInputRef.current.value = ''
+                          if (uploadInputRef.current) uploadInputRef.current.value = ''
+                        }}
+                        style={{
+                          background: 'transparent',
+                          color: '#7a4e28',
+                          border: '1px solid #c9a87c',
+                          borderRadius: 999,
+                          padding: '8px 14px',
+                          fontFamily: "'Cormorant Garamond',serif",
+                          fontSize: '.92rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Trocar video
+                      </button>
+                    </div>
+                  )}
                   <input
                     ref={recordInputRef}
                     type="file"
@@ -446,9 +551,14 @@ export default function VideoMensagensPage() {
                 </label>
 
                 <label style={{ display: 'block' }}>
-                  <span style={{ fontSize: '.8rem', color: 'rgba(62,36,8,.6)', letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                    Mensagem de texto (opcional)
-                  </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+                    <span style={{ fontSize: '.8rem', color: 'rgba(62,36,8,.6)', letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 600, display: 'block' }}>
+                      Mensagem de texto (opcional)
+                    </span>
+                    <span style={{ fontSize: '.76rem', color: 'rgba(62,36,8,.45)' }}>
+                      {message.length}/500
+                    </span>
+                  </div>
                   <textarea
                     value={message}
                     onChange={e => setMessage(e.target.value.slice(0, 500))}
@@ -465,6 +575,12 @@ export default function VideoMensagensPage() {
 
                 {error && (
                   <p style={{ color: '#c0392b', fontSize: '.88rem', fontStyle: 'italic' }}>{error}</p>
+                )}
+
+                {!error && file && (
+                  <p style={{ color: '#7a4e28', fontSize: '.82rem', fontStyle: 'italic', margin: '-4px 0 0' }}>
+                    Arquivo pronto para envio: {(file.size / 1024 / 1024).toFixed(1)} MB
+                  </p>
                 )}
 
                 {sending && (
@@ -486,13 +602,13 @@ export default function VideoMensagensPage() {
 
                 <button
                   type="submit"
-                  disabled={sending}
+                  disabled={!canSubmit}
                   style={{
-                    background: sending ? '#e8d4b8' : 'linear-gradient(135deg,#c47a3a,#7a4e28)',
-                    color: sending ? '#7a4e28' : '#fdf6ee',
+                    background: canSubmit ? 'linear-gradient(135deg,#c47a3a,#7a4e28)' : '#e8d4b8',
+                    color: canSubmit ? '#fdf6ee' : '#7a4e28',
                     border: 'none', borderRadius: 14, padding: '13px 20px',
                     fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem',
-                    fontWeight: 600, cursor: sending ? 'not-allowed' : 'pointer',
+                    fontWeight: 600, cursor: canSubmit ? 'pointer' : 'not-allowed',
                     letterSpacing: '.03em',
                   }}
                 >

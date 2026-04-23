@@ -24,6 +24,12 @@ export function AdminLoginForm({ onLogin }: { onLogin: () => void }) {
         return
       }
 
+      if (res.status === 429) {
+        const data = await res.json().catch(() => null) as { error?: string } | null
+        setError(data?.error || 'Muitas tentativas. Aguarde um pouco e tente novamente.')
+        return
+      }
+
       const data = await res.json().catch(() => null) as { error?: string } | null
       setError(data?.error || 'Nao foi possivel entrar. Verifique a senha e tente novamente.')
     } catch {
