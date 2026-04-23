@@ -1,0 +1,14 @@
+
+> cha-jose-augusto@1.0.0 dev
+> next dev -H 0.0.0.0 -H 0.0.0.0 -p 3000
+
+  ▲ Next.js 14.2.20
+  - Local:        http://localhost:3000
+  - Network:      http://0.0.0.0:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.1s
+ ○ Compiling /livro ...
+ ✓ Compiled /livro in 3.6s (512 modules)
+ GET /livro 200 in 3836ms
