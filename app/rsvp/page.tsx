@@ -41,6 +41,7 @@ export default function RsvpPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const submitLabel = status === 'confirmed' ? 'Confirmar presença' : status === 'maybe' ? 'Registrar resposta' : 'Avisar que não poderei ir'
 
   useEffect(() => {
     try {
@@ -68,6 +69,10 @@ export default function RsvpPage() {
         }),
       })
       const data = await res.json() as { error?: string }
+      if (res.status === 429) {
+        setError('Recebemos muitas respostas em sequência. Aguarde um instante e tente novamente.')
+        return
+      }
       if (!res.ok) { setError(data.error ?? 'Erro ao confirmar presença.'); return }
       try { localStorage.setItem('cha_author', name.trim()) } catch {}
       setSuccess(true)
@@ -233,6 +238,9 @@ export default function RsvpPage() {
                   style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--beige)', background: 'var(--warm)', fontSize: '1.2rem', cursor: 'pointer', display: 'grid', placeItems: 'center', color: 'var(--bd)' }}
                 >+</button>
               </div>
+              <span style={{ fontSize: '.75rem', color: 'var(--text-lo)', display: 'block', marginTop: 6 }}>
+                {guestsCount === 1 ? 'Somente você.' : `Você + ${guestsCount - 1} convidado${guestsCount > 2 ? 's' : ''}.`}
+              </span>
             </label>
           )}
 
@@ -288,7 +296,7 @@ export default function RsvpPage() {
               transition: 'background .2s',
             }}
           >
-            {sending ? 'Enviando...' : '🎀 Confirmar'}
+            {sending ? 'Enviando...' : submitLabel}
           </button>
         </form>
       </div>

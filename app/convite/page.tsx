@@ -72,6 +72,7 @@ function RsvpSection() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const submitLabel = status === 'confirmed' ? 'Confirmar presença' : status === 'maybe' ? 'Registrar resposta' : 'Avisar que não poderei ir'
 
   useEffect(() => {
     try {
@@ -122,6 +123,7 @@ function RsvpSection() {
         }),
       })
       const data = await res.json() as { error?: string }
+      if (res.status === 429) { setError('Recebemos muitas respostas em sequência. Aguarde um instante e tente novamente.'); return }
       if (!res.ok) { setError(data.error ?? 'Erro ao confirmar presença.'); return }
       try { localStorage.setItem('cha_author', name.trim()) } catch {}
       setSuccess(true)
@@ -231,6 +233,9 @@ function RsvpSection() {
               style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid #e8d4b8', background: '#fdf6ee', fontSize: '1.2rem', cursor: 'pointer', display: 'grid', placeItems: 'center', color: '#3e2408' }}
             >+</button>
           </div>
+          <span style={{ fontSize: '.72rem', color: '#a0713e', display: 'block', marginTop: 6 }}>
+            {guestsCount === 1 ? 'Somente você.' : `Você + ${guestsCount - 1} convidado${guestsCount > 2 ? 's' : ''}.`}
+          </span>
         </div>
       )}
 
@@ -287,7 +292,7 @@ function RsvpSection() {
           boxShadow: sending ? 'none' : '0 4px 14px rgba(196,122,58,.3)',
         }}
       >
-        {sending ? 'Enviando...' : '🎀 Confirmar presença'}
+        {sending ? 'Enviando...' : submitLabel}
       </button>
     </form>
   )

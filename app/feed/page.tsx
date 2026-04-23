@@ -35,6 +35,7 @@ function FeedPageInner() {
   const [media, setMedia] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [manualKey, setManualKey] = useState('')
@@ -83,6 +84,8 @@ function FeedPageInner() {
     if (cursor) {
       setMedia(prev => { const map = new Map(prev.map(i => [i.id, i])); for (const i of incoming) map.set(i.id, i); return Array.from(map.values()) })
     } else {
+      const failedInitialLoad = !('media' in data) || !Array.isArray(data.media)
+      setLoadError(failedInitialLoad ? 'Nao foi possivel carregar o feed agora.' : '')
       setMedia(incoming)
       setLoading(false)
     }
@@ -93,6 +96,7 @@ function FeedPageInner() {
   // Load and also reset the new-content counter
   const loadFresh = useCallback(() => {
     setNewCount(0)
+    setLoadError('')
     fetchMedia()
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [fetchMedia])
@@ -208,6 +212,34 @@ function FeedPageInner() {
           >
             Ir para enviar foto
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError && media.length === 0) {
+    return (
+      <div style={{ minHeight: '100dvh', background: '#0f0d0b', color: '#e8d9c4', display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24, fontFamily: "'Cormorant Garamond', serif" }}>
+        <div style={{ maxWidth: 380 }}>
+          <p style={{ fontSize: 54, margin: 0 }}>⚠️</p>
+          <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.35rem', margin: '10px 0 8px', color: '#f5dab6' }}>Feed indisponivel</h1>
+          <p style={{ margin: '0 0 18px', color: 'rgba(245,218,182,.72)', lineHeight: 1.5 }}>
+            {loadError}
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={loadFresh}
+              style={{ border: 'none', borderRadius: 999, background: 'linear-gradient(135deg,#d59056,#7a4e28)', color: '#fff', padding: '12px 22px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem' }}
+            >
+              Tentar novamente
+            </button>
+            <button
+              onClick={() => router.push('/')}
+              style={{ border: '1px solid rgba(245,218,182,.25)', borderRadius: 999, background: 'rgba(255,255,255,.04)', color: '#f5dab6', padding: '12px 22px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Cormorant Garamond',serif", fontSize: '1rem' }}
+            >
+              Voltar ao inicio
+            </button>
+          </div>
         </div>
       </div>
     )

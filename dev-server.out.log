@@ -1,0 +1,20 @@
+
+> cha-jose-augusto@1.0.0 dev
+> next dev -H 0.0.0.0 -H 0.0.0.0 -p 3000
+
+  ▲ Next.js 14.2.20
+  - Local:        http://localhost:3000
+  - Network:      http://0.0.0.0:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1833ms
+ ○ Compiling / ...
+ ✓ Compiled / in 6.5s (1360 modules)
+ GET / 200 in 6907ms
+ GET / 200 in 50ms
+ ✓ Compiled /api/melhores in 336ms (706 modules)
+ GET / 200 in 694ms
+ GET /api/melhores?mode=top 200 in 4897ms
+ ✓ Compiled /foto/[...slug] in 431ms (1383 modules)
+ GET /foto/cha-jose-augusto/fotos/foto_1776017861151_5emz.webp 200 in 2122ms

@@ -20,6 +20,7 @@ interface QItem {
   type: 'image' | 'video' | 'audio'
   retries: number
   isOfflineError: boolean
+  note?: string
 }
 
 const MAX_LS_SIZE = 5 * 1024 * 1024
@@ -317,12 +318,16 @@ export default function UploadModal({
         const timer = setInterval(() => setQueue(p => p.map((q, idx) => idx === i && q.progress < 85 ? { ...q, progress: q.progress + 15 } : q)), 250)
         const res = await fetch('/api/upload', { method: 'POST', body: fd })
         clearInterval(timer)
-        const data = await res.json()
+        const data = await res.json() as { error?: string; warning?: string; message?: string; status?: 'approved' | 'rejected' }
 
         if (res.ok) {
-          setMediaError('')
+          const note = data.status === 'rejected'
+            ? (data.message ?? 'Arquivo recebido, mas precisa de revisao antes de aparecer.')
+            : (data.warning ?? '')
+          if (note) setMediaError(note)
+          else setMediaError('')
           lastThumb = qi.preview
-          setQueue(p => p.map((q, idx) => idx === i ? { ...q, status: 'done', progress: 100 } : q))
+          setQueue(p => p.map((q, idx) => idx === i ? { ...q, status: 'done', progress: 100, note, error: undefined, isOfflineError: false } : q))
           removeFromLS(qi.name)
         } else {
           setMediaError(data.error ?? 'Erro no servidor ao enviar midia.')
@@ -829,6 +834,11 @@ export default function UploadModal({
                       {q.status === 'error' && !q.isOfflineError && `✗ ${q.error}`}
                       {q.status === 'error' && q.isOfflineError && (q.retries >= 3 ? `📶 ${q.error} - clique em tentar novamente` : `📶 ${q.error} - aguardando conexao`)}
                     </p>
+                    {q.note && (
+                      <p style={{ fontSize: '.74rem', color: 'var(--text-lo)', lineHeight: 1.35, marginTop: 4 }}>
+                        {q.note}
+                      </p>
+                    )}
                     {q.status === 'error' && !q.isOfflineError && q.file.size > MAX_LS_SIZE && (
                       <p style={{ fontSize: '.7rem', color: 'var(--text-lo)', fontStyle: 'italic' }}>arquivo grande - nao salvo localmente</p>
                     )}

@@ -210,7 +210,13 @@ export default function MediaGallery({
                 onClick={() => setLbIdx(i)}
               >
                 <div style={{ position: 'relative', aspectRatio: '1', overflow: 'hidden' }}>
-                  <img src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl} alt={item.author} loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+                  {item.type === 'audio'
+                    ? <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#f5ede0,#e8d4b8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 }}>
+                        <span style={{ fontSize: '2.2rem' }}>🎙️</span>
+                        <span style={{ fontSize: '.8rem', fontWeight: 700, color: '#7a4e28', textAlign: 'center' }}>Mensagem de áudio</span>
+                      </div>
+                    : <img src={item.imageSources?.thumb400 || item.imageSources?.w640 || item.thumbUrl || item.fullUrl} alt={item.author} loading="lazy" decoding="async" onError={(e) => { (e.currentTarget as HTMLImageElement).src = item.fullUrl }} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+                  }
                   {item.type === 'video' && (
                     <>
                       <div className="gallery-card-type">▶ Video</div>

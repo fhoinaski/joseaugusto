@@ -68,6 +68,7 @@ function FeedItem({
   const [comments, setComments] = useState<CommentItem[]>([])
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentText, setCommentText] = useState('')
+  const [commentsError, setCommentsError] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [videoMuted, setVideoMuted] = useState(true)
@@ -92,11 +93,15 @@ function FeedItem({
   const loadComments = async () => {
     try {
       const res = await fetch(`/api/comments?media_id=${encodeURIComponent(item.id)}`)
+      if (!res.ok) throw new Error('comments_load_failed')
       const data = await res.json() as { comments?: CommentItem[] }
       setComments(Array.isArray(data.comments) ? data.comments : [])
       setCommentsLoaded(true)
+      setCommentsError('')
     } catch {
       // Non-critical — keep whatever comments are already loaded
+      setCommentsLoaded(true)
+      setCommentsError('Nao foi possivel carregar os comentarios agora.')
       console.warn('[FeedItem] Could not load comments for', item.id)
     }
   }
@@ -219,6 +224,7 @@ function FeedItem({
         // Roll back optimistic on error
         setComments(prev => prev.filter(c => c.id !== tempId))
         setCommentText(text)
+        emitToast('Nao foi possivel publicar o comentario')
         return
       }
       const data = await res.json() as { comment?: CommentItem }
@@ -232,6 +238,7 @@ function FeedItem({
     } catch {
       setComments(prev => prev.filter(c => c.id !== tempId))
       setCommentText(text)
+      emitToast('Sem conexao para comentar')
     } finally {
       setIsSubmitting(false)
     }
@@ -583,9 +590,19 @@ function FeedItem({
                 </div>
               )}
               {commentsLoaded && comments.length === 0 && (
-                <p style={{ margin: '0 0 8px', fontSize: 12, opacity: 0.45, fontStyle: 'italic' }}>
-                  Nenhum comentário ainda. Seja o primeiro!
-                </p>
+                <div style={{ margin: '0 0 8px' }}>
+                  <p style={{ margin: 0, fontSize: 12, opacity: commentsError ? 0.7 : 0.45, fontStyle: 'italic' }}>
+                    {commentsError || 'Nenhum comentário ainda. Seja o primeiro!'}
+                  </p>
+                  {commentsError && (
+                    <button
+                      onClick={loadComments}
+                      style={{ marginTop: 6, background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.22)', color: '#fff', borderRadius: 999, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      Tentar novamente
+                    </button>
+                  )}
+                </div>
               )}
 
               {/* Reply chip */}
