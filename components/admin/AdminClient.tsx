@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { AdminLoginForm } from '@/components/admin/AdminLoginForm'
-import { ensurePushSubscription } from '@/lib/push-client'
+import { ensurePushSubscription, getPushDeviceState } from '@/lib/push-client'
 
 const CartaoAgradecimento = lazy(() => import('@/components/CartaoAgradecimento'))
 
@@ -15,6 +15,8 @@ interface RsvpStats { total: number; confirmed: number; maybe: number; declined:
 interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
 interface VideoMensagemAdmin { id: number; author: string; video_url: string; thumb_url: string | null; duration_s: number | null; message: string | null; approved: number; created_at: string }
 interface PushStatusAdmin { configured: boolean; subscribers: number }
+interface PushLastResult { kind: string; message: string; ok: boolean; createdAt: string }
+interface PushDeviceStatus { supported: boolean; permission: string; subscribed: boolean; reason: string }
 
 function AdminPanel() {
   const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'videos' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes' | 'anunciar'>('pending')
@@ -55,7 +57,9 @@ function AdminPanel() {
   const [sendingPush, setSendingPush] = useState(false)
   const [sendingPushTest, setSendingPushTest] = useState(false)
   const [pushStatus, setPushStatus] = useState<PushStatusAdmin | null>(null)
+  const [pushDeviceStatus, setPushDeviceStatus] = useState<PushDeviceStatus | null>(null)
   const [loadingPushStatus, setLoadingPushStatus] = useState(false)
+  const [pushLastResult, setPushLastResult] = useState<PushLastResult | null>(null)
   const [babyBorn, setBabyBorn] = useState(false)
   const [babyDueDate, setBabyDueDate] = useState('')
   const [babyWeightKg, setBabyWeightKg] = useState('')
@@ -134,6 +138,11 @@ function AdminPanel() {
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
+  const recordPushResult = (kind: string, message: string, ok: boolean) => {
+    setPushLastResult({ kind, message, ok, createdAt: new Date().toISOString() })
+    showToast(message)
+  }
+
   const sendAnnounce = async () => {
     if (!announceMsg.trim() || sendingAnnounce) return
     setSendingAnnounce(true)
@@ -149,13 +158,13 @@ function AdminPanel() {
         setAnnounceSuccess(true)
         setTimeout(() => setAnnounceSuccess(false), 5000)
         const push = data?.push
-        if (!push) showToast('Aviso ao vivo salvo.')
-        else if (!push.configured) showToast('Aviso ao vivo salvo. Push desativado por falta de configuracao.')
-        else if ((push.total ?? 0) === 0) showToast('Aviso ao vivo salvo. Nenhum aparelho inscrito para push.')
-        else showToast(`Aviso ao vivo salvo. Push: ${push.sent ?? 0}/${push.total ?? 0}.`)
+        if (!push) recordPushResult('Anuncio ao vivo', 'Aviso ao vivo salvo.', true)
+        else if (!push.configured) recordPushResult('Anuncio ao vivo', 'Aviso ao vivo salvo. Push desativado por falta de configuracao.', false)
+        else if ((push.total ?? 0) === 0) recordPushResult('Anuncio ao vivo', 'Aviso ao vivo salvo. Nenhum aparelho inscrito para push.', false)
+        else recordPushResult('Anuncio ao vivo', `Aviso ao vivo salvo. Push: ${push.sent ?? 0}/${push.total ?? 0}.`, (push.sent ?? 0) > 0)
         fetchPushStatus()
       } else {
-        showToast(data?.error || 'Erro ao enviar aviso ao vivo.')
+        recordPushResult('Anuncio ao vivo', data?.error || 'Erro ao enviar aviso ao vivo.', false)
       }
     } finally {
       setSendingAnnounce(false)
@@ -412,14 +421,14 @@ function AdminPanel() {
       if (res.ok) {
         setPushMsg({ title: '', body: '' })
         const push = data?.push
-        if (!push) showToast('Notificacao enviada.')
-        else if (!push.configured) showToast('Push nao enviado: configuracao ausente.')
-        else if ((push.total ?? 0) === 0) showToast('Push nao enviado: nenhum aparelho inscrito.')
-        else showToast(`Push enviado para ${push.sent ?? 0} de ${push.total ?? 0} aparelho(s).`)
+        if (!push) recordPushResult('Envio manual', 'Notificacao enviada.', true)
+        else if (!push.configured) recordPushResult('Envio manual', 'Push nao enviado: configuracao ausente.', false)
+        else if ((push.total ?? 0) === 0) recordPushResult('Envio manual', 'Push nao enviado: nenhum aparelho inscrito.', false)
+        else recordPushResult('Envio manual', `Push enviado para ${push.sent ?? 0} de ${push.total ?? 0} aparelho(s).`, (push.sent ?? 0) > 0)
         fetchPushStatus()
         return
       }
-      showToast(data?.error || 'Erro ao enviar notificacao.')
+      recordPushResult('Envio manual', data?.error || 'Erro ao enviar notificacao.', false)
       return
     } finally {
       setSendingPush(false)
@@ -431,8 +440,9 @@ function AdminPanel() {
     setSendingPushTest(true)
     try {
       const ready = await ensurePushSubscription()
+      fetchPushStatus()
       if (!ready.ok) {
-        showToast(ready.reason)
+        recordPushResult('Teste neste aparelho', ready.reason, false)
         return
       }
 
@@ -451,18 +461,18 @@ function AdminPanel() {
       const data = await res.json().catch(() => null) as { push?: { configured?: boolean; sent?: number }; error?: string } | null
 
       if (!res.ok) {
-        showToast(data?.error || 'Erro ao enviar teste de push.')
+        recordPushResult('Teste neste aparelho', data?.error || 'Erro ao enviar teste de push.', false)
         return
       }
 
       const push = data?.push
-      if (!push?.configured) showToast('Teste nao enviado: configuracao push ausente.')
-      else if ((push.sent ?? 0) > 0) showToast('Teste enviado para este aparelho.')
-      else showToast('Teste nao entregue. Reative as notificacoes no aparelho.')
+      if (!push?.configured) recordPushResult('Teste neste aparelho', 'Teste nao enviado: configuracao push ausente.', false)
+      else if ((push.sent ?? 0) > 0) recordPushResult('Teste neste aparelho', 'Teste enviado para este aparelho.', true)
+      else recordPushResult('Teste neste aparelho', 'Teste nao entregue. Reative as notificacoes no aparelho.', false)
 
       fetchPushStatus()
     } catch {
-      showToast('Erro ao preparar teste de push.')
+      recordPushResult('Teste neste aparelho', 'Erro ao preparar teste de push.', false)
     } finally {
       setSendingPushTest(false)
     }
@@ -611,7 +621,11 @@ function AdminPanel() {
   const fetchPushStatus = useCallback(async () => {
     setLoadingPushStatus(true)
     try {
-      const res = await fetch('/api/push/send')
+      const [res, device] = await Promise.all([
+        fetch('/api/push/send'),
+        getPushDeviceState(),
+      ])
+      setPushDeviceStatus(device)
       if (!res.ok) return
       const data = await res.json() as { configured?: boolean; subscribers?: number }
       setPushStatus({
@@ -620,6 +634,7 @@ function AdminPanel() {
       })
     } catch {
       setPushStatus(null)
+      setPushDeviceStatus(null)
     } finally {
       setLoadingPushStatus(false)
     }
@@ -1451,6 +1466,12 @@ function AdminPanel() {
                 <span style={{ fontSize: '.82rem', color: 'var(--bd)', background: 'var(--warm)', border: '1px solid var(--beige)', borderRadius: 999, padding: '6px 10px' }}>
                   Aparelhos inscritos: {loadingPushStatus ? '...' : pushStatus?.subscribers ?? 0}
                 </span>
+                <span
+                  title={pushDeviceStatus?.reason}
+                  style={{ fontSize: '.82rem', color: 'var(--bd)', background: pushDeviceStatus?.subscribed ? '#f1faec' : 'var(--warm)', border: `1px solid ${pushDeviceStatus?.subscribed ? '#8fbf73' : 'var(--beige)'}`, borderRadius: 999, padding: '6px 10px' }}
+                >
+                  Este aparelho: {loadingPushStatus ? '...' : pushDeviceStatus?.subscribed ? 'ativo' : pushDeviceStatus?.permission === 'denied' ? 'bloqueado' : 'nao habilitado'}
+                </span>
                 <button type="button" onClick={fetchPushStatus} disabled={loadingPushStatus} style={{ border: '1px solid var(--beige)', borderRadius: 999, background: 'var(--cream)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', cursor: loadingPushStatus ? 'wait' : 'pointer' }}>
                   Atualizar
                 </button>
@@ -1465,6 +1486,20 @@ function AdminPanel() {
               </button>
             </div>
           </div>
+
+          {pushLastResult && (
+            <div style={S.card}>
+              <p style={{ margin: '0 0 4px', fontSize: '.78rem', color: pushLastResult.ok ? '#3a6d10' : '#a33', fontWeight: 700 }}>
+                Ultimo resultado de push: {pushLastResult.kind}
+              </p>
+              <p style={{ margin: 0, fontSize: '.9rem', color: 'var(--bd)' }}>
+                {pushLastResult.message}
+              </p>
+              <p style={{ margin: '5px 0 0', fontSize: '.72rem', color: 'var(--bl)', fontStyle: 'italic' }}>
+                {new Date(pushLastResult.createdAt).toLocaleString('pt-BR')}
+              </p>
+            </div>
+          )}
 
           <div style={S.card}>
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📡 Monitoramento de Cache CDN</h2>

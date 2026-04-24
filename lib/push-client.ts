@@ -15,6 +15,44 @@ export async function fetchPushPublicKey(): Promise<string | null> {
   return data.publicKey ?? null
 }
 
+export async function getPushDeviceState(): Promise<{
+  supported: boolean
+  permission: NotificationPermission | 'unsupported'
+  subscribed: boolean
+  reason: string
+}> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return {
+      supported: false,
+      permission: 'unsupported',
+      subscribed: false,
+      reason: 'Este navegador/app nao suporta push.',
+    }
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.getSubscription()
+    return {
+      supported: true,
+      permission: Notification.permission,
+      subscribed: Boolean(sub),
+      reason: sub
+        ? 'Este aparelho esta inscrito.'
+        : Notification.permission === 'denied'
+          ? 'Notificacoes bloqueadas neste aparelho.'
+          : 'Este aparelho ainda nao esta inscrito.',
+    }
+  } catch {
+    return {
+      supported: true,
+      permission: Notification.permission,
+      subscribed: false,
+      reason: 'Nao foi possivel verificar este aparelho.',
+    }
+  }
+}
+
 export async function savePushSubscription(sub: PushSubscription): Promise<boolean> {
   const json = sub.toJSON()
   const fingerprint = `${json.endpoint}|${json.keys?.auth}|${json.keys?.p256dh}`
@@ -69,7 +107,7 @@ export async function ensurePushSubscription(): Promise<{ ok: true; subscription
     : await Notification.requestPermission()
 
   if (permission !== 'granted') {
-    return { ok: false, reason: 'Permissao de notificacao nao concedida.' }
+    return { ok: false, reason: 'Permissao de notificacao nao concedida neste aparelho.' }
   }
 
   const reg = await navigator.serviceWorker.ready

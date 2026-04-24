@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { fetchPushPublicKey, savePushSubscription, deletePushSubscription, urlBase64ToUint8Array } from '@/lib/push-client'
+import { fetchPushPublicKey, savePushSubscription, urlBase64ToUint8Array } from '@/lib/push-client'
 
 interface AppNotification {
   id: number
@@ -258,19 +258,6 @@ function PushSubscribeInline() {
     } catch { setStatus('idle') }
   }
 
-  const unsubscribe = async () => {
-    setStatus('loading')
-    try {
-      const reg = await navigator.serviceWorker.ready
-      const sub = await reg.pushManager.getSubscription()
-      if (sub) {
-        await deletePushSubscription(sub.endpoint)
-        await sub.unsubscribe()
-      }
-      setStatus('idle')
-    } catch { setStatus('idle') }
-  }
-
   if (status === 'unsupported') return null
 
   return (
@@ -281,19 +268,19 @@ function PushSubscribeInline() {
         </p>
       ) : (
         <button
-          onClick={status === 'subscribed' ? unsubscribe : subscribe}
-          disabled={status === 'loading'}
+          onClick={status === 'subscribed' ? undefined : subscribe}
+          disabled={status === 'loading' || status === 'subscribed'}
           style={{
             width: '100%', padding: '9px 12px', borderRadius: 10,
             border: status === 'subscribed' ? '1px solid rgba(122,78,40,.25)' : '1px solid #c9a87c',
             background: status === 'subscribed' ? 'rgba(122,78,40,.06)' : 'linear-gradient(135deg,rgba(196,122,58,.12),rgba(122,78,40,.06))',
             color: '#3e2408', fontSize: '.82rem', fontFamily: "'Cormorant Garamond',serif", fontWeight: 600,
-            cursor: status === 'loading' ? 'wait' : 'pointer',
+            cursor: status === 'loading' ? 'wait' : status === 'subscribed' ? 'default' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           }}
         >
           {status === 'loading' ? '⏳ Aguarde...'
-            : status === 'subscribed' ? '🔔 Notificações ativas · Desativar'
+            : status === 'subscribed' ? '🔔 Notificações ativas'
             : '🔔 Ativar notificações de novas fotos'}
         </button>
       )}
