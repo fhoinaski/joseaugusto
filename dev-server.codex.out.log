@@ -1,0 +1,42 @@
+
+> cha-jose-augusto@1.0.0 dev
+> next dev -H 0.0.0.0 -p 3000
+
+  ▲ Next.js 14.2.20
+  - Local:        http://localhost:3000
+  - Network:      http://0.0.0.0:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.2s
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 6.4s (543 modules)
+ GET /_next/static/webpack/4b65413bf98f4dc9.webpack.hot-update.json 404 in 6628ms
+ GET /bingo 200 in 6661ms
+ GET /bingo 200 in 50ms
+ ✓ Compiled /api/settings in 252ms (303 modules)
+ ✓ Compiled (305 modules)
+ GET /api/settings 200 in 447ms
+ ✓ Compiled /api/stream in 230ms (309 modules)
+ GET /api/bingo 200 in 980ms
+ GET /api/bingo 200 in 208ms
+ GET /api/bingo 200 in 205ms
+ GET /api/bingo 200 in 265ms
+ GET /bingo 200 in 133ms
+ GET /api/stream 200 in 14028ms
+ GET /api/bingo 200 in 373ms
+ GET /api/settings 200 in 408ms
+ GET /api/bingo 200 in 219ms
+ GET /api/settings 200 in 212ms
+ GET /api/bingo 200 in 199ms
+ GET /api/stream 200 in 9358ms
+ ✓ Compiled /palpites in 406ms (586 modules)
+ GET /palpites 200 in 588ms
+ ✓ Compiled /api/palpites in 147ms (316 modules)
+ GET /api/palpites 200 in 530ms
+ GET /api/settings 200 in 525ms
+ GET /api/palpites 200 in 188ms
+ GET /api/settings 200 in 214ms
+ GET /api/settings 200 in 217ms
+ GET /api/settings 200 in 213ms
+ GET /api/stream 200 in 29042ms

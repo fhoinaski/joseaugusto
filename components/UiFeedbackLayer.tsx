@@ -34,7 +34,8 @@ function getPendingCount(): number {
 
 export default function UiFeedbackLayer() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
-  const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const [hasMounted, setHasMounted] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
   const [pendingUploads, setPendingUploads] = useState(0)
   const [enableAmbientEffects, setEnableAmbientEffects] = useState(false)
 
@@ -69,6 +70,9 @@ export default function UiFeedbackLayer() {
   }, [])
 
   useEffect(() => {
+    setHasMounted(true)
+    setIsOnline(navigator.onLine)
+
     const onOnline = () => {
       setIsOnline(true)
       pushToast({ text: 'Conexao restaurada. Sincronizando fila...' })
@@ -112,6 +116,7 @@ export default function UiFeedbackLayer() {
   return (
     <>
       {/* Top-right: connection pill only (bell moved to BottomNav) */}
+      {hasMounted && (
       <div style={{
         position: 'fixed',
         top: 'max(10px, calc(8px + env(safe-area-inset-top)))',
@@ -145,6 +150,7 @@ export default function UiFeedbackLayer() {
           )}
         </div>
       </div>
+      )}
 
       <PWAInstallPrompt />
       <PushActivationPrompt />

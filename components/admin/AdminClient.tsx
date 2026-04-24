@@ -1169,9 +1169,9 @@ function AdminPanel() {
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🎯 Bingo do Chá</h2>
             <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 16 }}>Marque os itens conforme os presentes são abertos. Os convidados veem em tempo real.</p>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' as const }}>
-              {bingoItems.length === 0 && (
+              {bingoItems.length < 24 && (
                 <button style={{ ...S.btnApprove, padding: '9px 18px' }} onClick={async () => { await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'seed' }) }); fetchBingo(); showToast('🎯 30 itens padrão adicionados!') }}>
-                  🌱 Popular com itens padrão (30)
+                  🌱 Completar itens padrão ({bingoItems.length}/30)
                 </button>
               )}
               <button style={{ ...S.btnDelete, padding: '9px 18px', background: '#fff7e6', color: '#8a6d1f', borderColor: '#f4a623' }} onClick={async () => { if (!confirm('Resetar todos os itens (desmarcar todos)?')) return; await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset' }) }); fetchBingo(); showToast('↻ Bingo resetado!') }}>↻ Resetar</button>
@@ -1188,6 +1188,20 @@ function AdminPanel() {
                     <span style={{ fontSize: '1.1rem' }}>{item.emoji}</span>
                     <span style={{ flex: 1, fontSize: '.85rem', color: 'var(--bd)', fontWeight: item.called ? 700 : 400 }}>{item.label}</span>
                     {item.called && <span style={{ fontSize: '.7rem', color: '#3a6d10' }}>✓</span>}
+                    <button
+                      type="button"
+                      aria-label={`Excluir ${item.label}`}
+                      onClick={async event => {
+                        event.stopPropagation()
+                        if (!confirm(`Excluir item "${item.label}" do bingo?`)) return
+                        await fetch('/api/admin/bingo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: item.id }) })
+                        fetchBingo()
+                        showToast('Item removido.')
+                      }}
+                      style={{ border: 'none', background: 'transparent', color: '#a33', cursor: 'pointer', fontSize: '.9rem', lineHeight: 1, padding: '4px 2px' }}
+                    >
+                      x
+                    </button>
                   </div>
                 ))}
               </div>

@@ -23,6 +23,17 @@ function generateCard(items: BingoItem[]): number[] {
   return card
 }
 
+function isValidCard(card: unknown, items: BingoItem[]): card is number[] {
+  if (!Array.isArray(card) || card.length !== 25) return false
+  if (card[12] !== -1) return false
+
+  const availableIds = new Set(items.map(item => item.id))
+  const cardIds = card.filter(id => id !== -1)
+  return cardIds.length === 24
+    && new Set(cardIds).size === 24
+    && cardIds.every(id => typeof id === 'number' && availableIds.has(id))
+}
+
 function checkBingo(card: number[], marked: Set<number>, called: Set<number>): boolean {
   const active = new Set(card.map((id, i) => (id === -1 || (marked.has(id) && called.has(id))) ? i : -1).filter(i => i >= 0))
   const lines = [
@@ -45,14 +56,29 @@ export default function BingoPage() {
   const loadCard = useCallback((pool: BingoItem[]) => {
     if (pool.length < 24) return
     const saved = localStorage.getItem(CARD_LS)
-    const markedSaved: number[] = JSON.parse(localStorage.getItem(MARKED_LS) ?? '[]')
+    const poolIds = new Set(pool.map(item => item.id))
+    let markedSaved: number[] = []
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MARKED_LS) ?? '[]')
+      if (Array.isArray(parsed)) {
+        markedSaved = parsed.filter(id => typeof id === 'number' && poolIds.has(id))
+      }
+    } catch {
+      localStorage.removeItem(MARKED_LS)
+    }
     let c: number[]
     if (saved) {
-      try { c = JSON.parse(saved) } catch { c = generateCard(pool) }
+      try {
+        const parsed = JSON.parse(saved)
+        c = isValidCard(parsed, pool) ? parsed : generateCard(pool)
+      } catch {
+        c = generateCard(pool)
+      }
     } else {
       c = generateCard(pool)
-      localStorage.setItem(CARD_LS, JSON.stringify(c))
     }
+    localStorage.setItem(CARD_LS, JSON.stringify(c))
+    localStorage.setItem(MARKED_LS, JSON.stringify(markedSaved))
     setCard(c)
     setMarked(new Set(markedSaved))
   }, [])
@@ -61,16 +87,21 @@ export default function BingoPage() {
     try {
       const res = await fetch('/api/bingo')
       const data = await res.json()
-      setItems(data.items ?? [])
-      if (card.length === 0) loadCard(data.items ?? [])
+      const nextItems = data.items ?? []
+      setItems(nextItems)
+      if (nextItems.length >= 24 && (card.length === 0 || !isValidCard(card, nextItems))) {
+        loadCard(nextItems)
+      }
     } catch {} finally { setLoading(false) }
-  }, [card.length, loadCard])
+  }, [card, loadCard])
 
   useEffect(() => { fetchItems(); const t = setInterval(fetchItems, 5000); return () => clearInterval(t) }, [fetchItems])
 
   useEffect(() => {
     if (card.length > 0 && items.length > 0) {
       setBingo(checkBingo(card, marked, calledSet))
+    } else {
+      setBingo(false)
     }
   }, [card, marked, items])
 

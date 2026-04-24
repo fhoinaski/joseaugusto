@@ -28,12 +28,16 @@ export async function POST(req: NextRequest) {
 
   if (body.action === 'seed') {
     const existing = await dbGetBingoItems()
-    if (existing.length === 0) {
-      for (let i = 0; i < DEFAULT_ITEMS.length; i++) {
-        await dbInsertBingoItem(DEFAULT_ITEMS[i].label, DEFAULT_ITEMS[i].emoji, i)
-      }
+    const existingLabels = new Set(existing.map(item => item.label.trim().toLowerCase()))
+    let inserted = 0
+
+    for (let i = 0; i < DEFAULT_ITEMS.length; i++) {
+      const item = DEFAULT_ITEMS[i]
+      if (existingLabels.has(item.label.trim().toLowerCase())) continue
+      await dbInsertBingoItem(item.label, item.emoji, existing.length + i)
+      inserted++
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, inserted })
   }
   if (body.action === 'add') {
     const label = body.label?.toString().trim().slice(0, 60)
@@ -42,9 +46,15 @@ export async function POST(req: NextRequest) {
     await dbInsertBingoItem(label, emoji, Number(body.sortOrder) || 0)
     return NextResponse.json({ ok: true })
   }
-  if (body.action === 'call') { await dbCallBingoItem(Number(body.id), true); return NextResponse.json({ ok: true }) }
-  if (body.action === 'uncall') { await dbCallBingoItem(Number(body.id), false); return NextResponse.json({ ok: true }) }
-  if (body.action === 'delete') { await dbDeleteBingoItem(Number(body.id)); return NextResponse.json({ ok: true }) }
+  if (body.action === 'call' || body.action === 'uncall' || body.action === 'delete') {
+    const id = Number(body.id)
+    if (!Number.isInteger(id) || id <= 0) {
+      return NextResponse.json({ error: 'Item invalido' }, { status: 400 })
+    }
+    if (body.action === 'delete') await dbDeleteBingoItem(id)
+    else await dbCallBingoItem(id, body.action === 'call')
+    return NextResponse.json({ ok: true })
+  }
   if (body.action === 'reset') { await dbResetBingo(); return NextResponse.json({ ok: true }) }
   return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
 }

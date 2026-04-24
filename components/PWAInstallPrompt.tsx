@@ -10,22 +10,23 @@ interface BeforeInstallPromptEvent extends Event {
 export default function PWAInstallPrompt() {
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [dismissed, setDismissed] = useState(false)
-  const [isStandalone, setIsStandalone] = useState(true) // assume standalone to avoid flash
+  const [isStandalone, setIsStandalone] = useState(true)
 
   useEffect(() => {
-    // Check if already installed / running as PWA
     const standalone = window.matchMedia('(display-mode: standalone)').matches
       || (navigator as Navigator & { standalone?: boolean }).standalone === true
     setIsStandalone(standalone)
 
-    // Check if user previously dismissed
     try {
-      if (localStorage.getItem('cha_pwa_dismissed') === '1') { setDismissed(true); return }
+      if (localStorage.getItem('cha_pwa_dismissed') === '1') {
+        setDismissed(true)
+        return
+      }
     } catch {}
 
-    const handler = (e: Event) => {
-      e.preventDefault()
-      setPrompt(e as BeforeInstallPromptEvent)
+    const handler = (event: Event) => {
+      event.preventDefault()
+      setPrompt(event as BeforeInstallPromptEvent)
     }
     window.addEventListener('beforeinstallprompt', handler)
     return () => window.removeEventListener('beforeinstallprompt', handler)
@@ -35,11 +36,8 @@ export default function PWAInstallPrompt() {
     if (!prompt) return
     await prompt.prompt()
     const { outcome } = await prompt.userChoice
-    if (outcome === 'accepted') {
-      setPrompt(null)
-    } else {
-      dismiss()
-    }
+    if (outcome === 'accepted') setPrompt(null)
+    else dismiss()
   }
 
   const dismiss = () => {
@@ -67,13 +65,13 @@ export default function PWAInstallPrompt() {
       gap: 12,
       backdropFilter: 'blur(12px)',
     }}>
-      <span style={{ fontSize: 28, flexShrink: 0 }}>📲</span>
+      <span style={{ fontSize: 22, flexShrink: 0, fontWeight: 800, color: '#7a4e28' }} aria-hidden="true">+</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontFamily: "'Playfair Display',serif", fontSize: '.92rem', fontWeight: 600, color: '#3e2408' }}>
-          Adicionar à tela inicial
+        <p style={{ margin: 0, fontFamily: "'Playfair Display',serif", fontSize: '.92rem', fontWeight: 700, color: '#3e2408' }}>
+          Adicionar a tela inicial
         </p>
-        <p style={{ margin: '2px 0 0', fontSize: '.76rem', color: 'rgba(62,36,8,.55)', fontStyle: 'italic' }}>
-          Acesse o álbum como um app
+        <p style={{ margin: '2px 0 0', fontSize: '.76rem', color: 'rgba(62,36,8,.58)', fontStyle: 'italic' }}>
+          Acesse o album como um app
         </p>
       </div>
       <button
@@ -84,10 +82,10 @@ export default function PWAInstallPrompt() {
       </button>
       <button
         onClick={dismiss}
-        style={{ flexShrink: 0, background: 'none', border: 'none', color: 'rgba(62,36,8,.4)', fontSize: 18, cursor: 'pointer', padding: '4px 6px', lineHeight: 1 }}
+        style={{ flexShrink: 0, background: 'none', border: 'none', color: 'rgba(62,36,8,.45)', fontSize: 18, cursor: 'pointer', padding: '4px 6px', lineHeight: 1 }}
         aria-label="Fechar"
       >
-        ×
+        x
       </button>
     </div>
   )
