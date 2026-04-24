@@ -8,6 +8,14 @@ export interface PushSendResult {
   removed: number
 }
 
+export interface PushSubscriptionInput {
+  endpoint: string
+  keys: {
+    auth: string
+    p256dh: string
+  }
+}
+
 export function getVapidPublicKey(): string {
   return process.env.VAPID_PUBLIC_KEY ?? ''
 }
@@ -74,4 +82,46 @@ export async function sendPushToAll(payload: {
   )
 
   return result
+}
+
+export async function sendPushToSubscription(
+  subscription: PushSubscriptionInput,
+  payload: {
+    title: string
+    body: string
+    icon?: string
+    url?: string
+  },
+): Promise<PushSendResult> {
+  const publicKey = process.env.VAPID_PUBLIC_KEY
+  const privateKey = process.env.VAPID_PRIVATE_KEY
+  const subject = process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com'
+
+  if (!publicKey || !privateKey) {
+    console.warn('[push] VAPID keys not set; skipping push notification')
+    return { configured: false, total: 1, sent: 0, failed: 0, removed: 0 }
+  }
+
+  let webpush: typeof import('web-push')
+  try {
+    webpush = await import('web-push')
+  } catch {
+    console.warn('[push] web-push not installed')
+    return { configured: false, total: 1, sent: 0, failed: 0, removed: 0 }
+  }
+
+  webpush.setVapidDetails(subject, publicKey, privateKey)
+
+  try {
+    await webpush.sendNotification(subscription, JSON.stringify(payload))
+    return { configured: true, total: 1, sent: 1, failed: 0, removed: 0 }
+  } catch (err: unknown) {
+    const status = (err as { statusCode?: number }).statusCode
+    if (status === 410 || status === 404) {
+      await dbDeletePushSubscription(subscription.endpoint).catch(() => {})
+      return { configured: true, total: 1, sent: 0, failed: 1, removed: 1 }
+    }
+    console.warn('[push] Failed to send self-test', err)
+    return { configured: true, total: 1, sent: 0, failed: 1, removed: 0 }
+  }
 }

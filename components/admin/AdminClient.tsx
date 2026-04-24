@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { AdminLoginForm } from '@/components/admin/AdminLoginForm'
+import { ensurePushSubscription } from '@/lib/push-client'
 
 const CartaoAgradecimento = lazy(() => import('@/components/CartaoAgradecimento'))
 
@@ -13,6 +14,7 @@ interface RsvpItem { id: number; name: string; status: string; guests_count: num
 interface RsvpStats { total: number; confirmed: number; maybe: number; declined: number; total_guests: number }
 interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
 interface VideoMensagemAdmin { id: number; author: string; video_url: string; thumb_url: string | null; duration_s: number | null; message: string | null; approved: number; created_at: string }
+interface PushStatusAdmin { configured: boolean; subscribers: number }
 
 function AdminPanel() {
   const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'videos' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes' | 'anunciar'>('pending')
@@ -51,6 +53,9 @@ function AdminPanel() {
   const [savingStore, setSavingStore] = useState(false)
   const [pushMsg, setPushMsg] = useState({ title: '', body: '' })
   const [sendingPush, setSendingPush] = useState(false)
+  const [sendingPushTest, setSendingPushTest] = useState(false)
+  const [pushStatus, setPushStatus] = useState<PushStatusAdmin | null>(null)
+  const [loadingPushStatus, setLoadingPushStatus] = useState(false)
   const [babyBorn, setBabyBorn] = useState(false)
   const [babyDueDate, setBabyDueDate] = useState('')
   const [babyWeightKg, setBabyWeightKg] = useState('')
@@ -148,6 +153,7 @@ function AdminPanel() {
         else if (!push.configured) showToast('Aviso ao vivo salvo. Push desativado por falta de configuracao.')
         else if ((push.total ?? 0) === 0) showToast('Aviso ao vivo salvo. Nenhum aparelho inscrito para push.')
         else showToast(`Aviso ao vivo salvo. Push: ${push.sent ?? 0}/${push.total ?? 0}.`)
+        fetchPushStatus()
       } else {
         showToast(data?.error || 'Erro ao enviar aviso ao vivo.')
       }
@@ -410,18 +416,55 @@ function AdminPanel() {
         else if (!push.configured) showToast('Push nao enviado: configuracao ausente.')
         else if ((push.total ?? 0) === 0) showToast('Push nao enviado: nenhum aparelho inscrito.')
         else showToast(`Push enviado para ${push.sent ?? 0} de ${push.total ?? 0} aparelho(s).`)
+        fetchPushStatus()
         return
       }
       showToast(data?.error || 'Erro ao enviar notificacao.')
       return
-      if (res.ok) {
-        setPushMsg({ title: '', body: '' })
-        showToast('🔔 Notificação enviada!')
-      } else {
-        showToast('Erro ao enviar notificação.')
-      }
     } finally {
       setSendingPush(false)
+    }
+  }
+
+  const sendPushSelfTest = async () => {
+    if (sendingPushTest) return
+    setSendingPushTest(true)
+    try {
+      const ready = await ensurePushSubscription()
+      if (!ready.ok) {
+        showToast(ready.reason)
+        return
+      }
+
+      const json = ready.subscription.toJSON()
+      const res = await fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'self-test',
+          subscription: json,
+          title: 'Teste de notificacao',
+          body: 'Seu aparelho recebeu o push corretamente.',
+          url: '/admin',
+        }),
+      })
+      const data = await res.json().catch(() => null) as { push?: { configured?: boolean; sent?: number }; error?: string } | null
+
+      if (!res.ok) {
+        showToast(data?.error || 'Erro ao enviar teste de push.')
+        return
+      }
+
+      const push = data?.push
+      if (!push?.configured) showToast('Teste nao enviado: configuracao push ausente.')
+      else if ((push.sent ?? 0) > 0) showToast('Teste enviado para este aparelho.')
+      else showToast('Teste nao entregue. Reative as notificacoes no aparelho.')
+
+      fetchPushStatus()
+    } catch {
+      showToast('Erro ao preparar teste de push.')
+    } finally {
+      setSendingPushTest(false)
     }
   }
 
@@ -565,6 +608,23 @@ function AdminPanel() {
     }
   }, [])
 
+  const fetchPushStatus = useCallback(async () => {
+    setLoadingPushStatus(true)
+    try {
+      const res = await fetch('/api/push/send')
+      if (!res.ok) return
+      const data = await res.json() as { configured?: boolean; subscribers?: number }
+      setPushStatus({
+        configured: Boolean(data.configured),
+        subscribers: Number(data.subscribers ?? 0),
+      })
+    } catch {
+      setPushStatus(null)
+    } finally {
+      setLoadingPushStatus(false)
+    }
+  }, [])
+
   const approveAll = async () => {
     if (!confirm('Aprovar TODAS as mídias pendentes de uma vez?')) return
     const res = await fetch('/api/admin/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve_all' }) })
@@ -583,7 +643,11 @@ function AdminPanel() {
     if (tab === 'desafios') fetchDesafios()
     if (tab === 'bingo') { fetchBingo() }
     if (tab === 'diario') fetchDiario()
-    if (tab === 'pwa') { fetch('/api/pwa-session').then(r => r.json()).then(setPwaStats) }
+    if (tab === 'pwa') {
+      fetch('/api/pwa-session').then(r => r.json()).then(setPwaStats)
+      fetchPushStatus()
+    }
+    if (tab === 'settings') fetchPushStatus()
     if (tab === 'rsvp') fetchRsvp()
     if (tab === 'marcos') fetchMarcos()
     if (tab === 'memorias') fetchMemorias()
@@ -592,7 +656,7 @@ function AdminPanel() {
         setCartaoAuthors(d.topAuthors?.map((a: { author: string }) => a.author) ?? [])
       }).catch(() => {})
     }
-  }, [tab, fetchVideoMensagens, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias])
+  }, [tab, fetchVideoMensagens, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias, fetchPushStatus])
 
   useEffect(() => {
     if (tab !== 'settings') return
@@ -1380,6 +1444,20 @@ function AdminPanel() {
             <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>🔔 Notificações Push</h2>
             <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic', marginBottom: 20 }}>Envie uma notificação manual para todos os inscritos.</p>
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                <span style={{ fontSize: '.82rem', color: 'var(--bd)', background: 'var(--warm)', border: '1px solid var(--beige)', borderRadius: 999, padding: '6px 10px' }}>
+                  VAPID: {loadingPushStatus ? 'verificando...' : pushStatus?.configured ? 'configurado' : 'ausente'}
+                </span>
+                <span style={{ fontSize: '.82rem', color: 'var(--bd)', background: 'var(--warm)', border: '1px solid var(--beige)', borderRadius: 999, padding: '6px 10px' }}>
+                  Aparelhos inscritos: {loadingPushStatus ? '...' : pushStatus?.subscribers ?? 0}
+                </span>
+                <button type="button" onClick={fetchPushStatus} disabled={loadingPushStatus} style={{ border: '1px solid var(--beige)', borderRadius: 999, background: 'var(--cream)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', cursor: loadingPushStatus ? 'wait' : 'pointer' }}>
+                  Atualizar
+                </button>
+                <button type="button" onClick={sendPushSelfTest} disabled={sendingPushTest} style={{ border: '1px solid var(--accent)', borderRadius: 999, background: 'var(--warm)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', cursor: sendingPushTest ? 'wait' : 'pointer', fontWeight: 700 }}>
+                  {sendingPushTest ? 'Testando...' : 'Testar neste aparelho'}
+                </button>
+              </div>
               <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Título da notificação *" value={pushMsg.title} onChange={e => setPushMsg(m => ({ ...m, title: e.target.value }))} />
               <input style={{ border: '1px solid var(--sand)', borderRadius: 8, padding: '10px 14px', fontFamily: "'Cormorant Garamond',serif", fontSize: '.95rem', background: 'var(--cream)', color: 'var(--bd)', outline: 'none' }} placeholder="Mensagem (opcional)" value={pushMsg.body} onChange={e => setPushMsg(m => ({ ...m, body: e.target.value }))} />
               <button style={{ ...S.btnApprove, padding: '10px 20px', fontSize: '.92rem', alignSelf: 'flex-start' }} onClick={sendPush} disabled={sendingPush || !pushMsg.title.trim()}>

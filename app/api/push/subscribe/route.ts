@@ -5,7 +5,7 @@ import { cleanText, jsonError, jsonServerError, readJsonBody, requireRateLimit }
 
 export const dynamic = 'force-dynamic'
 
-const POST_LIMIT = 30
+const POST_LIMIT = 300
 const POST_WINDOW_MS = 60 * 60 * 1000
 
 export async function GET() {

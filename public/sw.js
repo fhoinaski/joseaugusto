@@ -143,9 +143,9 @@ self.addEventListener('push', e => {
     body: payload.body || 'Nova atualização!',
     icon: payload.icon || '/icon-192.png',
     badge: '/icon-192.png',
-    data: { url: payload.url || '/' },
+    data: { url: payload.url || '/', receivedAt: Date.now() },
     vibrate: [100, 50, 100],
-    tag: 'cha-notification',
+    tag: payload.tag || 'cha-notification',
     renotify: true,
   }
 
@@ -157,6 +157,7 @@ self.addEventListener('notificationclick', e => {
   const url = (e.notification.data && e.notification.data.url) || '/'
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      clients.forEach(c => c.postMessage({ type: 'PUSH_NOTIFICATION_CLICKED', url }))
       const existing = clients.find(c => c.url === url || c.url.endsWith(url))
       if (existing) return existing.focus()
       return self.clients.openWindow(url)

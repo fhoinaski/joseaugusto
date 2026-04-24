@@ -17,6 +17,14 @@ export async function fetchPushPublicKey(): Promise<string | null> {
 
 export async function savePushSubscription(sub: PushSubscription): Promise<boolean> {
   const json = sub.toJSON()
+  const fingerprint = `${json.endpoint}|${json.keys?.auth}|${json.keys?.p256dh}`
+  try {
+    const cached = JSON.parse(localStorage.getItem('cha_push_subscription_synced') ?? 'null') as { fingerprint?: string; ts?: number } | null
+    if (cached?.fingerprint === fingerprint && cached.ts && Date.now() - cached.ts < 10 * 60 * 1000) {
+      return true
+    }
+  } catch {}
+
   const res = await fetch('/api/push/subscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -28,6 +36,11 @@ export async function savePushSubscription(sub: PushSubscription): Promise<boole
       },
     }),
   })
+  if (res.ok) {
+    try {
+      localStorage.setItem('cha_push_subscription_synced', JSON.stringify({ fingerprint, ts: Date.now() }))
+    } catch {}
+  }
   return res.ok
 }
 
@@ -37,5 +50,37 @@ export async function deletePushSubscription(endpoint: string): Promise<boolean>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'unsubscribe', endpoint }),
   })
+  if (res.ok) {
+    try { localStorage.removeItem('cha_push_subscription_synced') } catch {}
+  }
   return res.ok
+}
+
+export async function ensurePushSubscription(): Promise<{ ok: true; subscription: PushSubscription } | { ok: false; reason: string }> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return { ok: false, reason: 'Este navegador nao suporta push.' }
+  }
+
+  const publicKey = await fetchPushPublicKey()
+  if (!publicKey) return { ok: false, reason: 'Chave publica VAPID ausente.' }
+
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission()
+
+  if (permission !== 'granted') {
+    return { ok: false, reason: 'Permissao de notificacao nao concedida.' }
+  }
+
+  const reg = await navigator.serviceWorker.ready
+  const existing = await reg.pushManager.getSubscription()
+  const subscription = existing ?? await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  })
+
+  const saved = await savePushSubscription(subscription)
+  if (!saved) return { ok: false, reason: 'Nao foi possivel salvar a inscricao push.' }
+
+  return { ok: true, subscription }
 }
