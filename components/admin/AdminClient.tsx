@@ -15,7 +15,8 @@ interface RsvpStats { total: number; confirmed: number; maybe: number; declined:
 interface MarcoAdmin { id: number; title: string; emoji: string; description: string | null; marco_date: string; photo_url: string | null }
 interface VideoMensagemAdmin { id: number; author: string; video_url: string; thumb_url: string | null; duration_s: number | null; message: string | null; approved: number; created_at: string }
 interface PushStatusAdmin { configured: boolean; subscribers: number }
-interface PushLastResult { kind: string; message: string; ok: boolean; createdAt: string }
+interface PushDeliveryResult { configured?: boolean; total?: number; sent?: number; failed?: number; removed?: number }
+interface PushLastResult { kind: string; message: string; ok: boolean; createdAt: string; details?: PushDeliveryResult }
 interface PushDeviceStatus { supported: boolean; permission: string; subscribed: boolean; reason: string }
 
 function AdminPanel() {
@@ -121,6 +122,7 @@ function AdminPanel() {
   const [announceMsg,     setAnnounceMsg]     = useState('')
   const [sendingAnnounce, setSendingAnnounce] = useState(false)
   const [announceSuccess, setAnnounceSuccess] = useState(false)
+  const [lastAnnounceSent, setLastAnnounceSent] = useState('')
 
   // ── Cartões ───────────────────────────────────────────────────────────────────
   const [cartaoTo,      setCartaoTo]      = useState('')
@@ -138,30 +140,50 @@ function AdminPanel() {
 
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
-  const recordPushResult = (kind: string, message: string, ok: boolean) => {
-    setPushLastResult({ kind, message, ok, createdAt: new Date().toISOString() })
+  const recordPushResult = (kind: string, message: string, ok: boolean, details?: PushDeliveryResult) => {
+    setPushLastResult({ kind, message, ok, createdAt: new Date().toISOString(), details })
     showToast(message)
   }
 
-  const sendAnnounce = async () => {
-    if (!announceMsg.trim() || sendingAnnounce) return
+  const summarizePushDelivery = (prefix: string, push?: PushDeliveryResult | null) => {
+    if (!push) return { ok: true, message: `${prefix}. Push nao solicitado ou sem retorno.` }
+    if (!push.configured) return { ok: false, message: `${prefix}. Push nao enviado: VAPID ausente ou web-push indisponivel.` }
+    if ((push.total ?? 0) === 0) return { ok: false, message: `${prefix}. Nenhum aparelho inscrito para push.` }
+
+    const sent = push.sent ?? 0
+    const total = push.total ?? 0
+    const failed = push.failed ?? 0
+    const removed = push.removed ?? 0
+    const detail = failed > 0 || removed > 0
+      ? ` Falhas: ${failed}. Removidos: ${removed}.`
+      : ''
+
+    return {
+      ok: sent > 0,
+      message: `${prefix}. Push entregue para ${sent}/${total} aparelho(s).${detail}`,
+    }
+  }
+
+  const postAnnounce = async (message: string, clearDraft = false) => {
+    const safeMessage = message.trim()
+    if (!safeMessage || sendingAnnounce) return
     setSendingAnnounce(true)
     setAnnounceSuccess(false)
     try {
       const res = await fetch('/api/admin/announce', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: announceMsg.trim() }),
+        body: JSON.stringify({ message: safeMessage }),
       })
-      const data = await res.json().catch(() => null) as { push?: { configured?: boolean; total?: number; sent?: number }; error?: string } | null
+      const data = await res.json().catch(() => null) as { push?: PushDeliveryResult; error?: string } | null
       if (res.ok) {
+        setLastAnnounceSent(safeMessage)
+        if (clearDraft) setAnnounceMsg('')
         setAnnounceSuccess(true)
         setTimeout(() => setAnnounceSuccess(false), 5000)
         const push = data?.push
-        if (!push) recordPushResult('Anuncio ao vivo', 'Aviso ao vivo salvo.', true)
-        else if (!push.configured) recordPushResult('Anuncio ao vivo', 'Aviso ao vivo salvo. Push desativado por falta de configuracao.', false)
-        else if ((push.total ?? 0) === 0) recordPushResult('Anuncio ao vivo', 'Aviso ao vivo salvo. Nenhum aparelho inscrito para push.', false)
-        else recordPushResult('Anuncio ao vivo', `Aviso ao vivo salvo. Push: ${push.sent ?? 0}/${push.total ?? 0}.`, (push.sent ?? 0) > 0)
+        const summary = summarizePushDelivery('Aviso ao vivo salvo e banner ativado', push)
+        recordPushResult('Anuncio ao vivo', summary.message, summary.ok, push)
         fetchPushStatus()
       } else {
         recordPushResult('Anuncio ao vivo', data?.error || 'Erro ao enviar aviso ao vivo.', false)
@@ -170,6 +192,9 @@ function AdminPanel() {
       setSendingAnnounce(false)
     }
   }
+
+  const sendAnnounce = async () => postAnnounce(announceMsg)
+  const resendLastAnnounce = async () => postAnnounce(lastAnnounceSent)
 
   const clearAnnounce = async () => {
     setSendingAnnounce(true)
@@ -417,14 +442,12 @@ function AdminPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: pushMsg.title.trim(), body: pushMsg.body.trim() }),
       })
-      const data = await res.json().catch(() => null) as { push?: { configured?: boolean; total?: number; sent?: number }; error?: string } | null
+      const data = await res.json().catch(() => null) as { push?: PushDeliveryResult; error?: string } | null
       if (res.ok) {
         setPushMsg({ title: '', body: '' })
         const push = data?.push
-        if (!push) recordPushResult('Envio manual', 'Notificacao enviada.', true)
-        else if (!push.configured) recordPushResult('Envio manual', 'Push nao enviado: configuracao ausente.', false)
-        else if ((push.total ?? 0) === 0) recordPushResult('Envio manual', 'Push nao enviado: nenhum aparelho inscrito.', false)
-        else recordPushResult('Envio manual', `Push enviado para ${push.sent ?? 0} de ${push.total ?? 0} aparelho(s).`, (push.sent ?? 0) > 0)
+        const summary = summarizePushDelivery('Envio manual processado', push)
+        recordPushResult('Envio manual', summary.message, summary.ok, push)
         fetchPushStatus()
         return
       }
@@ -458,7 +481,7 @@ function AdminPanel() {
           url: '/admin',
         }),
       })
-      const data = await res.json().catch(() => null) as { push?: { configured?: boolean; sent?: number }; error?: string } | null
+      const data = await res.json().catch(() => null) as { push?: PushDeliveryResult; error?: string } | null
 
       if (!res.ok) {
         recordPushResult('Teste neste aparelho', data?.error || 'Erro ao enviar teste de push.', false)
@@ -466,9 +489,8 @@ function AdminPanel() {
       }
 
       const push = data?.push
-      if (!push?.configured) recordPushResult('Teste neste aparelho', 'Teste nao enviado: configuracao push ausente.', false)
-      else if ((push.sent ?? 0) > 0) recordPushResult('Teste neste aparelho', 'Teste enviado para este aparelho.', true)
-      else recordPushResult('Teste neste aparelho', 'Teste nao entregue. Reative as notificacoes no aparelho.', false)
+      const summary = summarizePushDelivery('Teste neste aparelho processado', push)
+      recordPushResult('Teste neste aparelho', summary.message, summary.ok, push)
 
       fetchPushStatus()
     } catch {
@@ -662,7 +684,7 @@ function AdminPanel() {
       fetch('/api/pwa-session').then(r => r.json()).then(setPwaStats)
       fetchPushStatus()
     }
-    if (tab === 'settings') fetchPushStatus()
+    if (tab === 'settings' || tab === 'anunciar') fetchPushStatus()
     if (tab === 'rsvp') fetchRsvp()
     if (tab === 'marcos') fetchMarcos()
     if (tab === 'memorias') fetchMemorias()
@@ -1921,9 +1943,27 @@ function AdminPanel() {
       {tab === 'anunciar' && (
         <div style={{ maxWidth: 560 }}>
           <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.15rem', color: 'var(--bd)', fontWeight: 600, marginBottom: 4 }}>📣 Anunciar ao Vivo</p>
-          <p style={{ fontSize: '.85rem', color: 'var(--text-lo)', marginBottom: 20, fontStyle: 'italic' }}>
+          <p style={{ fontSize: '.85rem', color: 'var(--text-lo)', marginBottom: 12, fontStyle: 'italic' }}>
             Envia push notification para todos os convidados e exibe banner na home e no telão em tempo real.
           </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
+            <span style={{ border: '1px solid var(--beige)', borderRadius: 999, background: 'var(--warm)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', fontWeight: 700 }}>
+              Push: {loadingPushStatus ? 'verificando...' : pushStatus?.configured ? 'configurado' : 'nao configurado'}
+            </span>
+            <span style={{ border: '1px solid var(--beige)', borderRadius: 999, background: 'var(--warm)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', fontWeight: 700 }}>
+              Aparelhos: {loadingPushStatus ? '...' : pushStatus?.subscribers ?? 0}
+            </span>
+            <span style={{ border: '1px solid var(--beige)', borderRadius: 999, background: 'var(--warm)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', fontWeight: 700 }}>
+              Este admin: {loadingPushStatus ? '...' : pushDeviceStatus?.subscribed ? 'ativo' : pushDeviceStatus?.permission === 'denied' ? 'bloqueado' : 'nao habilitado'}
+            </span>
+            <button type="button" onClick={fetchPushStatus} disabled={loadingPushStatus} style={{ border: '1px solid var(--accent)', borderRadius: 999, background: 'var(--cream)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', cursor: loadingPushStatus ? 'wait' : 'pointer', fontWeight: 700 }}>
+              Atualizar
+            </button>
+            <button type="button" onClick={sendPushSelfTest} disabled={sendingPushTest} style={{ border: '1px solid var(--accent)', borderRadius: 999, background: 'var(--warm)', color: 'var(--bd)', padding: '6px 10px', fontSize: '.78rem', cursor: sendingPushTest ? 'wait' : 'pointer', fontWeight: 700 }}>
+              {sendingPushTest ? 'Testando...' : 'Testar neste aparelho'}
+            </button>
+          </div>
 
           {/* Quick presets */}
           <p style={{ fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-lo)', fontWeight: 600, marginBottom: 10 }}>Mensagens rápidas</p>
@@ -1964,20 +2004,29 @@ function AdminPanel() {
           />
           <p style={{ fontSize: '.78rem', color: 'var(--text-lo)', textAlign: 'right', margin: '0 0 16px' }}>{announceMsg.length}/120</p>
 
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
               onClick={sendAnnounce}
               disabled={!announceMsg.trim() || sendingAnnounce}
               className="btn-primary"
-              style={{ flex: 2, justifyContent: 'center' }}
+              style={{ flex: '2 1 190px', justifyContent: 'center' }}
             >
               {sendingAnnounce ? 'Enviando…' : '📣 Anunciar agora'}
+            </button>
+            <button
+              onClick={resendLastAnnounce}
+              disabled={!lastAnnounceSent || sendingAnnounce}
+              className="btn-secondary"
+              style={{ flex: '1 1 150px' }}
+              title={lastAnnounceSent || 'Nenhum anuncio enviado nesta sessao'}
+            >
+              Reenviar ultimo
             </button>
             <button
               onClick={clearAnnounce}
               disabled={sendingAnnounce}
               className="btn-secondary"
-              style={{ flex: 1 }}
+              style={{ flex: '1 1 110px' }}
             >
               🗑 Limpar
             </button>
@@ -1986,6 +2035,34 @@ function AdminPanel() {
           {announceSuccess && (
             <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f9f4', border: '1px solid #b8dece', borderRadius: 10, color: '#2d6a4f', fontSize: '.88rem' }}>
               ✓ Anúncio enviado com sucesso! Banner ativo por 15 segundos.
+            </div>
+          )}
+          {pushLastResult && (
+            <div style={{ marginTop: 12, padding: '12px 14px', background: pushLastResult.ok ? '#f0f9f4' : '#fff5f3', border: `1px solid ${pushLastResult.ok ? '#b8dece' : '#e6b7ad'}`, borderRadius: 12 }}>
+              <p style={{ margin: '0 0 5px', fontSize: '.78rem', color: pushLastResult.ok ? '#2d6a4f' : '#9f3f31', fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase' }}>
+                Ultimo resultado: {pushLastResult.kind}
+              </p>
+              <p style={{ margin: 0, fontSize: '.9rem', color: 'var(--bd)', lineHeight: 1.35 }}>
+                {pushLastResult.message}
+              </p>
+              {pushLastResult.details && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))', gap: 8, marginTop: 10 }}>
+                  {[
+                    ['Inscritos', pushLastResult.details.total ?? 0],
+                    ['Enviados', pushLastResult.details.sent ?? 0],
+                    ['Falhas', pushLastResult.details.failed ?? 0],
+                    ['Limpos', pushLastResult.details.removed ?? 0],
+                  ].map(([label, value]) => (
+                    <div key={String(label)} style={{ border: '1px solid rgba(122,78,40,.14)', borderRadius: 10, padding: '8px 6px', background: 'rgba(255,255,255,.45)', textAlign: 'center' }}>
+                      <strong style={{ display: 'block', color: 'var(--bd)', fontSize: '1rem', lineHeight: 1 }}>{value}</strong>
+                      <span style={{ color: 'var(--text-lo)', fontSize: '.68rem' }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p style={{ margin: '8px 0 0', fontSize: '.72rem', color: 'var(--text-lo)', fontStyle: 'italic' }}>
+                {new Date(pushLastResult.createdAt).toLocaleString('pt-BR')}
+              </p>
             </div>
           )}
         </div>

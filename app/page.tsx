@@ -12,6 +12,7 @@ import { REACTION_EMOJIS } from '@/lib/config'
 import AvaliacaoCard from '@/components/AvaliacaoCard'
 import EnqueteCard from '@/components/EnqueteCard'
 import { useUpload } from '@/components/UploadProvider'
+import { LiveAnnounce } from '@/components/LiveAnnounceBanner'
 
 interface MediaItem { id:string; thumbUrl:string; fullUrl:string; author:string; type:'image'|'video'|'audio'; createdAt:string; reactions:Record<string,number> }
 interface ToastMsg  { id:string; text:string; thumb?:string }
@@ -296,13 +297,15 @@ export default function Home() {
   const [pinnedText,  setPinnedText]   = useState('')
   const [savedAuthor, setSavedAuthor]  = useState('')
   const [eventStats,  setEventStats]   = useState<{photos:number; reactions:number; comments:number; authors:number} | null>(null)
-  const [liveAnnounce, setLiveAnnounce] = useState<{message:string;ts:number}|null>(null)
+  const [liveAnnounce, setLiveAnnounce] = useState<LiveAnnounce | null>(null)
   const { geoStatus, canWrite, unlockWithKey } = useGeoAccess()
   const { openUpload } = useUpload()
   const lastRtTs  = useRef<number>(0)
   const mediaRef = useRef<MediaItem[]>([])
   const authorRef = useRef('')
   const recentFetchAtRef = useRef(0)
+  const lastAnnounceTsRef = useRef(0)
+  const announceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
   const recentMediaIds = useMemo(() => media.slice(0, 6).map(m => m.id).join(','), [media])
@@ -405,18 +408,42 @@ export default function Home() {
     }
 
     // Fallback polling — used when EventSource is unavailable or times out
+    const handleAnnounce = (data: { message?: string; ts?: number }) => {
+      const ts = data.ts ?? Date.now()
+      if (!data.message) {
+        setLiveAnnounce(null)
+        return
+      }
+      if (ts <= lastAnnounceTsRef.current) return
+      lastAnnounceTsRef.current = ts
+      if (announceTimerRef.current) clearTimeout(announceTimerRef.current)
+      setLiveAnnounce({ message: data.message, ts })
+      announceTimerRef.current = setTimeout(() => setLiveAnnounce(null), 15000)
+    }
+
+    const fetchAnnounce = async () => {
+      const data = await fetchJsonSafe<{ message?: string; ts?: number }>('/api/announce', {})
+      handleAnnounce(data)
+    }
+
+    fetchAnnounce()
+
     let fallback:ReturnType<typeof setInterval>|null=null
     const startFallback=()=>{
       if(fallback)return
       fallback=setInterval(async()=>{
         const { data } = await fetchJsonSafe<{ data?: any }>('/api/realtime', {})
         handleNewPhoto(data)
+        fetchAnnounce()
       },25000)
     }
 
     if(typeof EventSource==='undefined'){
       startFallback()
-      return()=>{if(fallback)clearInterval(fallback)}
+      return()=>{
+        if(fallback)clearInterval(fallback)
+        if(announceTimerRef.current)clearTimeout(announceTimerRef.current)
+      }
     }
 
     let es=new EventSource('/api/stream')
@@ -456,12 +483,7 @@ export default function Home() {
     es.addEventListener('announce', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data) as { message?: string; ts?: number }
-        if (data.message) {
-          setLiveAnnounce({ message: data.message, ts: data.ts ?? Date.now() })
-          setTimeout(() => setLiveAnnounce(null), 15000)
-        } else {
-          setLiveAnnounce(null)
-        }
+        handleAnnounce(data)
       } catch {}
     })
 
@@ -469,8 +491,9 @@ export default function Home() {
       es.close()
       if(fallback)clearInterval(fallback)
       if(fbTimer)clearTimeout(fbTimer)
+      if(announceTimerRef.current)clearTimeout(announceTimerRef.current)
     }
-  },[fetchMedia])
+  },[fetchMedia, fetchRecentComments])
 
   useEffect(()=>{
     if(loading)return

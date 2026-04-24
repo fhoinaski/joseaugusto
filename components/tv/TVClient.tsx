@@ -54,6 +54,7 @@ export default function TVClient() {
   const authorTimer = useRef<ReturnType<typeof setTimeout>>()
   const cursorTimer = useRef<ReturnType<typeof setTimeout>>()
   const announceTimer = useRef<ReturnType<typeof setTimeout>>()
+  const lastAnnounceTs = useRef(0)
   const touchStartX = useRef<number | null>(null)
 
   const fetchPhotos = useCallback(async () => {
@@ -81,18 +82,35 @@ export default function TVClient() {
   }, [])
 
   const triggerAnnounce = useCallback((data: LiveAnnounce) => {
+    if (!data.message || data.ts <= lastAnnounceTs.current) return
+    lastAnnounceTs.current = data.ts
     clearTimeout(announceTimer.current)
     setLiveAnnounce(data)
     announceTimer.current = setTimeout(() => setLiveAnnounce(null), 15000)
   }, [])
+
+  const fetchAnnounce = useCallback(async () => {
+    try {
+      const res = await fetch('/api/announce', { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json() as { message?: string; ts?: number }
+      if (data.message) triggerAnnounce({ message: data.message, ts: data.ts ?? Date.now() })
+      else setLiveAnnounce(null)
+    } catch {}
+  }, [triggerAnnounce])
 
   // SSE
   useEffect(() => {
     let fallback: ReturnType<typeof setInterval> | null = null
     const startFallback = () => {
       if (fallback) return
-      fallback = setInterval(fetchPhotos, 30_000)
+      fallback = setInterval(() => {
+        fetchPhotos()
+        fetchAnnounce()
+      }, 30_000)
     }
+
+    fetchAnnounce()
 
     if (typeof EventSource === 'undefined') {
       startFallback()
@@ -141,7 +159,7 @@ export default function TVClient() {
       es.close()
       if (fallback) clearInterval(fallback)
     }
-  }, [addLiveReaction, fetchPhotos, triggerAnnounce])
+  }, [addLiveReaction, fetchAnnounce, fetchPhotos, triggerAnnounce])
 
   useEffect(() => {
     const siteUrl = window.location.origin

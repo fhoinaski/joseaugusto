@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import FeedItem, { FeedMediaItem } from '@/components/FeedItem'
 import Stories from '@/components/Stories'
 import { useGeoAccess } from '@/components/GeoAccessProvider'
+import LiveAnnounceBanner, { LiveAnnounce } from '@/components/LiveAnnounceBanner'
 
 type MediaItem = FeedMediaItem
 
@@ -43,10 +44,13 @@ function FeedPageInner() {
   const [headerHeight, setHeaderHeight] = useState(132)
   const [isDesktop, setIsDesktop] = useState(false)
   const [newCount, setNewCount] = useState(0)           // ← pill counter
+  const [liveAnnounce, setLiveAnnounce] = useState<LiveAnnounce | null>(null)
   const headerRef = useRef<HTMLElement | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const loadingMoreRef = useRef(false)
+  const lastAnnounceTsRef = useRef(0)
+  const announceTimerRef = useRef<number | null>(null)
   const { canWrite, geoStatus, unlockWithKey } = useGeoAccess()
   const bottomNavInset = 'max(96px, calc(84px + env(safe-area-inset-bottom)))'
 
@@ -101,17 +105,43 @@ function FeedPageInner() {
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [fetchMedia])
 
+  const handleAnnounce = useCallback((data: { message?: string; ts?: number }) => {
+    const ts = data.ts ?? Date.now()
+    if (!data.message) {
+      setLiveAnnounce(null)
+      return
+    }
+    if (ts <= lastAnnounceTsRef.current) return
+    lastAnnounceTsRef.current = ts
+    if (announceTimerRef.current) window.clearTimeout(announceTimerRef.current)
+    setLiveAnnounce({ message: data.message, ts })
+    announceTimerRef.current = window.setTimeout(() => setLiveAnnounce(null), 15000)
+  }, [])
+
+  const fetchAnnounce = useCallback(async () => {
+    const data = await fetchJsonSafe<{ message?: string; ts?: number }>('/api/announce', {})
+    handleAnnounce(data)
+  }, [handleAnnounce])
+
   useEffect(() => {
     fetchMedia()
     let fallback: ReturnType<typeof setInterval> | null = null
     const startFallback = () => {
       if (fallback) return
-      fallback = setInterval(() => { if (document.visibilityState === 'visible') setNewCount(n => n + 1) }, 45000)
+      fallback = setInterval(() => {
+        if (document.visibilityState === 'visible') setNewCount(n => n + 1)
+        fetchAnnounce()
+      }, 45000)
     }
+
+    fetchAnnounce()
 
     if (typeof EventSource === 'undefined') {
       startFallback()
-      return () => { if (fallback) clearInterval(fallback) }
+      return () => {
+        if (fallback) clearInterval(fallback)
+        if (announceTimerRef.current) window.clearTimeout(announceTimerRef.current)
+      }
     }
 
     const es = new EventSource('/api/stream')
@@ -133,13 +163,25 @@ function FeedPageInner() {
       } catch {}
     })
 
+    es.addEventListener('announce', (e: Event) => {
+      try {
+        const payload = JSON.parse((e as MessageEvent).data) as { message?: string; ts?: number }
+        handleAnnounce(payload)
+      } catch {}
+    })
+
     es.onerror = () => startFallback()
 
     const onVisibility = () => { if (document.visibilityState === 'visible') setNewCount(n => n + 1) }
     document.addEventListener('visibilitychange', onVisibility)
 
-    return () => { es.close(); document.removeEventListener('visibilitychange', onVisibility); if (fallback) clearInterval(fallback) }
-  }, [fetchMedia])
+    return () => {
+      es.close()
+      document.removeEventListener('visibilitychange', onVisibility)
+      if (fallback) clearInterval(fallback)
+      if (announceTimerRef.current) window.clearTimeout(announceTimerRef.current)
+    }
+  }, [fetchAnnounce, fetchMedia, handleAnnounce])
 
   // Infinite scroll sentinel
   useEffect(() => {
@@ -254,6 +296,8 @@ function FeedPageInner() {
         <Stories items={storiesItems} />
       </header>
 
+      <LiveAnnounceBanner announce={liveAnnounce} onClose={() => setLiveAnnounce(null)} top={headerHeight} />
+
       {/* ── New-content pill ─────────────────────────────────────────── */}
       <AnimatePresence>
         {newCount > 0 && (
@@ -265,7 +309,7 @@ function FeedPageInner() {
             onClick={loadFresh}
             style={{
               position: 'fixed',
-              top: headerHeight + 14,
+              top: liveAnnounce ? headerHeight + 76 : headerHeight + 14,
               left: '50%',
               transform: 'translateX(-50%)',
               zIndex: 200,

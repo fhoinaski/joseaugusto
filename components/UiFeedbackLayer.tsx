@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 
 const PWAInstallPrompt    = dynamic(() => import('@/components/PWAInstallPrompt'),    { ssr: false })
+const PushActivationPrompt = dynamic(() => import('@/components/PushActivationPrompt'), { ssr: false })
 const ReactionStorm       = dynamic(() => import('@/components/ReactionStorm'),       { ssr: false })
 const ConfettiCelebration = dynamic(() => import('@/components/ConfettiCelebration'), { ssr: false })
 const BottomNav           = dynamic(() => import('@/components/BottomNav'),           { ssr: false })
@@ -146,6 +147,7 @@ export default function UiFeedbackLayer() {
       </div>
 
       <PWAInstallPrompt />
+      <PushActivationPrompt />
       {enableAmbientEffects && <ReactionStorm />}
       {enableAmbientEffects && <ConfettiCelebration />}
       <BottomNav />
