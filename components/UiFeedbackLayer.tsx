@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
 const PWAInstallPrompt    = dynamic(() => import('@/components/PWAInstallPrompt'),    { ssr: false })
@@ -33,6 +34,9 @@ function getPendingCount(): number {
 }
 
 export default function UiFeedbackLayer() {
+  const pathname = usePathname()
+  const isTv = pathname === '/tv'
+
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [hasMounted, setHasMounted] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
@@ -116,7 +120,7 @@ export default function UiFeedbackLayer() {
   return (
     <>
       {/* Top-right: connection pill only (bell moved to BottomNav) */}
-      {hasMounted && (
+      {hasMounted && !isTv && (
       <div style={{
         position: 'fixed',
         top: 'max(10px, calc(8px + env(safe-area-inset-top)))',
@@ -156,7 +160,7 @@ export default function UiFeedbackLayer() {
       <PushActivationPrompt />
       {enableAmbientEffects && <ReactionStorm />}
       {enableAmbientEffects && <ConfettiCelebration />}
-      <BottomNav />
+      {!isTv && <BottomNav />}
 
       <div className="toast-container">
         {toasts.map(t => (

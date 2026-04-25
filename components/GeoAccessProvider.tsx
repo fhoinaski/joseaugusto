@@ -32,9 +32,13 @@ export function GeoAccessProvider({ children }: { children: React.ReactNode }) {
   const [canWrite, setCanWrite] = useState(true)
 
   useEffect(() => {
-    fetch('/api/settings')
+    const ctrl = new AbortController()
+    const timeoutId = setTimeout(() => ctrl.abort(), 5000)
+
+    fetch('/api/settings', { signal: ctrl.signal })
       .then(r => r.json())
       .then(({ geoGateEnabled }: { geoGateEnabled?: boolean }) => {
+        clearTimeout(timeoutId)
         if (!geoGateEnabled) {
           setGeoStatus('allowed')
           setCanWrite(true)
@@ -80,9 +84,15 @@ export function GeoAccessProvider({ children }: { children: React.ReactNode }) {
         )
       })
       .catch(() => {
+        clearTimeout(timeoutId)
         setGeoStatus('allowed')
         setCanWrite(true)
       })
+
+    return () => {
+      clearTimeout(timeoutId)
+      ctrl.abort()
+    }
   }, [])
 
   const unlockWithKey = async (key: string): Promise<boolean> => {

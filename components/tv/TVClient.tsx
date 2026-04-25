@@ -253,9 +253,13 @@ export default function TVClient() {
 
   // ── MOSAICO MODE ──────────────────────────────────────────────────────────
   if (tvMode === 'mosaico') {
+    // Fall back to slideshow photos if mosaicPhotos hasn't populated yet
+    const displayMosaicPhotos = mosaicPhotos.length > 0 ? mosaicPhotos : photos.slice(0, MAX_MOSAIC)
+    const hasPhotos = displayMosaicPhotos.length > 0
+
     return (
       <>
-        <div style={{ position: 'fixed', inset: 0, background: '#0a0400', display: 'flex', flexDirection: 'column', cursor: hideCursor ? 'none' : 'default' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: '#0a0400', display: 'flex', flexDirection: 'column', cursor: hideCursor ? 'none' : 'default' }}>
           {/* Header bar */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -266,7 +270,7 @@ export default function TVClient() {
               <span style={{ fontSize: '1.6rem' }}>🧸</span>
               <div>
                 <p style={{ margin: 0, color: '#f5dab6', fontFamily: "'Playfair Display',serif", fontSize: '1.05rem', fontWeight: 600 }}>Chá de Bebê · José Augusto</p>
-                <p style={{ margin: 0, color: 'rgba(245,218,182,.45)', fontSize: '.72rem', letterSpacing: '.06em' }}>álbum ao vivo · {photos.length} fotos</p>
+                <p style={{ margin: 0, color: 'rgba(245,218,182,.45)', fontSize: '.72rem', letterSpacing: '.06em' }}>álbum ao vivo · {photos.length} foto{photos.length !== 1 ? 's' : ''}</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -290,61 +294,77 @@ export default function TVClient() {
               flex: 1, display: 'grid',
               gridTemplateColumns: 'repeat(4, 1fr)',
               gridTemplateRows: 'repeat(4, 1fr)',
-              gap: 3, padding: 3, minWidth: 0,
+              gap: 3, padding: 3, minWidth: 0, position: 'relative',
             }}>
-              {Array.from({ length: MAX_MOSAIC }, (_, i) => {
-                const photo = mosaicPhotos[i]
-                const isNew = !!photo && newPhotoIds.has(photo.id)
-                return (
-                  <div
-                    key={photo?.id ?? `empty-${i}`}
-                    style={{
-                      position: 'relative', overflow: 'hidden', borderRadius: 6,
-                      background: 'rgba(255,255,255,.04)',
-                      animation: isNew ? 'mosaicIn .5s cubic-bezier(.34,1.56,.64,1)' : undefined,
-                    }}
-                  >
-                    {photo ? (
-                      <>
-                        {photo.type === 'video' ? (
-                          <video src={photo.thumbUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} muted playsInline loop autoPlay />
-                        ) : (
-                          <img
-                            src={photo.thumbUrl}
-                            alt={photo.author}
-                            onError={e => { (e.currentTarget as HTMLImageElement).src = photo.fullUrl }}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                          />
-                        )}
-                        {/* Author strip */}
-                        <div style={{
-                          position: 'absolute', bottom: 0, left: 0, right: 0,
-                          padding: '12px 7px 5px',
-                          background: 'linear-gradient(to top, rgba(0,0,0,.75), transparent)',
-                          fontSize: '.68rem', color: '#fff', fontWeight: 600,
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>
-                          {isNew && <span style={{ color: '#c47a3a', marginRight: 3 }}>●</span>}
-                          {photo.author}
-                        </div>
-                        {/* New photo highlight border */}
-                        {isNew && (
+              {!hasPhotos ? (
+                <div style={{
+                  gridColumn: '1 / -1', gridRow: '1 / -1',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 16,
+                }}>
+                  <span style={{ fontSize: '5rem' }}>📷</span>
+                  <p style={{ margin: 0, color: 'rgba(245,218,182,.7)', fontFamily: "'Playfair Display',serif", fontSize: '1.4rem', fontWeight: 600, textAlign: 'center' }}>
+                    Nenhuma foto ainda
+                  </p>
+                  <p style={{ margin: 0, color: 'rgba(245,218,182,.4)', fontSize: '.95rem', textAlign: 'center', lineHeight: 1.6 }}>
+                    As fotos enviadas pelos convidados aparecerão aqui
+                  </p>
+                </div>
+              ) : (
+                Array.from({ length: MAX_MOSAIC }, (_, i) => {
+                  const photo = displayMosaicPhotos[i]
+                  const isNew = !!photo && newPhotoIds.has(photo.id)
+                  return (
+                    <div
+                      key={photo?.id ?? `empty-${i}`}
+                      style={{
+                        position: 'relative', overflow: 'hidden', borderRadius: 6,
+                        background: 'rgba(255,255,255,.04)',
+                        animation: isNew ? 'mosaicIn .5s cubic-bezier(.34,1.56,.64,1)' : undefined,
+                      }}
+                    >
+                      {photo ? (
+                        <>
+                          {photo.type === 'video' ? (
+                            <video src={photo.thumbUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} muted playsInline loop autoPlay />
+                          ) : (
+                            <img
+                              src={photo.thumbUrl}
+                              alt={photo.author}
+                              onError={e => { (e.currentTarget as HTMLImageElement).src = photo.fullUrl }}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            />
+                          )}
+                          {/* Author strip */}
                           <div style={{
-                            position: 'absolute', inset: 0,
-                            border: '2.5px solid #c47a3a', borderRadius: 6,
-                            pointerEvents: 'none',
-                            animation: 'mosaicGlow 1s ease-in-out 4',
-                          }} />
-                        )}
-                      </>
-                    ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', opacity: .08 }}>
-                        <span style={{ fontSize: '1.8rem' }}>📷</span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                            position: 'absolute', bottom: 0, left: 0, right: 0,
+                            padding: '12px 7px 5px',
+                            background: 'linear-gradient(to top, rgba(0,0,0,.75), transparent)',
+                            fontSize: '.68rem', color: '#fff', fontWeight: 600,
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>
+                            {isNew && <span style={{ color: '#c47a3a', marginRight: 3 }}>●</span>}
+                            {photo.author}
+                          </div>
+                          {/* New photo highlight border */}
+                          {isNew && (
+                            <div style={{
+                              position: 'absolute', inset: 0,
+                              border: '2.5px solid #c47a3a', borderRadius: 6,
+                              pointerEvents: 'none',
+                              animation: 'mosaicGlow 1s ease-in-out 4',
+                            }} />
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', opacity: .15 }}>
+                          <span style={{ fontSize: '1.8rem' }}>📷</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
             </div>
 
             {/* Sidebar: leaderboard + QR */}

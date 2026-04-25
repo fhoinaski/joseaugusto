@@ -308,6 +308,8 @@ export default function Home() {
   const announceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sentinelRef= useRef<HTMLDivElement>(null)
   const obsRef     = useRef<IntersectionObserver|null>(null)
+  // Stable ref so SSE effect doesn't re-run on every media change
+  const fetchRecentCommentsRef = useRef<() => void>(() => {})
   const recentMediaIds = useMemo(() => media.slice(0, 6).map(m => m.id).join(','), [media])
 
   useEffect(()=>{
@@ -367,6 +369,8 @@ export default function Home() {
     }
   }, [recentMediaIds])
 
+  useEffect(() => { fetchRecentCommentsRef.current = fetchRecentComments }, [fetchRecentComments])
+
   useEffect(() => {
     fetchRecentComments()
   }, [fetchRecentComments])
@@ -404,7 +408,7 @@ export default function Home() {
       const now = Date.now()
       if (now - recentFetchAtRef.current < 5000) return
       recentFetchAtRef.current = now
-      fetchRecentComments()
+      fetchRecentCommentsRef.current()
     }
 
     // Fallback polling — used when EventSource is unavailable or times out
@@ -493,7 +497,7 @@ export default function Home() {
       if(fbTimer)clearTimeout(fbTimer)
       if(announceTimerRef.current)clearTimeout(announceTimerRef.current)
     }
-  },[fetchMedia, fetchRecentComments])
+  },[fetchMedia])
 
   useEffect(()=>{
     if(loading)return
