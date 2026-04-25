@@ -20,7 +20,7 @@ interface PushLastResult { kind: string; message: string; ok: boolean; createdAt
 interface PushDeviceStatus { supported: boolean; permission: string; subscribed: boolean; reason: string }
 
 function AdminPanel() {
-  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'videos' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes' | 'anunciar'>('pending')
+  const [tab, setTab] = useState<'pending' | 'approved' | 'message' | 'capsule' | 'videos' | 'settings' | 'store' | 'baby' | 'avaliacao' | 'enquete' | 'musicas' | 'desafios' | 'bingo' | 'diario' | 'pwa' | 'convite' | 'rsvp' | 'marcos' | 'memorias' | 'cartoes' | 'anunciar' | 'livro' | 'carta'>('pending')
   const [pending, setPending] = useState<MediaItem[]>([])
   const [approved, setApproved] = useState<MediaItem[]>([])
   const [capsules, setCapsules] = useState<CapsuleItem[]>([])
@@ -138,6 +138,16 @@ function AdminPanel() {
   const [savingEnquete, setSavingEnquete] = useState(false)
   const [loadingEnquete, setLoadingEnquete] = useState(false)
 
+  // ── Livro de Mensagens ────────────────────────────────────────────────────────
+  interface LivroAdmin { id: number; author: string; message: string; created_at: string }
+  const [livroMessages, setLivroMessages] = useState<LivroAdmin[]>([])
+  const [loadingLivro, setLoadingLivro] = useState(false)
+
+  // ── Cartas ao José ────────────────────────────────────────────────────────────
+  interface CartaAdmin { id: number; author: string; message: string; created_at: string }
+  const [cartaMessages, setCartaMessages] = useState<CartaAdmin[]>([])
+  const [loadingCarta, setLoadingCarta] = useState(false)
+
   const showToast = (t: string) => { setToast(t); setTimeout(() => setToast(''), 3000) }
 
   const recordPushResult = (kind: string, message: string, ok: boolean, details?: PushDeliveryResult) => {
@@ -241,6 +251,30 @@ function AdminPanel() {
     setCapsuleOpenDate(data.openDate ?? '18 anos')
     setEditingOpenDate(data.openDate ?? '18 anos')
     setLoadingC(false)
+  }, [])
+
+  const fetchLivroMessages = useCallback(async () => {
+    setLoadingLivro(true)
+    try {
+      const data = await fetch('/api/livro').then(r => r.json()) as { messages?: LivroAdmin[] }
+      setLivroMessages(data.messages ?? [])
+    } catch {
+      showToast('Não foi possível carregar mensagens do livro.')
+    } finally {
+      setLoadingLivro(false)
+    }
+  }, [])
+
+  const fetchCartaMessages = useCallback(async () => {
+    setLoadingCarta(true)
+    try {
+      const data = await fetch('/api/carta').then(r => r.json()) as { cartas?: CartaAdmin[] }
+      setCartaMessages(data.cartas ?? [])
+    } catch {
+      showToast('Não foi possível carregar cartas.')
+    } finally {
+      setLoadingCarta(false)
+    }
   }, [])
 
   const fetchVideoMensagens = useCallback(async () => {
@@ -693,7 +727,9 @@ function AdminPanel() {
         setCartaoAuthors(d.topAuthors?.map((a: { author: string }) => a.author) ?? [])
       }).catch(() => {})
     }
-  }, [tab, fetchVideoMensagens, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias, fetchPushStatus])
+    if (tab === 'livro') fetchLivroMessages()
+    if (tab === 'carta') fetchCartaMessages()
+  }, [tab, fetchVideoMensagens, fetchStore, fetchAvaliacao, fetchEnquete, fetchMusicas, fetchDesafios, fetchBingo, fetchDiario, fetchRsvp, fetchMarcos, fetchMemorias, fetchPushStatus, fetchLivroMessages, fetchCartaMessages])
 
   useEffect(() => {
     if (tab !== 'settings') return
@@ -809,8 +845,15 @@ function AdminPanel() {
           { key: 'memorias', label: '📬 Memórias', count: 0 },
           { key: 'cartoes', label: '💌 Cartões', count: 0 },
           { key: 'anunciar', label: '📣 Anunciar', count: 0 },
+          { key: 'livro', label: '📝 Livro', count: livroMessages.length },
+          { key: 'carta', label: '💌 Carta ao José', count: cartaMessages.length },
         ].map(t => (
-          <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => { setTab(t.key as any); if (t.key === 'capsule' && capsules.length === 0) fetchCapsules() }}>
+          <button key={t.key} style={tabStyle(tab === t.key)} onClick={() => {
+            setTab(t.key as any)
+            if (t.key === 'capsule' && capsules.length === 0) fetchCapsules()
+            if (t.key === 'livro' && livroMessages.length === 0) fetchLivroMessages()
+            if (t.key === 'carta' && cartaMessages.length === 0) fetchCartaMessages()
+          }}>
             {t.label}{t.count > 0 && <span style={S.badge}>{t.count}</span>}
           </button>
         ))}
@@ -889,6 +932,62 @@ function AdminPanel() {
                         <button style={S.btnDelete} onClick={() => deleteCapsule(c.id, c.author)}>🗑 Excluir</button>
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </div>
+      )}
+
+      {tab === 'livro' && (
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const, marginBottom: 18 }}>
+            <div>
+              <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>📝 Livro de Mensagens</h2>
+              <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic' }}>Recados deixados pelos convidados para os papais.</p>
+            </div>
+            <button style={{ ...S.btnApprove, flex: '0 0 auto', padding: '8px 18px' }} onClick={fetchLivroMessages} disabled={loadingLivro}>Atualizar</button>
+          </div>
+          {loadingLivro ? <p style={S.empty}>Carregando…</p> : livroMessages.length === 0
+            ? <p style={S.empty}>Nenhuma mensagem ainda 📝</p>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+                {livroMessages.map(m => (
+                  <div key={m.id} style={{ background: 'var(--cream)', border: '1px solid var(--beige)', borderRadius: 12, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: '.9rem', color: 'var(--bd)' }}>✍️ {m.author}</span>
+                      <span style={{ fontSize: '.78rem', color: 'var(--text-lo)' }}>{new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <p style={{ fontSize: '.88rem', color: 'var(--bd)', fontStyle: 'italic', lineHeight: 1.6, margin: 0 }}>"{m.message}"</p>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </div>
+      )}
+
+      {tab === 'carta' && (
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const, marginBottom: 18 }}>
+            <div>
+              <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.2rem', color: 'var(--bd)', marginBottom: 6 }}>💌 Cartas ao José Augusto</h2>
+              <p style={{ fontSize: '.9rem', color: 'var(--bl)', fontStyle: 'italic' }}>Cartas escritas pelos convidados para o bebê.</p>
+            </div>
+            <button style={{ ...S.btnApprove, flex: '0 0 auto', padding: '8px 18px' }} onClick={fetchCartaMessages} disabled={loadingCarta}>Atualizar</button>
+          </div>
+          {loadingCarta ? <p style={S.empty}>Carregando…</p> : cartaMessages.length === 0
+            ? <p style={S.empty}>Nenhuma carta ainda 💌</p>
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+                {cartaMessages.map(c => (
+                  <div key={c.id} style={{ background: 'var(--cream)', border: '1px solid var(--beige)', borderRadius: 12, padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: '.9rem', color: 'var(--bd)' }}>✍️ {c.author}</span>
+                      <span style={{ fontSize: '.78rem', color: 'var(--text-lo)' }}>{new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <p style={{ fontSize: '.88rem', color: 'var(--bd)', fontStyle: 'italic', lineHeight: 1.6, margin: 0 }}>"{c.message}"</p>
                   </div>
                 ))}
               </div>

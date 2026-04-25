@@ -150,7 +150,7 @@ export default function LivroPage() {
         padding: '28px 20px 20px', textAlign: 'center',
       }}>
         <p style={{ fontFamily: "'Dancing Script',cursive", color: 'var(--sand)', fontSize: '1.05rem', marginBottom: 4 }}>
-          ✦ Para Thaysa e Fernando ✦
+          ✦ Para Bruna e Fernando ✦
         </p>
         <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: '1.9rem', color: 'var(--bd)', margin: '0 0 8px' }}>
           Livro de <em>Mensagens</em>
