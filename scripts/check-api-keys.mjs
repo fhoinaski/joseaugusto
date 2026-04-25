@@ -132,11 +132,30 @@ async function main() {
     'R2_ACCESS_KEY_ID',
     'R2_SECRET_ACCESS_KEY',
     'R2_BUCKET_NAME',
+    'ADMIN_PASSWORD',
   ]
 
   const missing = requireVars(required)
   if (missing.length) {
-    console.error('FALTANDO:', missing.join(', '))
+    console.error('FALTANDO variáveis obrigatórias:', missing.join(', '))
+    process.exit(1)
+  }
+
+  const optional = [
+    'R2_PUBLIC_URL',
+    'NEXT_PUBLIC_SITE_URL',
+    'NEXT_PUBLIC_EVENT_NAME',
+    'VAPID_PUBLIC_KEY',
+    'VAPID_PRIVATE_KEY',
+  ]
+  const missingOptional = optional.filter((n) => !process.env[n])
+  if (missingOptional.length) {
+    console.warn('AVISO variáveis opcionais ausentes:', missingOptional.join(', '))
+  }
+
+  const adminPwd = (process.env.ADMIN_PASSWORD ?? '').trim()
+  if (adminPwd.length < 12) {
+    console.error('ADMIN_PASSWORD deve ter pelo menos 12 caracteres.')
     process.exit(1)
   }
 
@@ -151,7 +170,7 @@ async function main() {
       console.log(`OK   ${name}: ${result.detail}`)
     } else {
       failed = true
-      console.log(`ERRO ${name}: ${result.detail}`)
+      console.error(`ERRO ${name}: ${result.detail}`)
     }
   }
 
