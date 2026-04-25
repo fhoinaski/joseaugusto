@@ -722,23 +722,23 @@ export default function UploadModal({
         {step === 'frames' && queue.length > 0 && (() => {
           const currentItem = queue[0]
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0f0d0b' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', background: '#0f0d0b' }}>
               {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,.08)', flexShrink: 0 }}>
                 <button onClick={() => setStep('filter')} style={{ background: 'none', border: 'none', color: '#f5dab6', fontSize: '1rem', cursor: 'pointer', padding: '4px 8px' }}>‹ Filtros</button>
                 <p style={{ fontFamily: "'Playfair Display',serif", fontSize: '1rem', color: '#f5dab6', fontWeight: 600 }}>Moldura</p>
-                <div style={{ width: 70 }} />
+                <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(245,218,182,.45)', fontSize: '.82rem', cursor: 'pointer', padding: '4px 8px', fontFamily: "'Cormorant Garamond',serif" }}>✕</button>
               </div>
 
-              {/* Preview */}
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflow: 'hidden' }}>
-                <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '55vh' }}>
+              {/* Preview — altura limitada para caber em telas pequenas */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 16px', overflow: 'hidden', flexShrink: 0 }}>
+                <div style={{ position: 'relative', maxWidth: '100%', maxHeight: 'min(42vh, 240px)' }}>
                   <img
                     src={currentItem.preview}
                     alt="preview"
                     style={{
                       maxWidth: '100%',
-                      maxHeight: '55vh',
+                      maxHeight: 'min(42vh, 240px)',
                       objectFit: 'contain',
                       display: 'block',
                       borderRadius: selectedFrame === 'polaroid' ? 4 : 8,
@@ -763,7 +763,7 @@ export default function UploadModal({
               </div>
 
               {/* Frame thumbnails */}
-              <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none' }}>
+              <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none', flexShrink: 0 } as React.CSSProperties}>
                 {FRAMES.map(f => (
                   <button
                     key={f.id}
@@ -775,7 +775,7 @@ export default function UploadModal({
                     }}
                   >
                     <div style={{
-                      width: 64, height: 64,
+                      width: 60, height: 60,
                       borderRadius: 10,
                       border: selectedFrame === f.id ? '2.5px solid #d59056' : '2px solid rgba(255,255,255,.15)',
                       background: f.id === 'polaroid' ? '#faf6ef' : f.id === 'gold' ? 'linear-gradient(135deg,#3a2800,#7a5800)' : f.id === 'cha' ? '#0f0d0b' : 'rgba(255,255,255,.06)',
@@ -796,8 +796,16 @@ export default function UploadModal({
                 ))}
               </div>
 
-              {/* Continuar */}
-              <div style={{ padding: '12px 16px 20px' }}>
+              {/* Continuar — sticky para ficar sempre visível sem scroll */}
+              <div style={{
+                position: 'sticky',
+                bottom: 0,
+                background: '#0f0d0b',
+                borderTop: '1px solid rgba(255,255,255,.08)',
+                padding: '12px 16px',
+                paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+                flexShrink: 0,
+              }}>
                 <button
                   onClick={async () => {
                     // Apply frame via canvas to all queue items
