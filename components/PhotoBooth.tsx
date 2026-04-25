@@ -407,7 +407,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
         {/* ── TOP BAR (overlaid) ── */}
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0,
-          padding: 'max(14px, env(safe-area-inset-top)) 14px 12px',
+          padding: 'max(48px, env(safe-area-inset-top)) 14px 12px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: 'linear-gradient(to bottom, rgba(0,0,0,.6) 0%, transparent 100%)',
           pointerEvents: status === 'error' ? 'none' : 'auto',
@@ -424,7 +424,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             background: 'linear-gradient(to top, rgba(0,0,0,.9) 70%, transparent 100%)',
-            paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+            paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
           }}>
 
             {/* ── Tab selector: Filtros | Stickers | Clipe ── */}
@@ -585,7 +585,7 @@ export default function PhotoBooth({ onCapture, onClose }: PhotoBoothProps) {
             position: 'absolute', bottom: 0, left: 0, right: 0,
             background: 'linear-gradient(to top, rgba(0,0,0,.92) 80%, transparent)',
             padding: '20px 16px',
-            paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+            paddingBottom: 'max(28px, env(safe-area-inset-bottom))',
             display: 'flex', gap: 10,
           }}>
             <button onClick={retake} style={{
