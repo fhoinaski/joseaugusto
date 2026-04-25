@@ -637,13 +637,22 @@ export default function UploadModal({
         )}
         {step === 'filter' && queue.length > 0 && (
           <>
-            <p className="modal-label">✦ Escolha um filtro ✦</p>
-            <h2 className="modal-title" style={{ marginBottom: 12 }}>
+            {/* Header com título e botão fechar */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <p className="modal-label" style={{ margin: 0 }}>✦ Escolha um filtro ✦</p>
+              <button
+                onClick={onClose}
+                style={{ background: 'none', border: 'none', color: 'var(--text-lo)', fontSize: '.82rem', cursor: 'pointer', padding: '4px 2px', fontFamily: "'Cormorant Garamond',serif", display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                ✕ Fechar
+              </button>
+            </div>
+            <h2 className="modal-title" style={{ marginBottom: 10 }}>
               {queue.length > 1 ? `${queue.length} fotos` : '1 foto'}
             </h2>
 
-            {/* Preview da primeira imagem com filtro */}
-            <div style={{ width: '100%', maxWidth: 280, margin: '0 auto 16px', borderRadius: 14, overflow: 'hidden', aspectRatio: '1', background: '#f5ede0' }}>
+            {/* Preview — menor em mobile para não empurrar botões para fora da tela */}
+            <div style={{ width: '100%', maxWidth: 220, margin: '0 auto 10px', borderRadius: 14, overflow: 'hidden', aspectRatio: '1', background: '#f5ede0' }}>
               <img
                 src={queue[0].preview}
                 alt="Preview"
@@ -652,14 +661,14 @@ export default function UploadModal({
             </div>
 
             {/* Strip de filtros */}
-            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 16, scrollbarWidth: 'none' }}>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6, marginBottom: 8, scrollbarWidth: 'none' } as React.CSSProperties}>
               {FILTERS.map(f => (
                 <button
                   key={f.id}
                   onClick={() => setSelectedFilter(f.id)}
                   style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                 >
-                  <div style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', border: selectedFilter === f.id ? '2.5px solid var(--bd)' : '2px solid transparent' }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 10, overflow: 'hidden', border: selectedFilter === f.id ? '2.5px solid var(--bd)' : '2px solid transparent' }}>
                     <img src={queue[0].preview} alt={f.label} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: f.css }} />
                   </div>
                   <span style={{ fontSize: '.68rem', fontWeight: selectedFilter === f.id ? 700 : 500, color: selectedFilter === f.id ? 'var(--bd)' : 'var(--bl)', fontFamily: "'Cormorant Garamond',serif" }}>{f.label}</span>
@@ -667,6 +676,17 @@ export default function UploadModal({
               ))}
             </div>
 
+            {/* Ações — sticky para ficar sempre visível sem scroll */}
+            <div style={{
+              position: 'sticky',
+              bottom: 0,
+              background: 'var(--warm)',
+              paddingTop: 8,
+              paddingBottom: 4,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}>
             <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={async () => {
               // Apply filter to canvas if not 'none'
               if (selectedFilter !== 'none') {
@@ -693,9 +713,10 @@ export default function UploadModal({
             }}>
               Continuar →
             </button>
-            <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={() => setStep('frames')}>
-              Pular
+            <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setStep('frames')}>
+              Pular filtro
             </button>
+            </div>{/* fim sticky */}
           </>
         )}
         {step === 'frames' && queue.length > 0 && (() => {
